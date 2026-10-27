@@ -126,7 +126,11 @@ button (persisted in `localStorage`) or `?quality=`.
 |--------|-------------|---------------------|-------|----------------|-------|
 | low    | 1.0         | blob shadow only    | no    | 1200           | 45 %  |
 | medium | ≤1.5        | blob shadow only    | no    | 2600           | 75 %  |
-| high   | ≤2.0        | PCF soft shadow map | yes   | 5000           | 100 % |
+| high   | ≤2.0        | PCF soft shadow map | off*  | 5000           | 100 % |
+
+\* The bloom pass (`QUALITY.high.bloom`) exists but is off: the procedural sky's radiance is well above 1, so every
+threshold bloomed the sky over the whole frame and the EffectComposer path blended HDR before tone mapping, washing
+out the cockpit. The high tier renders directly.
 
 All tiers: sRGB output, ACES tone mapping, PMREM environment baked from the procedural sky
 (re-baked when time of day or weather changes).

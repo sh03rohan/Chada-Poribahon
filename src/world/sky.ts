@@ -127,14 +127,14 @@ export class SkySystem {
     const skyCol = night ? new THREE.Color(0x1a2238) : new THREE.Color(0x9fc3ff).lerp(new THREE.Color(0x8b8f98), rain);
     const groundCol = night ? new THREE.Color(0x0a0a08) : new THREE.Color(0x6b6040);
     this.hemi.color.copy(skyCol); this.hemi.groundColor.copy(groundCol);
-    this.hemi.intensity = night ? 0.2 : 0.25 + 0.3 * dayAmount - rain * 0.18;
+    this.hemi.intensity = night ? 0.2 : 0.25 + 0.3 * dayAmount - rain * 0.22;
 
     const fog = this.scene.fog as THREE.FogExp2;
     const fogDay = new THREE.Color(0xcad9e6).lerp(new THREE.Color(0xe8b98a), 1 - dayAmount);
-    fog.color.copy(night ? new THREE.Color(0x05070d) : fogDay.lerp(new THREE.Color(0x7f868e), rain));
-    fog.density = WORLD.fogDensity * (1 + rain * 2.6 + (night ? 0.6 : 0));
+    fog.color.copy(night ? new THREE.Color(0x05070d) : fogDay.lerp(new THREE.Color(0x5f666e), rain));
+    fog.density = WORLD.fogDensity * (1 + rain * 1.1 + (night ? 0.6 : 0));
 
-    this.exposure = night ? 0.32 : 0.5 - rain * 0.16;
+    this.exposure = night ? 0.32 : 0.5 - rain * 0.2;
     this.renderer.toneMappingExposure = this.exposure;
 
     // Bake environment map: the sky dome lives in a tiny side scene while PMREM runs,

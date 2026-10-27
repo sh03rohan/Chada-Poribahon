@@ -185,7 +185,8 @@ export const QUALITY: Record<QualityTier, {
 }> = {
   low: { pixelRatio: 1, shadows: false, bloom: false, rainCount: 1200, anisotropy: 2, envMapSize: 128, shadowMapSize: 1024 },
   medium: { pixelRatio: 1.5, shadows: false, bloom: false, rainCount: 2600, anisotropy: 4, envMapSize: 256, shadowMapSize: 2048 },
-  high: { pixelRatio: 2, shadows: true, bloom: true, rainCount: 5000, anisotropy: 8, envMapSize: 256, shadowMapSize: 2048 },
+  // bloom is off: the procedural sky is HDR-bright, so any bloom threshold spreads sky light over the frame
+  high: { pixelRatio: 2, shadows: true, bloom: false, rainCount: 5000, anisotropy: 8, envMapSize: 256, shadowMapSize: 2048 },
 };
 
 export const BUS_DIMENSIONS = {

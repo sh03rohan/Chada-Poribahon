@@ -166,7 +166,7 @@ class Game {
     if (q.bloom) {
       this.composer = new EffectComposer(this.renderer);
       this.composer.addPass(new RenderPass(this.scene, this.cam.camera));
-      this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.22, 0.6, 0.92));
+      this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.12, 0.35, 1.3));
       this.composer.addPass(new OutputPass());
     }
     if (this.tier !== 'low') { // live rear-view mirror
