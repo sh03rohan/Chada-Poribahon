@@ -14,7 +14,6 @@ export class CameraRig {
   private prevMode: CameraMode = 'chase';
   private blend = 1;              // 0 → 1 during a transition
   private chasePos = new THREE.Vector3();
-  private chaseVel = new THREE.Vector3();
   private shakeT = 0;
   private tmpA = new THREE.Vector3(); private tmpB = new THREE.Vector3(); private tmpQ = new THREE.Quaternion();
   private fromPos = new THREE.Vector3(); private fromQuat = new THREE.Quaternion();
@@ -60,11 +59,12 @@ export class CameraRig {
       const right = new THREE.Vector3(1, 0, 0).applyQuaternion(root.quaternion);
       desired.addScaledVector(right, -aLat * 0.12);
       if (!this.initialised) { this.chasePos.copy(desired); this.initialised = true; }
-      // spring-damper follow
+      // Exponential follow (stable for any frame time, unlike an explicit-Euler spring); a slow
+      // frame just lags a little instead of launching the camera away. Snap if ever far off.
       const k = C.chase.stiffness;
-      const acc = desired.clone().sub(this.chasePos).multiplyScalar(k * k).sub(this.chaseVel.clone().multiplyScalar(2 * k));
-      this.chaseVel.addScaledVector(acc, dt);
-      this.chasePos.addScaledVector(this.chaseVel, dt);
+      const a = 1 - Math.exp(-k * dt);
+      this.chasePos.lerp(desired, a);
+      if (this.chasePos.distanceTo(desired) > 40) this.chasePos.copy(desired);
       pos.copy(this.chasePos);
       look.copy(root.position).add(new THREE.Vector3(0, C.chase.lookUp, 0)).addScaledVector(back, -6);
       cam.position.copy(pos); cam.lookAt(look);
@@ -103,7 +103,7 @@ export class CameraRig {
   }
 
   /** Forget the chase spring state (after a teleport) so the camera re-appears behind the bus. */
-  snap() { this.initialised = false; this.chaseVel.set(0, 0, 0); this.blend = 1; }
+  snap() { this.initialised = false; this.blend = 1; }
 
   resize(aspect: number) { this.camera.aspect = aspect; this.camera.updateProjectionMatrix(); }
 }

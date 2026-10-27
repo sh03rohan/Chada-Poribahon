@@ -141,3 +141,20 @@ test('performance: no frame spikes after warm-up (software renderer, low tier)',
   // SwiftShader is slow; we only assert the loop never stalls (a stall would be a bug, slow frames are the CPU).
   expect(st.worstFrame).toBeLessThan(1.0);
 });
+
+test('camera follows the bus when a run is started from the menu (not autostart)', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
+  await page.goto('/?quality=low&hour=10');
+  await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 90_000 });
+  await page.click('#menu-start');
+  await page.waitForTimeout(600);
+  await page.click('#pretrip-go');
+  await page.waitForTimeout(500);
+  await g(page, '__game.input.override = { throttle: 1 }; __game.autopilot = true');
+  await page.waitForTimeout(8000);
+  const r = await g(page, '(() => { const c = __game.cam.camera.position, b = __game.bus.root.position; return { kmh: __game.cur.v * 3.6, dist: c.distanceTo(b), freeCam: !!__game.freeCam }; })()') as { kmh: number; dist: number; freeCam: boolean };
+  console.log('menu-start camera', r);
+  expect(r.kmh).toBeGreaterThan(5);
+  expect(r.freeCam).toBe(false);
+  expect(r.dist, 'chase camera stays near the bus').toBeLessThan(30);
+});

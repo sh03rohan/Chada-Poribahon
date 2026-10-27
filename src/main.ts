@@ -227,7 +227,7 @@ class Game {
   private onSettingsClosed() { /* scheme/side changes already applied live */ }
 
   showPretrip() {
-    this.screen = 'pretrip'; this.running = false;
+    this.screen = 'pretrip'; this.running = false; this.freeCam = null;
     $('landing').classList.add('hidden'); $('pretrip').classList.remove('hidden'); this.hud.show(false);
     this.resetRun();
     this.map.drawFull($('pretrip-map') as HTMLCanvasElement, this.mapState());
@@ -298,7 +298,7 @@ class Game {
 
   startRun() {
     $('landing').classList.add('hidden'); $('pretrip').classList.add('hidden'); $('results').classList.add('hidden');
-    this.screen = 'driving'; this.paused = false;
+    this.screen = 'driving'; this.paused = false; this.freeCam = null;
     this.resetRun();
     this.sky.setTime(this.clockHour()); this.applyNight();
     if (!params.get('view')) this.cam.setMode(this.settings.value.camera);
