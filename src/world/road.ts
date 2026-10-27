@@ -18,12 +18,23 @@ export interface RoadSample { x: number; z: number; tx: number; tz: number; rx: 
 /** Wrong-turn branch at the fork: bends right, runs to a ferry-ghat queue, ends in a turnaround pad. */
 export const BRANCH_ROUTE: [number, number][] = [[60, 0], [140, 38], [230, 0], [60, -12], [40, 0]];
 
-export interface RoadOptions { route?: [number, number][]; start?: { x: number; z: number; yaw: number }; ground?: boolean; }
+export interface RoadOptions { route?: [number, number][]; start?: { x: number; z: number; yaw: number }; ground?: boolean; roundabouts?: number[]; }
 
 export class Road {
   readonly spacing = WORLD.frameSpacing;
   private route: [number, number][];
   private start: { x: number; z: number; yaw: number };
+  private roundabouts: number[];
+
+  /** Extra lateral half-width at s (the road splits around roundabout islands). 0 elsewhere. */
+  bulge(s: number): number {
+    let b = 0;
+    for (const sc of this.roundabouts) {
+      const d = Math.abs(s - sc) / WORLD.roundaboutHalfLength;
+      if (d < 1) b = Math.max(b, WORLD.roundaboutBulge * (0.5 - 0.5 * Math.cos(Math.PI * (1 - d))));
+    }
+    return b;
+  }
   px!: Float32Array; pz!: Float32Array; tx!: Float32Array; tz!: Float32Array;
   count = 0;
   length = 0;
@@ -35,6 +46,7 @@ export class Road {
   constructor(anisotropy: number, opts: RoadOptions = {}) {
     this.route = opts.route ?? MAIN_ROUTE;
     this.start = opts.start ?? { x: 0, z: 0, yaw: 0 };
+    this.roundabouts = opts.roundabouts ?? [];
     this.buildFrames();
     this.buildMeshes(anisotropy, opts.ground ?? true);
   }
@@ -147,8 +159,10 @@ export class Road {
       for (let i = 0; i < n; i++) {
         const rx = -this.tz[i], rz = this.tx[i];
         const s = i * this.spacing;
-        pos.set([this.px[i] + rx * offA, yA, this.pz[i] + rz * offA], i * 6);
-        pos.set([this.px[i] + rx * offB, yB, this.pz[i] + rz * offB], i * 6 + 3);
+        const bl = this.bulge(s);
+        const oa = offA + (offA < 0 ? -bl : bl), ob = offB + (offB < 0 ? -bl : bl);
+        pos.set([this.px[i] + rx * oa, yA, this.pz[i] + rz * oa], i * 6);
+        pos.set([this.px[i] + rx * ob, yB, this.pz[i] + rz * ob], i * 6 + 3);
         nrm.set([0, 1, 0, 0, 1, 0], i * 6);
         uv.set([0, s / vScale, uRepeatAcross, s / vScale], i * 4);
         // CCW seen from above (+y): left_i → right_i → left_{i+1}

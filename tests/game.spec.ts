@@ -104,12 +104,12 @@ test('route: Rajbari stop, blockade wait + police clear, finish at Dhaka', async
   await page.screenshot({ path: `${SHOTS}/rajbari.png` });
 
   // Blockade
-  await g(page, '__game.teleport(3600)');
+  await g(page, '__game.teleport(3650)');
   st = await g(page, '__game.simulate(30, { throttle: 1, autopilot: true })') as Stats;
   console.log('at blockade', st);
   expect(st.phase).toBe('blockade');
   expect(st.kmh).toBeLessThan(1);
-  expect(st.s, 'bus held before the barrier').toBeLessThan(3850 - 5);
+  expect(st.s, 'bus held before the barrier (or in the queue behind it)').toBeLessThan(3850 - 5);
   await g(page, '__game.switchCamera("cockpit")');
   await page.waitForTimeout(1500); // let the 0.6 s camera transition finish
   await page.screenshot({ path: `${SHOTS}/blockade-cockpit.png` });

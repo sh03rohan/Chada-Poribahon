@@ -22,46 +22,60 @@ function noiseBuffer(ctx: AudioContext, seconds = 2): AudioBuffer {
   return buf;
 }
 
-/** Synth diesel: pulse train (firing frequency) + sub + exhaust noise through a resonant low-pass. */
+/**
+ * Synth diesel for a 12-tonne bus: low firing fundamental (rpm/60 × 1.5), a slow "chug" that
+ * modulates gain at firing rate, sub-bass, heavy low-pass and lots of exhaust noise. Everything
+ * sits below ~600 Hz so it rumbles instead of buzzing like a two-wheeler.
+ */
 class SynthEngine implements EngineSource {
   private out: GainNode;
-  private osc1: OscillatorNode; private osc2: OscillatorNode; private osc3: OscillatorNode;
-  private filt: BiquadFilterNode;
-  private noiseGain: GainNode;
-  private g1: GainNode; private g2: GainNode;
+  private osc1: OscillatorNode; private osc2: OscillatorNode; private sub: OscillatorNode; private chug: OscillatorNode;
+  private chugGain: GainNode; private filt: BiquadFilterNode; private filt2: BiquadFilterNode;
+  private noiseGain: GainNode; private noiseFilt: BiquadFilterNode;
   private smoothed = PHYSICS.idleRpm;
 
   constructor(private ctx: AudioContext, noise: AudioBuffer) {
     this.out = ctx.createGain(); this.out.gain.value = 0;
-    this.filt = ctx.createBiquadFilter(); this.filt.type = 'lowpass'; this.filt.frequency.value = 400; this.filt.Q.value = 1.6;
-    this.filt.connect(this.out);
+    // two cascaded low-pass stages = 24 dB/oct roll-off above the rumble
+    this.filt = ctx.createBiquadFilter(); this.filt.type = 'lowpass'; this.filt.frequency.value = 220; this.filt.Q.value = 1.1;
+    this.filt2 = ctx.createBiquadFilter(); this.filt2.type = 'lowpass'; this.filt2.frequency.value = 420; this.filt2.Q.value = 0.7;
+    // chug: amplitude modulation at firing rate so each "bang" is audible at idle
+    this.chug = ctx.createOscillator(); this.chug.type = 'square';
+    this.chugGain = ctx.createGain(); this.chugGain.gain.value = 0.35;
+    const amp = ctx.createGain(); amp.gain.value = 0.65;
+    this.chug.connect(this.chugGain).connect(amp.gain);
+    this.filt.connect(this.filt2).connect(amp).connect(this.out);
     this.osc1 = ctx.createOscillator(); this.osc1.type = 'sawtooth';
-    this.osc2 = ctx.createOscillator(); this.osc2.type = 'square';
-    this.osc3 = ctx.createOscillator(); this.osc3.type = 'sine';
-    this.g1 = ctx.createGain(); this.g1.gain.value = 0.35; this.osc1.connect(this.g1).connect(this.filt);
-    this.g2 = ctx.createGain(); this.g2.gain.value = 0.18; this.osc2.connect(this.g2).connect(this.filt);
-    const g3 = ctx.createGain(); g3.gain.value = 0.5; this.osc3.connect(g3).connect(this.filt);
+    this.osc2 = ctx.createOscillator(); this.osc2.type = 'triangle';
+    this.sub = ctx.createOscillator(); this.sub.type = 'sine';
+    const g1 = ctx.createGain(); g1.gain.value = 0.5; this.osc1.connect(g1).connect(this.filt);
+    const g2 = ctx.createGain(); g2.gain.value = 0.35; this.osc2.connect(g2).connect(this.filt);
+    const g3 = ctx.createGain(); g3.gain.value = 0.9; this.sub.connect(g3).connect(this.filt);
     const ns = ctx.createBufferSource(); ns.buffer = noise; ns.loop = true;
-    const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 180; nf.Q.value = 0.7;
-    this.noiseGain = ctx.createGain(); this.noiseGain.gain.value = 0.3;
-    ns.connect(nf).connect(this.noiseGain).connect(this.filt);
-    this.osc1.start(); this.osc2.start(); this.osc3.start(); ns.start();
+    this.noiseFilt = ctx.createBiquadFilter(); this.noiseFilt.type = 'bandpass'; this.noiseFilt.frequency.value = 110; this.noiseFilt.Q.value = 0.6;
+    this.noiseGain = ctx.createGain(); this.noiseGain.gain.value = 0.6;
+    ns.connect(this.noiseFilt).connect(this.noiseGain).connect(this.filt);
+    this.osc1.start(); this.osc2.start(); this.sub.start(); this.chug.start(); ns.start();
   }
 
   connect(dest: AudioNode) { this.out.connect(dest); }
 
   update(rpm: number, throttle: number, dt: number) {
-    this.smoothed += (rpm - this.smoothed) * Math.min(1, dt * 10);
+    this.smoothed += (rpm - this.smoothed) * Math.min(1, dt * 6);
     const t = this.ctx.currentTime;
-    // 6-cylinder 4-stroke: 3 firings per revolution
-    const fire = this.smoothed / 60 * 3;
-    this.osc1.frequency.setTargetAtTime(fire, t, 0.02);
-    this.osc2.frequency.setTargetAtTime(fire * 0.5, t, 0.02);
-    this.osc3.frequency.setTargetAtTime(fire * 0.25 + 28, t, 0.02);
-    const load = 0.35 + throttle * 0.65;
-    this.filt.frequency.setTargetAtTime(220 + this.smoothed * 0.35 + throttle * 700, t, 0.05);
-    this.out.gain.setTargetAtTime(AUDIO.engineGain * (0.45 + 0.55 * load) * (0.6 + 0.4 * this.smoothed / PHYSICS.redlineRpm), t, 0.05);
-    this.noiseGain.gain.setTargetAtTime(0.2 + throttle * 0.5, t, 0.05);
+    const rps = this.smoothed / 60;
+    const fire = rps * 1.5;                   // perceived firing rate of a big slow diesel
+    this.osc1.frequency.setTargetAtTime(fire, t, 0.03);
+    this.osc2.frequency.setTargetAtTime(fire * 2.01, t, 0.03);
+    this.sub.frequency.setTargetAtTime(Math.max(20, fire * 0.5), t, 0.03);
+    this.chug.frequency.setTargetAtTime(Math.max(8, fire), t, 0.03);
+    const load = 0.3 + throttle * 0.7;
+    this.filt.frequency.setTargetAtTime(140 + this.smoothed * 0.09 + throttle * 160, t, 0.08);
+    this.filt2.frequency.setTargetAtTime(300 + this.smoothed * 0.12 + throttle * 220, t, 0.08);
+    this.chugGain.gain.setTargetAtTime(0.45 - Math.min(0.35, this.smoothed / PHYSICS.redlineRpm * 0.4), t, 0.1);
+    this.noiseFilt.frequency.setTargetAtTime(90 + this.smoothed * 0.06, t, 0.1);
+    this.noiseGain.gain.setTargetAtTime(0.4 + throttle * 0.7, t, 0.08);
+    this.out.gain.setTargetAtTime(AUDIO.engineGain * (0.5 + 0.5 * load) * (0.7 + 0.3 * this.smoothed / PHYSICS.redlineRpm), t, 0.06);
   }
 }
 
@@ -91,9 +105,9 @@ export class BusAudio {
 
     // Horn: Bangladeshi bus air-horn-ish two-tone
     this.hornGain = ctx.createGain(); this.hornGain.gain.value = 0;
-    const hf = ctx.createBiquadFilter(); hf.type = 'lowpass'; hf.frequency.value = 1800;
+    const hf = ctx.createBiquadFilter(); hf.type = 'lowpass'; hf.frequency.value = 1400;
     this.hornGain.connect(hf).connect(this.master);
-    for (const [f, type] of [[392, 'sawtooth'], [494, 'square'], [196, 'sawtooth']] as [number, OscillatorType][]) {
+    for (const [f, type] of [[311, 'sawtooth'], [370, 'square'], [155, 'sawtooth']] as [number, OscillatorType][]) {
       const o = ctx.createOscillator(); o.type = type; o.frequency.value = f;
       const g = ctx.createGain(); g.gain.value = 0.3; o.connect(g).connect(this.hornGain); o.start();
       this.hornOsc.push(o);

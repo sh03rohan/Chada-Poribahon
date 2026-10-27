@@ -67,7 +67,8 @@ export class RouteEvents {
         this.hud.message('সামনে অবরোধ! রাস্তা বন্ধ — থামুন', false, 4000);
         this.passengers.shout('blockade', true);
       }
-      if (this.blockade.active && this.wallDistance(s + 5.6) <= 0.5) {
+      // Pressed against the barrier, or stopped in the traffic queue behind it (within 60 m)
+      if (this.blockade.active && (this.wallDistance(s + 5.6) <= 0.5 || (s > WORLD.andolonS - 60 && s < WORLD.andolonS && kmh < 0.8))) {
         // bus is pressed against the barrier
         if (!this.blockadeStopped) {
           this.blockadeStopped = true;

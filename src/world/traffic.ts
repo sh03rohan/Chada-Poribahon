@@ -27,66 +27,105 @@ function colored(g: THREE.BufferGeometry, c: THREE.ColorRepresentation) {
 const wheel = (x: number, z: number, r = 0.33, w = 0.22) => colored(new THREE.CylinderGeometry(r, r, w, 10).rotateZ(Math.PI / 2).translate(x, r, z), 0x151515);
 
 /** Geometry builders — vehicles face -Z (forward), origin at ground centre. */
+const GLASS = 0x1c2a36, CHROME = 0xcfd4d8, DARK = 0x151515, LIGHT = 0xfff2cc, TAIL = 0xd82020;
+const box = (w: number, h: number, d: number, x: number, y: number, z: number, c: number) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y, z), c);
+const hubcap = (x: number, z: number, r: number, w: number) => colored(new THREE.CylinderGeometry(r * 0.55, r * 0.55, w + 0.02, 10).rotateZ(Math.PI / 2).translate(x, r, z), 0xb8bcc0);
+const arch = (x: number, z: number, r: number, w: number, c: number) => colored(new THREE.CylinderGeometry(r + 0.1, r + 0.1, w, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2).rotateY(Math.PI / 2 * 0).translate(x, r, z), c);
+
 function buildCar(body: number): THREE.BufferGeometry {
+  const dark = 0x0f0f10;
   return mergeGeometries([
-    colored(new THREE.BoxGeometry(1.7, 0.55, 4.2).translate(0, 0.6, 0), body),
-    colored(new THREE.BoxGeometry(1.5, 0.5, 2.2).translate(0, 1.12, 0.1), body),
-    colored(new THREE.BoxGeometry(1.46, 0.42, 2.0).translate(0, 1.12, 0.1), 0x9ac0d8),
-    colored(new THREE.BoxGeometry(0.3, 0.12, 0.05).translate(-0.55, 0.65, -2.1), 0xfff2cc), colored(new THREE.BoxGeometry(0.3, 0.12, 0.05).translate(0.55, 0.65, -2.1), 0xfff2cc),
-    colored(new THREE.BoxGeometry(0.3, 0.12, 0.05).translate(-0.55, 0.65, 2.1), 0xd82020), colored(new THREE.BoxGeometry(0.3, 0.12, 0.05).translate(0.55, 0.65, 2.1), 0xd82020),
+    box(1.74, 0.42, 4.3, 0, 0.62, 0, body),                             // lower body
+    box(1.7, 0.3, 1.5, 0, 0.98, -1.1, body),                            // hood
+    box(1.7, 0.26, 1.1, 0, 0.96, 1.5, body),                            // trunk
+    colored(new THREE.BoxGeometry(1.5, 0.5, 2.1).translate(0, 1.33, 0.05), body),   // cabin
+    colored(new THREE.BoxGeometry(1.52, 0.36, 1.9).translate(0, 1.33, 0.05), GLASS),  // window band
+    box(1.4, 0.36, 0.06, 0, 1.3, -1.02, GLASS), box(1.3, 0.3, 0.06, 0, 1.3, 1.1, GLASS),   // windshield / rear glass
+    box(0.5, 0.05, 1.8, -0.75, 1.1, 0.05, body), box(0.5, 0.05, 1.8, 0.75, 1.1, 0.05, body),   // sills
+    box(1.8, 0.16, 0.2, 0, 0.42, -2.18, 0x2a2a2a), box(1.8, 0.16, 0.2, 0, 0.42, 2.18, 0x2a2a2a), // bumpers
+    box(0.34, 0.14, 0.05, -0.6, 0.74, -2.16, LIGHT), box(0.34, 0.14, 0.05, 0.6, 0.74, -2.16, LIGHT),
+    box(0.34, 0.12, 0.05, -0.6, 0.78, 2.16, TAIL), box(0.34, 0.12, 0.05, 0.6, 0.78, 2.16, TAIL),
+    box(0.12, 0.08, 0.16, -0.92, 1.12, -0.6, body), box(0.12, 0.08, 0.16, 0.92, 1.12, -0.6, body),  // mirrors
+    box(0.5, 0.06, 0.02, 0, 0.6, -2.19, 0x202020),                      // grille
+    arch(-0.8, -1.35, 0.33, 0.3, dark), arch(0.8, -1.35, 0.33, 0.3, dark), arch(-0.8, 1.35, 0.33, 0.3, dark), arch(0.8, 1.35, 0.33, 0.3, dark),
     wheel(-0.8, -1.35), wheel(0.8, -1.35), wheel(-0.8, 1.35), wheel(0.8, 1.35),
+    hubcap(-0.9, -1.35, 0.33, 0.22), hubcap(0.9, -1.35, 0.33, 0.22), hubcap(-0.9, 1.35, 0.33, 0.22), hubcap(0.9, 1.35, 0.33, 0.22),
   ])!;
 }
 function buildBike(body: number): THREE.BufferGeometry {
   return mergeGeometries([
-    colored(new THREE.BoxGeometry(0.3, 0.3, 1.1).translate(0, 0.65, 0), body),
-    colored(new THREE.BoxGeometry(0.25, 0.1, 0.6).translate(0, 0.85, 0.2), 0x202020),
-    colored(new THREE.BoxGeometry(0.6, 0.05, 0.05).translate(0, 1.0, -0.55), 0x303030),
-    colored(new THREE.BoxGeometry(0.16, 0.14, 0.08).translate(0, 0.95, -0.7), 0xfff2cc),
+    box(0.18, 0.22, 0.9, 0, 0.62, 0.05, 0x202020),                      // frame
+    colored(new THREE.SphereGeometry(0.17, 8, 6).scale(1, 0.75, 1.5).translate(0, 0.82, -0.15), body),  // tank
+    box(0.24, 0.08, 0.5, 0, 0.84, 0.3, 0x111111),                       // seat
+    box(0.62, 0.04, 0.04, 0, 1.02, -0.52, CHROME), box(0.06, 0.3, 0.06, 0, 0.9, -0.55, 0x202020), // handlebar + stem
+    colored(new THREE.CylinderGeometry(0.1, 0.1, 0.1, 8).rotateX(Math.PI / 2).translate(0, 0.86, -0.68), LIGHT),
+    box(0.1, 0.06, 0.05, 0, 0.8, 0.72, TAIL),
+    colored(new THREE.CylinderGeometry(0.05, 0.06, 0.9, 6).rotateX(Math.PI / 2 - 0.15).translate(0.14, 0.42, 0.35), CHROME),  // exhaust
+    box(0.14, 0.04, 0.5, 0, 0.66, -0.72, body), box(0.14, 0.04, 0.5, 0, 0.66, 0.72, body),       // mudguards
     wheel(0, -0.72, 0.3, 0.08), wheel(0, 0.72, 0.3, 0.08),
+    colored(new THREE.CylinderGeometry(0.18, 0.18, 0.09, 8).rotateZ(Math.PI / 2).translate(0, 0.3, -0.72), 0x8a8e92),
+    colored(new THREE.CylinderGeometry(0.18, 0.18, 0.09, 8).rotateZ(Math.PI / 2).translate(0, 0.3, 0.72), 0x8a8e92),
   ])!;
 }
 function buildBus(body: number, stripe: number): THREE.BufferGeometry {
   const parts = [
-    colored(new THREE.BoxGeometry(2.45, 2.6, 10.5).translate(0, 1.75, 0), body),
-    colored(new THREE.BoxGeometry(2.48, 0.35, 10.52).translate(0, 1.4, 0), stripe),
-    colored(new THREE.BoxGeometry(2.1, 0.1, 10.0).translate(0, 3.1, 0), 0xdddddd),
-    colored(new THREE.BoxGeometry(2.2, 0.9, 0.05).translate(0, 2.3, -5.26), 0x9ac0d8),
-    colored(new THREE.BoxGeometry(0.35, 0.2, 0.05).translate(-0.8, 0.9, -5.26), 0xfff2cc), colored(new THREE.BoxGeometry(0.35, 0.2, 0.05).translate(0.8, 0.9, -5.26), 0xfff2cc),
-    colored(new THREE.BoxGeometry(0.35, 0.2, 0.05).translate(-0.8, 0.9, 5.26), 0xd82020), colored(new THREE.BoxGeometry(0.35, 0.2, 0.05).translate(0.8, 0.9, 5.26), 0xd82020),
+    box(2.45, 2.55, 10.5, 0, 1.8, 0, body),
+    box(2.48, 0.38, 10.52, 0, 1.35, 0, stripe), box(2.48, 0.12, 10.52, 0, 2.95, 0, stripe),
+    box(2.1, 0.12, 10.0, 0, 3.12, 0, 0xdddddd),                         // roof
+    box(0.05, 0.05, 8.6, -0.9, 3.35, 0.2, CHROME), box(0.05, 0.05, 8.6, 0.9, 3.35, 0.2, CHROME), // roof rack rails
+    box(2.2, 1.0, 0.05, 0, 2.3, -5.26, GLASS), box(2.0, 0.8, 0.05, 0, 2.3, 5.26, GLASS),  // front / rear glass
+    box(1.8, 0.3, 0.04, 0, 2.95, -5.27, 0x101418),                      // destination board
+    box(2.5, 0.3, 0.3, 0, 0.55, -5.3, CHROME), box(2.5, 0.3, 0.3, 0, 0.55, 5.3, CHROME), // bumpers
+    box(1.4, 0.4, 0.05, 0, 1.0, -5.27, 0x202020),                       // grille
+    box(0.35, 0.22, 0.05, -0.8, 1.0, -5.28, LIGHT), box(0.35, 0.22, 0.05, 0.8, 1.0, -5.28, LIGHT),
+    box(0.35, 0.22, 0.05, -0.8, 1.0, 5.28, TAIL), box(0.35, 0.22, 0.05, 0.8, 1.0, 5.28, TAIL),
+    box(0.06, 0.45, 0.3, -1.5, 2.3, -4.9, 0x202020), box(0.06, 0.45, 0.3, 1.5, 2.3, -4.9, 0x202020), // mirrors
+    box(0.05, 1.9, 1.1, -1.24, 1.5, -3.6, 0x3a3a3a),                    // door
+    arch(-1.0, -3.3, 0.5, 0.35, 0x0f0f10), arch(1.0, -3.3, 0.5, 0.35, 0x0f0f10), arch(-1.0, 2.8, 0.5, 0.35, 0x0f0f10), arch(1.0, 2.8, 0.5, 0.35, 0x0f0f10),
     wheel(-1.0, -3.3, 0.5, 0.3), wheel(1.0, -3.3, 0.5, 0.3), wheel(-1.0, 2.8, 0.5, 0.3), wheel(1.0, 2.8, 0.5, 0.3),
   ];
-  for (let i = 0; i < 6; i++) for (const sx of [-1, 1]) parts.push(colored(new THREE.BoxGeometry(0.05, 0.9, 1.3).translate(sx * 1.24, 2.3, -4 + i * 1.6), 0x9ac0d8));
+  for (let i = 0; i < 6; i++) for (const sx of [-1, 1]) parts.push(box(0.05, 0.9, 1.3, sx * 1.24, 2.3, -4 + i * 1.6, GLASS));
   return mergeGeometries(parts)!;
 }
 function buildTruck(cab: number, cargo: number): THREE.BufferGeometry {
-  return mergeGeometries([
-    colored(new THREE.BoxGeometry(2.3, 2.2, 2.2).translate(0, 1.6, -3.4), cab),
-    colored(new THREE.BoxGeometry(2.0, 0.8, 0.05).translate(0, 2.1, -4.51), 0x9ac0d8),
-    colored(new THREE.BoxGeometry(2.4, 0.5, 7.6).translate(0, 0.9, 1.4), 0x3a3a3a),
-    colored(new THREE.BoxGeometry(2.4, 1.9, 6.0).translate(0, 2.1, 1.6), cargo),
-    colored(new THREE.BoxGeometry(2.42, 0.25, 6.02).translate(0, 2.9, 1.6), 0xffcc33),
-    colored(new THREE.BoxGeometry(2.42, 0.25, 6.02).translate(0, 1.3, 1.6), 0x1f9d55),
-    colored(new THREE.BoxGeometry(0.35, 0.2, 0.05).translate(-0.8, 0.8, -4.51), 0xfff2cc), colored(new THREE.BoxGeometry(0.35, 0.2, 0.05).translate(0.8, 0.8, -4.51), 0xfff2cc),
+  const parts = [
+    box(2.3, 2.1, 2.2, 0, 1.65, -3.4, cab),
+    box(2.0, 0.85, 0.06, 0, 2.15, -4.52, GLASS), box(0.06, 0.7, 0.9, -1.16, 2.1, -3.5, GLASS), box(0.06, 0.7, 0.9, 1.16, 2.1, -3.5, GLASS),
+    box(2.4, 0.3, 0.5, 0, 2.85, -3.4, 0xffcc33),                        // cab visor
+    box(2.4, 0.5, 7.6, 0, 0.9, 1.4, 0x3a3a3a),                          // chassis
+    box(2.4, 1.9, 6.0, 0, 2.1, 1.6, cargo),
+    box(2.42, 0.25, 6.02, 0, 2.95, 1.6, 0xffcc33), box(2.42, 0.25, 6.02, 0, 1.3, 1.6, 0x1f9d55),
+    box(2.44, 0.12, 6.04, 0, 1.75, 1.6, 0xd8262c), box(2.44, 0.12, 6.04, 0, 2.5, 1.6, 0xd8262c), // painted planks
+    box(2.5, 0.3, 0.3, 0, 0.5, -4.55, CHROME),
+    box(0.35, 0.2, 0.05, -0.8, 0.85, -4.52, LIGHT), box(0.35, 0.2, 0.05, 0.8, 0.85, -4.52, LIGHT),
+    box(0.3, 0.2, 0.05, -0.9, 0.9, 4.62, TAIL), box(0.3, 0.2, 0.05, 0.9, 0.9, 4.62, TAIL),
+    box(0.06, 0.5, 0.3, -1.4, 2.2, -4.2, 0x202020), box(0.06, 0.5, 0.3, 1.4, 2.2, -4.2, 0x202020),
+    arch(-1.0, -3.0, 0.5, 0.36, 0x0f0f10), arch(1.0, -3.0, 0.5, 0.36, 0x0f0f10),
+    box(0.4, 0.08, 1.9, -1.1, 1.08, 2.8, 0x2a2a2a), box(0.4, 0.08, 1.9, 1.1, 1.08, 2.8, 0x2a2a2a), // rear mudguards
     wheel(-1.0, -3.0, 0.5, 0.3), wheel(1.0, -3.0, 0.5, 0.3), wheel(-1.0, 2.2, 0.5, 0.3), wheel(1.0, 2.2, 0.5, 0.3), wheel(-1.0, 3.4, 0.5, 0.3), wheel(1.0, 3.4, 0.5, 0.3),
-  ])!;
+  ];
+  return mergeGeometries(parts)!;
 }
 function buildAuto(): THREE.BufferGeometry {
   const green = 0x1f8a4a;
   return mergeGeometries([
-    colored(new THREE.BoxGeometry(1.3, 0.6, 2.6).translate(0, 0.65, 0.1), green),
-    colored(new THREE.BoxGeometry(1.35, 0.1, 2.7).translate(0, 1.75, 0.1), green),
-    colored(new THREE.BoxGeometry(0.06, 0.9, 0.06).translate(-0.62, 1.3, -1.1), 0x202020), colored(new THREE.BoxGeometry(0.06, 0.9, 0.06).translate(0.62, 1.3, -1.1), 0x202020),
-    colored(new THREE.BoxGeometry(0.06, 0.9, 0.06).translate(-0.62, 1.3, 1.3), 0x202020), colored(new THREE.BoxGeometry(0.06, 0.9, 0.06).translate(0.62, 1.3, 1.3), 0x202020),
-    colored(new THREE.BoxGeometry(1.2, 0.8, 0.05).translate(0, 1.3, -1.2), 0x9ac0d8),
-    colored(new THREE.BoxGeometry(1.2, 0.5, 0.05).translate(0, 1.0, 1.4), 0xffcc33),
-    colored(new THREE.SphereGeometry(0.1, 6, 5).translate(0, 0.95, -1.35), 0xfff2cc),
+    box(1.3, 0.55, 2.4, 0, 0.62, 0.2, green),
+    colored(new THREE.CylinderGeometry(0.66, 0.66, 1.35, 10, 1, false, Math.PI, Math.PI).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).translate(0, 0.7, -1.0), green), // rounded nose
+    colored(new THREE.CylinderGeometry(1.42, 1.42, 1.42, 10, 1, false, Math.PI * 1.08, Math.PI * 0.84).rotateX(Math.PI / 2).scale(1, 1, 1).translate(0, 0.45, 0.25), 0x111111), // canopy (segment)
+    box(1.36, 0.08, 2.6, 0, 1.78, 0.15, 0x111111),
+    box(0.06, 0.95, 0.06, -0.62, 1.3, -0.95, 0x202020), box(0.06, 0.95, 0.06, 0.62, 1.3, -0.95, 0x202020),
+    box(0.06, 0.95, 0.06, -0.62, 1.3, 1.35, 0x202020), box(0.06, 0.95, 0.06, 0.62, 1.3, 1.35, 0x202020),
+    box(1.2, 0.8, 0.05, 0, 1.3, -1.22, GLASS),
+    box(1.24, 0.5, 0.05, 0, 1.0, 1.42, 0xffcc33),                        // rear sign panel
+    box(0.05, 0.6, 1.0, -0.66, 1.1, 0.5, green), box(0.05, 0.6, 1.0, 0.66, 1.1, 0.5, green), // doors
+    colored(new THREE.SphereGeometry(0.11, 7, 6).translate(0, 0.95, -1.38), LIGHT),
+    box(0.28, 0.06, 0.5, 0, 0.62, -1.1, green),                         // front mudguard
     wheel(0, -1.1, 0.25, 0.1), wheel(-0.6, 0.9, 0.25, 0.12), wheel(0.6, 0.9, 0.25, 0.12),
   ])!;
 }
 
 const SPEC: Record<VType, { count: number; speed: [number, number]; len: number; colors: number[][] }> = {
-  car: { count: 14, speed: [55, 85], len: 4.2, colors: [[0xe8e8e8], [0x1b1b1b], [0xb0b8c0], [0x8a1f2a], [0x1f4a8a]] },
+  car: { count: 14, speed: [55, 85], len: 4.3, colors: [[0xe8e8e8], [0x1b1b1b], [0xb0b8c0], [0x8a1f2a], [0x1f4a8a], [0xd8a020]] },
   bike: { count: 10, speed: [45, 75], len: 1.6, colors: [[0xd8262c], [0x1b1b1b], [0x1f6fb5]] },
   bus: { count: 5, speed: [55, 75], len: 10.5, colors: [[0xf2e2b0, 0x1f6fb5], [0xd8e8d0, 0xd8262c], [0xffffff, 0x1f9d55]] },
   truck: { count: 6, speed: [40, 60], len: 8.4, colors: [[0x2a5a9a, 0xc8a050], [0xd8262c, 0x3a7a3a], [0x1f9d55, 0xa04040]] },
@@ -173,7 +212,7 @@ export class Traffic {
 
   private place(vh: Vehicle) {
     const f = this.road.sample(vh.s);
-    const lat = vh.lateral + vh.swerve;
+    const lat = vh.lateral + vh.swerve - vh.dir * this.road.bulge(vh.s);
     this.v.set(f.x + f.rx * lat, 0, f.z + f.rz * lat);
     const yaw = Math.atan2(-f.tx, -f.tz) + (vh.dir === 1 ? 0 : Math.PI);
     this.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
@@ -208,21 +247,31 @@ export class Traffic {
       // barrier (blockade) ahead
       const toBarrier = (this.barrierS - vh.s) * vh.dir - vh.len / 2 - 3;
       if (this.barrierS !== Infinity && toBarrier > -5 && toBarrier < gap) { gap = toBarrier; leadSpeed = 0; }
-      // target speed: keep ~2 s headway, hard stop at 2 m
+      // target speed: the fastest speed from which we can still slow to the leader's speed
+      // within (gap − margin) at a comfortable 4.5 m/s², plus a time headway
       let target = vh.maxSpeed;
       if (gap < Infinity) {
-        const safe = 3 + leadSpeed * 1.4;
-        if (gap < safe) target = Math.min(target, Math.max(0, leadSpeed * (gap / safe) + (gap < 2 ? 0 : 0)));
-        if (gap < 2) target = 0;
+        const margin = 4 + vh.speed * 0.9;
+        const room = gap - margin;
+        const allowed = room <= 0 ? Math.min(leadSpeed, Math.max(0, gap - 2) * 0.5) : Math.sqrt(leadSpeed * leadSpeed + 2 * 4.5 * room);
+        target = Math.min(target, Math.max(0, allowed));
+        if (gap < 1.5) target = 0;
       }
       // oncoming swerve when the player sits in their lane
       let swerveT = 0;
       if (playerActive && vh.dir === -1) {
-        const d = vh.s - playerS; // positive = player ahead of (i.e. in front of) the oncoming vehicle
-        if (d > 0 && d < 55 && playerLateral > 0.2) { swerveT = 3.0; target = Math.min(target, 7); }
+        const d = vh.s - playerS - 5.6 - vh.len / 2; // distance from the oncoming vehicle's nose to the bus front
+        const overlap = Math.abs(playerLateral - vh.lateral) < 3.2;
+        if (d > -2 && d < 70 && overlap) {
+          swerveT = 3.2;
+          const room = d - 6;
+          const allowed = room <= 0 ? 0 : Math.sqrt(2 * 4.5 * room);
+          target = Math.min(target, Math.max(0, allowed), 9);
+          if (d < 2) target = 0;
+        }
       }
       vh.swerve += (swerveT - vh.swerve) * Math.min(1, dt * 1.5);
-      const accel = target > vh.speed ? 2.2 : 5.5;
+      const accel = target > vh.speed ? 2.2 : 7.5;
       vh.speed += THREE.MathUtils.clamp(target - vh.speed, -accel * dt, accel * dt);
       vh.s += vh.speed * vh.dir * dt;
       if (vh.s > L - 20) { vh.s -= L - 40; } else if (vh.s < 20) { vh.s += L - 40; }
@@ -238,7 +287,7 @@ export class Traffic {
       }
       const yaw = this.place(vh);
       if (vh.type === 'bike') {
-        const r = this.riders[vh.idx]; if (r) { const f = this.road.sample(vh.s); const lat = vh.lateral + vh.swerve; r.position.set(f.x + f.rx * lat, 0.52, f.z + f.rz * lat); r.root.rotation.y = yaw; }
+        const r = this.riders[vh.idx]; if (r) { const f = this.road.sample(vh.s); const lat = vh.lateral + vh.swerve - vh.dir * this.road.bulge(vh.s); r.position.set(f.x + f.rx * lat, 0.52, f.z + f.rz * lat); r.root.rotation.y = yaw + Math.PI; }
       }
     }
     for (const type of Object.keys(this.meshes) as VType[]) for (const mesh of this.meshes[type]) mesh.instanceMatrix.needsUpdate = true;
@@ -252,8 +301,9 @@ export class Traffic {
       }
       pd.s += pd.dir * pd.p.walkSpeed * dt;
       const f = this.road.sample(pd.s);
-      pd.p.position.set(f.x + f.rx * pd.lat, 0, f.z + f.rz * pd.lat);
-      pd.p.root.rotation.y = Math.atan2(-f.tx, -f.tz) + (pd.dir === 1 ? 0 : Math.PI);
+      const plat = pd.lat + Math.sign(pd.lat) * this.road.bulge(pd.s);
+      pd.p.position.set(f.x + f.rx * plat, 0, f.z + f.rz * plat);
+      pd.p.root.rotation.y = Math.atan2(f.tx, f.tz) + (pd.dir === 1 ? 0 : Math.PI);
       if (pd.p.action !== 'walk') pd.p.setAction('walk');
     }
     void camPos;

@@ -51,10 +51,24 @@ greyed wrong branch, position, distance remaining, ETA. About 40 % in there is a
 ("ঢাকা ➜ পদ্মা সেতু" straight, "দৌলতদিয়া ঘাট ➜" right). The right branch is a ferry-queue dead end with a
 turnaround pad: "রাস্তা ভুল!" warning, mood drain, reroute arrow on both maps until you are back on the main road.
 
+### Cities, roundabouts, weather, mobile
+
+* **গোল চত্বর** at Rajbari (2.13 km), Faridpur (3.56 km) and Dhaka (5.72 km): the road widens (`Road.bulge`, up to
+  `WORLD.roundaboutBulge` m per side) and splits around a kerbed island with a monument, flower beds, lamps and a
+  name board (`src/world/roundabouts.ts`). Traffic, pedestrians and the autopilot follow the widened lanes;
+  driving onto the island stops the bus (`Roundabouts.wallDistance`). Positions/radius live in `WORLD.roundabouts`.
+* **Sky**: visible sun disc + glow, moon and stars at night (the dome goes properly dark, exposure 0.32), a cloud
+  dome that thickens and darkens with rain, fog/light/exposure all re-derived on every time or weather change.
+* **Mobile**: the first menu tap requests fullscreen + `screen.orientation.lock('landscape')` (Android); where
+  locking is unsupported (iOS) a portrait overlay asks the player to rotate. `manifest.webmanifest` declares
+  `orientation: landscape` for installed/PWA use.
+
 ### Traffic & people
 
-Ambient traffic (cars, bikes with riders, buses, trucks, CNG autos) runs in both lanes, keeps headway, queues
-behind the bus and the blockade, and oncoming vehicles swerve to their shoulder if you drift into their lane.
+Ambient traffic (cars, bikes with riders, buses, trucks, CNG autos) runs in both lanes. Following uses a
+stopping-distance rule (fastest speed from which the vehicle can still slow to its leader within the gap at
+4.5 m/s²), so vehicles queue behind the bus and the blockade instead of driving through it; oncoming vehicles
+swerve to their shoulder and brake to a stop if the bus sits in their lane.
 Rear-ending a vehicle stops the bus and costs mood. Pedestrians walk the footpaths, hawkers stand at shop
 clusters, a helper hangs from the door shouting "ঢাকা ঢাকা!", passengers board at Rajbari.
 

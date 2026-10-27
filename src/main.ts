@@ -21,6 +21,7 @@ import { Stops } from './world/stops.ts';
 import { Blockade } from './world/blockade.ts';
 import { Traffic } from './world/traffic.ts';
 import { Fork } from './world/fork.ts';
+import { Roundabouts } from './world/roundabouts.ts';
 import { CameraRig, type CameraMode } from './game/camera.ts';
 import { Passengers } from './game/passengers.ts';
 import { Hud } from './game/hud.ts';
@@ -45,7 +46,7 @@ class Game {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
   composer: EffectComposer | null = null;
-  road!: Road; props!: Props; traffic!: Traffic; fork!: Fork;
+  road!: Road; props!: Props; traffic!: Traffic; fork!: Fork; roundabouts!: Roundabouts;
   sky!: SkySystem; weather!: Weather; stops!: Stops; blockade!: Blockade;
   bus!: BusRig;
   cam: CameraRig;
@@ -125,7 +126,7 @@ class Game {
     const q = QUALITY[this.tier];
     const maxAniso = Math.min(q.anisotropy, this.renderer.capabilities.getMaxAnisotropy());
 
-    this.road = new Road(maxAniso);
+    this.road = new Road(maxAniso, { roundabouts: WORLD.roundabouts.map((r) => r.s) });
     this.scene.add(this.road.group);
     this.props = new Props(this.road, this.tier, maxAniso);
     this.scene.add(this.props.group);
@@ -133,6 +134,8 @@ class Game {
     this.scene.add(this.stops.group);
     this.blockade = new Blockade(this.road, this.tier === 'low', this.people);
     this.scene.add(this.blockade.group);
+    this.roundabouts = new Roundabouts(this.road);
+    this.scene.add(this.roundabouts.group);
     this.fork = new Fork(this.road, maxAniso, this.people);
     this.scene.add(this.fork.group);
     this.traffic = new Traffic(this.road, this.tier, this.people);
@@ -186,9 +189,17 @@ class Game {
   }
 
   // ---- Screens / menus ------------------------------------------------------
+  /** Mobile: go fullscreen and lock to landscape on the first user gesture (best effort; needs fullscreen on Android). */
+  private async lockLandscape() {
+    if (!isMobile()) return;
+    try { if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); } catch { /* not allowed */ }
+    try { const o = screen.orientation as ScreenOrientation & { lock?: (t: string) => Promise<void> }; await o.lock?.('landscape'); } catch { /* unsupported (iOS) → the CSS rotate overlay asks the player */ }
+    this.resize();
+  }
+
   private bindMenus() {
-    $('menu-start').onclick = async () => { await this.audio.init(); this.audio.setVolume(this.settings.value.volume); if (this.settings.value.introSeen) this.showPretrip(); else this.playIntro(); };
-    $('menu-intro').onclick = async () => { await this.audio.init(); this.playIntro(); };
+    $('menu-start').onclick = async () => { await this.lockLandscape(); await this.audio.init(); this.audio.setVolume(this.settings.value.volume); if (this.settings.value.introSeen) this.showPretrip(); else this.playIntro(); };
+    $('menu-intro').onclick = async () => { await this.lockLandscape(); await this.audio.init(); this.playIntro(); };
     $('menu-settings').onclick = () => this.openSettings();
     $('menu-howto').onclick = () => $('howto').classList.remove('hidden');
     $('howto-close').onclick = () => $('howto').classList.add('hidden');
@@ -301,7 +312,7 @@ class Game {
 
   applyNight() {
     const night = this.sky.state.night;
-    this.props.setNight(night);
+    this.props.setNight(night); this.roundabouts?.setNight(night);
     this.bus.setLights({ headlights: night || this.weather.wet > 0.5, brake: this.cur.brake, reverse: this.cur.v < -0.2 });
   }
 
@@ -353,14 +364,16 @@ class Game {
     const loc = this.road.locate(this.cur.x, this.cur.z, this.routeS);
     const br = this.fork.locate(this.cur.x, this.cur.z, this.branchS);
     this.branchS = br.s;
-    const mainOn = Math.abs(loc.lateral) < WORLD.roadWidth / 2 + WORLD.shoulderWidth * 0.6;
+    const bl = this.road.bulge(loc.s);
+    const mainOn = Math.abs(loc.lateral) < WORLD.roadWidth / 2 + bl + WORLD.shoulderWidth * 0.6 && !this.roundabouts.inside(this.cur.x, this.cur.z, loc.s);
     const branchOn = br.onBranch && Math.abs(br.lateral) < WORLD.roadWidth / 2 + WORLD.shoulderWidth * 0.6;
     this.onBranch = br.onBranch && !mainOn;
     if (this.onBranch) { this.routeS = WORLD.forkS; this.lateral = br.lateral; } else { this.routeS = loc.s; this.lateral = loc.lateral; }
     this.surf.onRoad = mainOn || branchOn || (br.onBranch && br.s > this.fork.branch.length - 30 && Math.abs(br.lateral) < 16);
     this.surf.wet = this.weather.wet > 0.5;
     const trafficWall = this.onBranch || this.cinematicMode ? Infinity : this.traffic.collisionS;
-    this.surf.wallDistance = Math.min(this.events.wallDistance(loc.s + 5.6), trafficWall > 0 ? trafficWall : 0);
+    const islandWall = this.cinematicMode ? Infinity : this.roundabouts.wallDistance(this.cur.x - Math.sin(this.cur.yaw) * 5.6, this.cur.z - Math.cos(this.cur.yaw) * 5.6, this.cur.yaw, loc.s);
+    this.surf.wallDistance = Math.min(this.events.wallDistance(loc.s + 5.6), trafficWall > 0 ? trafficWall : 0, islandWall);
     if (trafficWall <= 0.3 && this.cur.v > 2.5 && this.elapsed - this.lastCrash > 4 && !this.cinematicMode) { this.lastCrash = this.elapsed; this.crashPending = true; }
     const inp = this.running && !this.finished && !this.paused ? raw : { throttle: 0, brake: 1, steer: 0, handbrake: true };
     if (this.events.phase === 'rajbari-stop') { inp.throttle = 0; inp.brake = 1; }

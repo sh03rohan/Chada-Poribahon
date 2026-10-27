@@ -9,6 +9,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>চাঁদা পরিবহন</title>
     <link rel="preload" href="/fonts/hind-siliguri-bengali-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -140,6 +142,13 @@
     </div>
 
     <div id="toasts"></div>
+
+    <!-- Portrait phones: ask to rotate (the game is landscape-only on mobile) -->
+    <div id="rotate-overlay">
+      <div class="rotate-icon">📱</div>
+      <div>ফোনটি ঘুরিয়ে <b>ল্যান্ডস্কেপ</b> করুন</div>
+      <div class="rotate-sub">খেলাটি আড়াআড়ি (landscape) মোডে খেলতে হয়</div>
+    </div>
 
     <!-- Results -->
     <div id="results" class="hidden">

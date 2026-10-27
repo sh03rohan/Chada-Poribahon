@@ -18,6 +18,7 @@ export class SkySystem {
   private skyScene = new THREE.Scene();
   private sunDir = new THREE.Vector3();
   exposure = 0.7;
+  private sunDisc: THREE.Sprite; private sunGlow: THREE.Sprite; private moon: THREE.Sprite; private stars: THREE.Points; private clouds: THREE.Mesh;
 
   constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, shadows: boolean, shadowMapSize: number) {
     this.sky.scale.setScalar(10000);
@@ -31,6 +32,30 @@ export class SkySystem {
       this.sun.shadow.bias = -0.0005; this.sun.shadow.normalBias = 0.03;
     }
     scene.add(this.sun, this.sun.target, this.hemi);
+    // Visible sun (disc + soft glow), moon and stars; drawn beyond the fog
+    const spr = (color: string, inner: number) => {
+      const c = document.createElement('canvas'); c.width = c.height = 128; const ctx = c.getContext('2d')!;
+      const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, color); g.addColorStop(inner, color); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      return new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, depthTest: true, fog: false, blending: THREE.AdditiveBlending }));
+    };
+    this.sunDisc = spr('rgba(255,250,225,1)', 0.55); this.sunDisc.scale.setScalar(70); this.sunDisc.renderOrder = -2;
+    this.sunGlow = spr('rgba(255,210,140,0.55)', 0.05); this.sunGlow.scale.setScalar(260); this.sunGlow.renderOrder = -3;
+    this.moon = spr('rgba(235,240,255,1)', 0.6); this.moon.scale.setScalar(55); this.moon.renderOrder = -2;
+    const starPos = new Float32Array(1800 * 3);
+    for (let i = 0; i < 1800; i++) { const u = Math.random() * Math.PI * 2, v = Math.random() * 0.9 + 0.08; const r = 1500; starPos.set([Math.cos(u) * Math.sqrt(1 - v * v) * r, v * r, Math.sin(u) * Math.sqrt(1 - v * v) * r], i * 3); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    this.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+    this.stars.frustumCulled = false;
+    // Cloud dome: noise alpha; thickens with rain
+    const cc = document.createElement('canvas'); cc.width = 1024; cc.height = 512; const cx = cc.getContext('2d')!;
+    cx.clearRect(0, 0, 1024, 512);
+    for (let i = 0; i < 900; i++) { const x = Math.random() * 1024, y = 120 + Math.random() * 300, r = 20 + Math.random() * 70; const g = cx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(255,255,255,0.5)'); g.addColorStop(1, 'rgba(255,255,255,0)'); cx.fillStyle = g; cx.fillRect(x - r, y - r, r * 2, r * 2); }
+    const ct = new THREE.CanvasTexture(cc); ct.wrapS = THREE.RepeatWrapping; ct.repeat.set(2, 1);
+    this.clouds = new THREE.Mesh(new THREE.SphereGeometry(1400, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), new THREE.MeshBasicMaterial({ map: ct, transparent: true, opacity: 0.2, side: THREE.BackSide, depthWrite: false, fog: false, color: 0xffffff }));
+    this.clouds.renderOrder = -1; this.clouds.frustumCulled = false;
+    scene.add(this.sunDisc, this.sunGlow, this.moon, this.stars, this.clouds);
     scene.fog = new THREE.FogExp2(0xc8d8e8, WORLD.fogDensity);
     scene.background = null;
     const h = new URLSearchParams(location.search).get('hour');
@@ -52,7 +77,13 @@ export class SkySystem {
   follow(target: THREE.Vector3) {
     this.sun.target.position.copy(target);
     this.sun.position.copy(target).addScaledVector(this.sunDir, 120);
+    this.sunDisc.position.copy(target).addScaledVector(this.sunDir, 1500);
+    this.sunGlow.position.copy(this.sunDisc.position);
+    this.moon.position.copy(target).addScaledVector(this.moonDir, 1500);
+    this.stars.position.copy(target); this.clouds.position.copy(target);
+    this.clouds.rotation.y += 0.00004;
   }
+  private moonDir = new THREE.Vector3(0.4, 0.6, -0.5).normalize();
 
   private update() {
     const { hour, rain } = this.state;
@@ -63,7 +94,8 @@ export class SkySystem {
     const night = elevation < 1;
     this.state.night = night; this.state.sunElevation = elevation;
 
-    const phi = THREE.MathUtils.degToRad(90 - Math.max(elevation, night ? -4 : elevation));
+    // at night push the shader sun well below the horizon so the dome goes properly dark
+    const phi = THREE.MathUtils.degToRad(90 - (night ? Math.min(elevation, -18) : elevation));
     const theta = THREE.MathUtils.degToRad(azimuth);
     this.sunDir.setFromSphericalCoords(1, phi, theta);
 
@@ -79,21 +111,30 @@ export class SkySystem {
     const warm = new THREE.Color().setHSL(0.09, 0.8, 0.62);        // low sun orange
     const white = new THREE.Color(0xfff4e0);
     this.sun.color.copy(warm).lerp(white, dayAmount);
-    this.sun.intensity = night ? 0.45 : (0.6 + 1.9 * dayAmount) * (1 - rain * 0.65);
-    if (night) this.sun.color.set(0x7a8fc0);
+    this.sun.intensity = night ? 0.24 : (0.6 + 1.9 * dayAmount) * (1 - rain * 0.72);
+    if (night) { this.sun.color.set(0x8aa0cc); this.sunDir.copy(this.moonDir); }
     this.sun.visible = true;
+    // visible sun / moon / stars / clouds
+    this.sunDisc.visible = this.sunGlow.visible = !night && elevation > -3;
+    (this.sunDisc.material as THREE.SpriteMaterial).opacity = Math.max(0, 1 - rain * 0.85);
+    (this.sunGlow.material as THREE.SpriteMaterial).opacity = (0.18 + 0.25 * (1 - dayAmount)) * (1 - rain);
+    this.sunDisc.material.color.copy(new THREE.Color().setHSL(0.09, 0.9, 0.7).lerp(new THREE.Color(0xfffbe8), dayAmount));
+    this.moon.visible = night;
+    (this.stars.material as THREE.PointsMaterial).opacity = night ? 0.9 * (1 - rain) : 0;
+    (this.clouds.material as THREE.MeshBasicMaterial).opacity = (night ? 0.06 : 0.22) + rain * 0.6;
+    (this.clouds.material as THREE.MeshBasicMaterial).color.set(night ? 0x202430 : 0xffffff).lerp(new THREE.Color(0x6a6e75), rain);
 
     const skyCol = night ? new THREE.Color(0x1a2238) : new THREE.Color(0x9fc3ff).lerp(new THREE.Color(0x8b8f98), rain);
-    const groundCol = night ? new THREE.Color(0x1a1812) : new THREE.Color(0x6b6040);
+    const groundCol = night ? new THREE.Color(0x0a0a08) : new THREE.Color(0x6b6040);
     this.hemi.color.copy(skyCol); this.hemi.groundColor.copy(groundCol);
-    this.hemi.intensity = night ? 0.55 : 0.25 + 0.3 * dayAmount - rain * 0.15;
+    this.hemi.intensity = night ? 0.2 : 0.25 + 0.3 * dayAmount - rain * 0.18;
 
     const fog = this.scene.fog as THREE.FogExp2;
     const fogDay = new THREE.Color(0xcad9e6).lerp(new THREE.Color(0xe8b98a), 1 - dayAmount);
-    fog.color.copy(night ? new THREE.Color(0x0b1020) : fogDay.lerp(new THREE.Color(0x9aa2aa), rain));
-    fog.density = WORLD.fogDensity * (1 + rain * 2.2 + (night ? 0.4 : 0));
+    fog.color.copy(night ? new THREE.Color(0x05070d) : fogDay.lerp(new THREE.Color(0x7f868e), rain));
+    fog.density = WORLD.fogDensity * (1 + rain * 2.6 + (night ? 0.6 : 0));
 
-    this.exposure = night ? 0.8 : 0.5 - rain * 0.08;
+    this.exposure = night ? 0.32 : 0.5 - rain * 0.16;
     this.renderer.toneMappingExposure = this.exposure;
 
     // Bake environment map: the sky dome lives in a tiny side scene while PMREM runs,
@@ -102,7 +143,7 @@ export class SkySystem {
     this.envTarget?.dispose();
     this.envTarget = this.pmrem.fromScene(this.skyScene, 0.02);
     this.scene.environment = this.envTarget.texture;
-    this.scene.environmentIntensity = night ? 0.2 : 0.45 - rain * 0.15;
+    this.scene.environmentIntensity = night ? 0.05 : 0.45 - rain * 0.2;
     this.scene.add(this.sky);
   }
 }

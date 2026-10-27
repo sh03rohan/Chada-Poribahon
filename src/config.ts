@@ -122,6 +122,11 @@ export const WORLD = {
   bridgeStartS: 4650,
   bridgeEndS: 5350,
   finishS: 6050,
+  /** City roundabouts (গোল চত্বর): the road splits around a central island here. */
+  roundabouts: [{ s: 2130, name: 'রাজবাড়ী' }, { s: 3560, name: 'ফরিদপুর' }, { s: 5720, name: 'ঢাকা' }],
+  roundaboutHalfLength: 48,
+  roundaboutBulge: 9,
+  islandRadius: 6.6,
   /** Prop density multipliers per tier. */
   propDensity: { low: 0.45, medium: 0.75, high: 1.0 },
   treesPerKm: 170,

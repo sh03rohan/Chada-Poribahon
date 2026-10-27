@@ -1,0 +1,11 @@
+{
+  "name": "চাঁদা পরিবহন",
+  "short_name": "চাঁদা পরিবহন",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#111111",
+  "theme_color": "#1b1b1b",
+  "lang": "bn",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

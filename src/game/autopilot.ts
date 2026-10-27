@@ -8,7 +8,8 @@ import type { VehicleState } from '../vehicle/physics.ts';
 export function autopilotSteer(road: Road, s: number, st: VehicleState, laneOffset = -1.75, dir: 1 | -1 = 1): number {
   const look = 8 + st.v * 0.9;
   const p = road.sample(s + look * dir);
-  const tx = p.x + p.rx * laneOffset * dir, tz = p.z + p.rz * laneOffset * dir;
+  const lane = (laneOffset - road.bulge(s + look * dir)) * dir; // keep left; swing out around roundabout islands
+  const tx = p.x + p.rx * lane, tz = p.z + p.rz * lane;
   const dx = tx - st.x, dz = tz - st.z;
   // angle between bus forward and target vector (positive = target to the right)
   const fx = -Math.sin(st.yaw), fz = -Math.cos(st.yaw);

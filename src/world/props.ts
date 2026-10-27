@@ -183,6 +183,7 @@ export class Props {
       { s: 1150, n: 4, spread: 90 },
       { s: WORLD.andolonS - 300, n: 5, spread: 120 },
       { s: 4450, n: 4, spread: 80 },
+      { s: 3560, n: 9, spread: 150 },
       { s: WORLD.finishS - 350, n: 16, spread: 260 },
     ];
     for (const c of clusters) {
@@ -205,6 +206,18 @@ export class Props {
         shop.rotation.y = yaw + (side > 0 ? Math.PI / 2 : -Math.PI / 2);
         this.group.add(shop);
       }
+    }
+    // Faridpur: mid-rise cluster around the roundabout
+    for (let i = 0; i < 10; i++) {
+      const s = 3560 - 200 + this.rand() * 400;
+      const side = this.rand() < 0.5 ? -1 : 1;
+      const floors = 2 + Math.floor(this.rand() * 4);
+      const w = 8 + this.rand() * 6, d = 7 + this.rand() * 5, h = floors * 3.1;
+      const { pos, yaw } = placeAt(this.road, s, side * (20 + this.rand() * 16));
+      const tex = makeWallTexture(['#cfd4d8', '#e0c9a8', '#b9c7d1'][i % 3], anisotropy); tex.repeat.set(w / 4, floors); tex.needsUpdate = true;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
+      b.position.copy(pos).setY(h / 2); b.rotation.y = yaw; b.castShadow = true;
+      this.group.add(b);
     }
     // Taller buildings near Dhaka
     const bTex = [makeWallTexture('#cfd4d8', anisotropy), makeWallTexture('#e0c9a8', anisotropy), makeWallTexture('#b9c7d1', anisotropy)];
