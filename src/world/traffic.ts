@@ -12,8 +12,8 @@ import { Person, PeopleManager, VARIANTS, HAWKER_VARIANT, makeVariant } from './
  * Pedestrians reuse the humanoid factory and are recycled around the player.
  */
 
-type VType = 'car' | 'bike' | 'bus' | 'truck' | 'auto';
-interface Vehicle { type: VType; idx: number; s: number; dir: 1 | -1; speed: number; maxSpeed: number; lateral: number; swerve: number; len: number; }
+type VType = 'car' | 'bike' | 'bus' | 'truck' | 'auto' | 'rickshaw' | 'van';
+interface Vehicle { type: VType; idx: number; s: number; dir: 1 | -1; speed: number; maxSpeed: number; lateral: number; swerve: number; len: number; overtake: number; cutin: number; }
 
 const LANE = WORLD.laneWidth / 2;
 
@@ -106,6 +106,28 @@ function buildTruck(cab: number, cargo: number): THREE.BufferGeometry {
   ];
   return mergeGeometries(parts)!;
 }
+function buildRickshaw(hood: number): THREE.BufferGeometry {
+  return mergeGeometries([
+    box(0.9, 0.08, 1.0, 0, 0.72, 0.25, 0x6b4a2e),                       // seat base
+    box(0.9, 0.5, 0.1, 0, 0.98, 0.72, hood),                             // seat back
+    box(0.3, 0.12, 0.5, 0, 0.84, 0.3, 0x3a2a1a),                          // cushion
+    colored(new THREE.CylinderGeometry(0.75, 0.75, 1.0, 10, 1, false, Math.PI, Math.PI).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).translate(0, 1.1, 0.35), hood), // folding hood
+    box(0.06, 0.6, 0.06, -0.42, 1.05, 0.7, 0x202020), box(0.06, 0.6, 0.06, 0.42, 1.05, 0.7, 0x202020),
+    box(0.1, 0.06, 1.4, 0, 0.55, -0.3, 0x202020),                        // frame
+    box(0.5, 0.04, 0.04, 0, 0.95, -0.95, CHROME),                        // handlebar
+    box(0.25, 0.06, 0.3, 0, 0.9, -0.55, 0x111111),                        // saddle
+    wheel(0, -0.95, 0.33, 0.05), wheel(-0.48, 0.45, 0.33, 0.05), wheel(0.48, 0.45, 0.33, 0.05),
+  ])!;
+}
+function buildVan(): THREE.BufferGeometry {
+  return mergeGeometries([
+    box(1.2, 0.06, 2.0, 0, 0.62, 0.3, 0x8a6a3a),                         // flat bed
+    box(1.2, 0.3, 0.05, 0, 0.8, 1.3, 0x8a6a3a),
+    box(0.9, 0.5, 1.2, 0, 0.9, 0.4, 0xc9b58a),                           // sacks
+    box(0.1, 0.06, 1.2, 0, 0.5, -0.9, 0x202020), box(0.5, 0.04, 0.04, 0, 0.95, -1.4, CHROME), box(0.25, 0.06, 0.3, 0, 0.88, -1.0, 0x111111),
+    wheel(0, -1.4, 0.33, 0.05), wheel(-0.55, 0.9, 0.33, 0.05), wheel(0.55, 0.9, 0.33, 0.05),
+  ])!;
+}
 function buildAuto(): THREE.BufferGeometry {
   const green = 0x1f8a4a;
   return mergeGeometries([
@@ -130,14 +152,17 @@ const SPEC: Record<VType, { count: number; speed: [number, number]; len: number;
   bus: { count: 5, speed: [55, 75], len: 10.5, colors: [[0xf2e2b0, 0x1f6fb5], [0xd8e8d0, 0xd8262c], [0xffffff, 0x1f9d55]] },
   truck: { count: 6, speed: [40, 60], len: 8.4, colors: [[0x2a5a9a, 0xc8a050], [0xd8262c, 0x3a7a3a], [0x1f9d55, 0xa04040]] },
   auto: { count: 9, speed: [35, 50], len: 2.8, colors: [[0x1f8a4a]] },
+  rickshaw: { count: 10, speed: [12, 18], len: 2.2, colors: [[0x2a7fcf], [0xd8262c], [0x1f9d55]] },
+  van: { count: 5, speed: [12, 16], len: 2.8, colors: [[0x8a6a3a]] },
 };
 
 export class Traffic {
   readonly group = new THREE.Group();
   private vehicles: Vehicle[] = [];
-  private meshes: Record<VType, THREE.InstancedMesh[]> = { car: [], bike: [], bus: [], truck: [], auto: [] };
-  private slots: Record<VType, { mesh: number; idx: number }[]> = { car: [], bike: [], bus: [], truck: [], auto: [] };
+  private meshes: Record<VType, THREE.InstancedMesh[]> = { car: [], bike: [], bus: [], truck: [], auto: [], rickshaw: [], van: [] };
+  private slots: Record<VType, { mesh: number; idx: number }[]> = { car: [], bike: [], bus: [], truck: [], auto: [], rickshaw: [], van: [] };
   private riders: Person[] = [];
+  private riderOf = new Map<Vehicle, Person>();
   private peds: { p: Person; s: number; dir: 1 | -1; lat: number }[] = [];
   private hawkers: Person[] = [];
   private density: number;
@@ -158,7 +183,7 @@ export class Traffic {
       // one InstancedMesh per colour variant
       const per = Math.ceil(count / sp.colors.length);
       sp.colors.forEach((c, ci) => {
-        const geo = type === 'car' ? buildCar(c[0]) : type === 'bike' ? buildBike(c[0]) : type === 'bus' ? buildBus(c[0], c[1]) : type === 'truck' ? buildTruck(c[0], c[1]) : buildAuto();
+        const geo = type === 'car' ? buildCar(c[0]) : type === 'bike' ? buildBike(c[0]) : type === 'bus' ? buildBus(c[0], c[1]) : type === 'truck' ? buildTruck(c[0], c[1]) : type === 'rickshaw' ? buildRickshaw(c[0]) : type === 'van' ? buildVan() : buildAuto();
         geo.computeVertexNormals();
         const mesh = new THREE.InstancedMesh(geo, mat, per);
         mesh.castShadow = true; mesh.frustumCulled = false;
@@ -171,13 +196,14 @@ export class Traffic {
         // keep the first 250 m clear so the player is not boxed in at the start
         let s0 = 250 + Math.random() * (road.length - 300);
         if (dir === -1 && s0 < 400) s0 += 400;
-        this.vehicles.push({ type, idx: i, s: s0, dir, speed: maxSpeed, maxSpeed, lateral: -dir * LANE, swerve: 0, len: sp.len });
+        const slow = type === 'rickshaw' || type === 'van';
+        this.vehicles.push({ type, idx: i, s: s0, dir, speed: maxSpeed, maxSpeed, lateral: -dir * (slow ? LANE + 1.3 : LANE), swerve: 0, len: sp.len, overtake: 0, cutin: 0 });
       }
     }
     // Bike riders (humanoids in a riding pose), one per bike
-    for (const vh of this.vehicles) if (vh.type === 'bike') {
+    for (const vh of this.vehicles) if (vh.type === 'bike' || vh.type === 'rickshaw' || vh.type === 'van') {
       const p = new Person(VARIANTS[(vh.idx * 3 + 1) % VARIANTS.length]); p.setAction('ride'); p.mesh.castShadow = false;
-      this.group.add(p.root); people.add(p); this.riders.push(p);
+      this.group.add(p.root); people.add(p); this.riders.push(p); this.riderOf.set(vh, p);
     }
     // Footpath pedestrians near the player (recycled) + hawkers at shop clusters
     const nPed = tier === 'low' ? 8 : tier === 'medium' ? 12 : 16;
@@ -194,7 +220,7 @@ export class Traffic {
       const p = new Person(i % 2 ? HAWKER_VARIANT : makeVariant({ id: 'hawker2', outfit: 'lungi-shirt', top: '#f2e2b0', bottom: '#2a4a2a', hair: 'cap', accent: '#d8262c', prop: 'basket', height: 1.68 }));
       const side = i % 2 ? -1 : 1;
       const f = road.sample(s); const lat = side * (WORLD.roadWidth / 2 + WORLD.shoulderWidth + 0.8);
-      p.position.set(f.x + f.rx * lat, 0, f.z + f.rz * lat); p.lookAt(f.x, f.z); p.setAction('hawk');
+      p.position.set(f.x + f.rx * lat, road.footpathHeight(s), f.z + f.rz * lat); p.lookAt(f.x, f.z); p.setAction('hawk');
       this.group.add(p.root); people.add(p); this.hawkers.push(p);
     });
   }
@@ -251,6 +277,7 @@ export class Traffic {
       const vh = vs[i];
       // vehicle ahead in the same direction/lane
       let gap = Infinity, leadSpeed = Infinity;
+      let target = vh.maxSpeed;
       for (let j = 1; j < vs.length; j++) {
         const o = vs[(i + j * vh.dir + vs.length * 4) % vs.length];
         if (o.dir !== vh.dir) continue;
@@ -262,12 +289,37 @@ export class Traffic {
         const d = playerS - vh.s - 5.6 - vh.len / 2;
         if (d > -1 && d < gap && Math.abs(playerLateral - vh.lateral) < 2.4) { gap = d; leadSpeed = Math.max(0, playerSpeed); }
       }
+      // overtaking: a clearly faster vehicle stuck behind a slow one (or the slow bus) moves into the
+      // oncoming lane when nothing oncoming is within 140 m, then returns once past
+      const slowLead = gap < 18 && leadSpeed < vh.maxSpeed * 0.6 && vh.type !== 'rickshaw' && vh.type !== 'van' && vh.type !== 'truck';
+      if (vh.overtake === 0 && slowLead) {
+        let clear = true;
+        for (const o of vs) { if (o.dir === vh.dir) continue; const dd = (o.s - vh.s) * vh.dir; if (dd > -10 && dd < 140) { clear = false; break; } }
+        if (clear && !(vh.dir === 1 && playerActive && playerS > vh.s && playerS - vh.s < 150 && playerLateral > -0.5)) vh.overtake = 1;
+      }
+      if (vh.overtake === 1) {
+        // in the overtaking lane: ignore the leader, go a bit faster, come back when past it by 15 m
+        gap = Infinity; target = Math.min(vh.maxSpeed * 1.15, vh.maxSpeed + 4);
+        let passed = true;
+        for (let j = 1; j < vs.length; j++) { const o = vs[(i - j * vh.dir + vs.length * 4) % vs.length]; if (o.dir !== vh.dir) continue; let dd = (vh.s - o.s) * vh.dir; if (dd < 0) dd += L; if (dd < 15 + o.len && dd > -2) passed = false; break; }
+        if (playerActive && vh.dir === 1 && Math.abs(vh.s - playerS) < 16) passed = false;
+        let oncoming = false; for (const o of vs) { if (o.dir === vh.dir) continue; const dd = (o.s - vh.s) * vh.dir; if (dd > -5 && dd < 60) oncoming = true; }
+        if (passed || oncoming) vh.overtake = 0;
+      }
+      const laneTarget = vh.overtake === 1 ? vh.dir * (LANE + 0.3) : vh.lateral; // oncoming lane = +LANE for dir 1
+      vh.swerve += ((laneTarget - vh.lateral) - vh.swerve) * Math.min(1, dt * 1.6) * (vh.overtake === 1 || Math.abs(vh.swerve) > 0.05 ? 1 : 0);
+      // CNG cut-in: an auto parked on the shoulder ahead of the bus pulls out into the lane
+      if (vh.type === 'auto' && vh.cutin === 0 && vh.dir === 1 && playerActive && playerSpeed > 8) {
+        const dd = vh.s - playerS;
+        if (dd > 35 && dd < 60 && Math.random() < dt * 0.05) { vh.cutin = 1; vh.swerve = -2.6; vh.speed = 2; }
+      }
+      if (vh.cutin === 1) { vh.swerve += (0 - vh.swerve) * Math.min(1, dt * 0.9); if (Math.abs(vh.swerve) < 0.1) vh.cutin = 2; }
       // barrier (blockade) ahead
       const toBarrier = (this.barrierS - vh.s) * vh.dir - vh.len / 2 - 3;
       if (this.barrierS !== Infinity && toBarrier > -5 && toBarrier < gap) { gap = toBarrier; leadSpeed = 0; }
       // target speed: the fastest speed from which we can still slow to the leader's speed
       // within (gap − margin) at a comfortable 4.5 m/s², plus a time headway
-      let target = vh.maxSpeed;
+      target = Math.min(target, vh.maxSpeed);
       if (gap < Infinity) {
         const margin = 4 + vh.speed * 0.9;
         const room = gap - margin;
@@ -277,7 +329,7 @@ export class Traffic {
       }
       // oncoming swerve when the player sits in their lane
       let swerveT = 0;
-      if (playerActive && vh.dir === -1) {
+      if (playerActive && vh.dir === -1 && vh.overtake === 0) {
         const d = vh.s - playerS - 5.6 - vh.len / 2; // distance from the oncoming vehicle's nose to the bus front
         const overlap = Math.abs(playerLateral - vh.lateral) < 3.2;
         if (d > -4 && d < 70 && overlap) swerveT = 3.2;
@@ -292,7 +344,7 @@ export class Traffic {
       // an oncoming vehicle that has come to a stop next to / in front of the bus always edges aside
       if (playerActive && vh.dir === -1 && vh.speed < 0.5 && Math.abs(vh.s - playerS) < 14 && Math.abs(vh.lateral + vh.swerve - playerLateral) < 3.5) swerveT = Math.max(swerveT, 3.2);
       // move aside while rolling; a vehicle that had to stop for the bus still edges over slowly
-      if (vh.speed > 1.5 || swerveT > 0) vh.swerve += (swerveT - vh.swerve) * Math.min(1, dt * (vh.speed > 1.5 ? 1.5 : 0.5));
+      if (swerveT > 0 && vh.overtake === 0 && vh.cutin !== 1 && (vh.speed > 1.5 || swerveT > 0)) vh.swerve += (swerveT - vh.swerve) * Math.min(1, dt * (vh.speed > 1.5 ? 1.5 : 0.5));
       const accel = target > vh.speed ? 2.2 : 7.5;
       vh.speed += THREE.MathUtils.clamp(target - vh.speed, -accel * dt, accel * dt);
       vh.s += vh.speed * vh.dir * dt;
@@ -308,9 +360,8 @@ export class Traffic {
         if (d > -3 && d < this.collisionS) this.collisionS = d;
       }
       const yaw = this.place(vh);
-      if (vh.type === 'bike') {
-        const r = this.riders[vh.idx]; if (r) { const f = this.road.sample(vh.s); const lat = vh.lateral + vh.swerve - vh.dir * this.road.bulge(vh.s); r.position.set(f.x + f.rx * lat, 0.52, f.z + f.rz * lat); r.root.rotation.y = yaw + Math.PI; }
-      }
+      const rider = this.riderOf.get(vh);
+      if (rider) { const f = this.road.sample(vh.s); const lat = vh.lateral + vh.swerve - vh.dir * this.road.bulge(vh.s); const back = vh.type === 'rickshaw' ? -0.55 : vh.type === 'van' ? -1.0 : 0; rider.position.set(f.x + f.rx * lat + f.tx * back * vh.dir, vh.type === 'bike' ? 0.52 : 0.62, f.z + f.rz * lat + f.tz * back * vh.dir); rider.root.rotation.y = yaw + Math.PI; }
     }
     for (const type of Object.keys(this.meshes) as VType[]) for (const mesh of this.meshes[type]) mesh.instanceMatrix.needsUpdate = true;
 
@@ -324,7 +375,7 @@ export class Traffic {
       pd.s += pd.dir * pd.p.walkSpeed * dt;
       const f = this.road.sample(pd.s);
       const plat = pd.lat + Math.sign(pd.lat) * this.road.bulge(pd.s);
-      pd.p.position.set(f.x + f.rx * plat, 0, f.z + f.rz * plat);
+      pd.p.position.set(f.x + f.rx * plat, this.road.footpathHeight(pd.s), f.z + f.rz * plat);
       pd.p.root.rotation.y = Math.atan2(f.tx, f.tz) + (pd.dir === 1 ? 0 : Math.PI);
       if (pd.p.action !== 'walk') pd.p.setAction('walk');
     }

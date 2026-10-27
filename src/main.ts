@@ -8,7 +8,7 @@ import { PHYSICS, WORLD, QUALITY, CAMERA, GAMEPLAY, type QualityTier } from './c
 import { detectQuality, TIER_LABEL, isMobile } from './quality.ts';
 import { InputManager } from './input.ts';
 import { loadBanglaFont, verifyBanglaShaping } from './util/fonts.ts';
-import { bn, bnKm, bnTime } from './util/bangla.ts';
+import { bn, bnKm, bnTime, bnClock } from './util/bangla.ts';
 import { createState, copyState, stepVehicle, lerpPose, type VehicleInput } from './vehicle/physics.ts';
 import { loadBus } from './vehicle/loadBus.ts';
 import type { BusRig } from './vehicle/busModel.ts';
@@ -35,6 +35,11 @@ import { SettingsStore, buildSettingsPanel } from './game/settings.ts';
 import { SteeringUI } from './game/steeringUI.ts';
 import { RouteMap, type MapState } from './game/minimap.ts';
 import { Cinematic } from './game/cinematic.ts';
+import { Ledger } from './game/ledger.ts';
+import { ChoicePanel } from './game/choice.ts';
+import { Incidents } from './game/incidents.ts';
+import { Fuel } from './game/fuel.ts';
+import { IncidentProps } from './world/incidentProps.ts';
 
 const params = new URLSearchParams(location.search);
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -63,6 +68,9 @@ class Game {
   steeringUI!: SteeringUI;
   map!: RouteMap;
   cinematic!: Cinematic;
+  ledger = new Ledger();
+  choice = new ChoicePanel();
+  incidentProps!: IncidentProps; incidents!: Incidents; fuel!: Fuel;
   screen: Screen = 'landing';
   paused = false;
 
@@ -75,7 +83,7 @@ class Game {
   /** test hooks */
   autopilotRoad: Road | null = null; autopilotDir: 1 | -1 = 1;
   freeCam: { pos: THREE.Vector3; look: THREE.Vector3; fov?: number } | null = null;
-  wiperPhase = 0; speedoTimer = 0; minimapTimer = 0;
+  wiperPhase = 0; speedoTimer = 0; minimapTimer = 0; clockTimer = 0;
   lastFrame = performance.now();
   ready = false;
   private surf = { onRoad: true, wet: false, wallDistance: Infinity };
@@ -146,12 +154,14 @@ class Game {
     };
     this.props = new Props(this.road, this.tier, maxAniso, exclude);
     this.scene.add(this.props.group);
-    this.stops = new Stops(this.road);
+    this.stops = new Stops(this.road, this.people);
     this.scene.add(this.stops.group);
     this.blockade = new Blockade(this.road, this.tier === 'low', this.people);
     this.scene.add(this.blockade.group);
     this.traffic = new Traffic(this.road, this.tier, this.people);
     this.scene.add(this.traffic.group);
+    this.incidentProps = new IncidentProps(this.road, this.people);
+    this.scene.add(this.incidentProps.group);
     this.sky = new SkySystem(this.renderer, this.scene, q.shadows, q.shadowMapSize);
     this.weather = new Weather(this.scene, q.rainCount);
     if (params.get('rain') === '1') { this.weather.set(true); this.weather.wet = 1; this.sky.setRain(1); }
@@ -159,7 +169,9 @@ class Game {
     this.bus = await loadBus({ anisotropy: maxAniso, shadows: q.shadows, people: this.people });
     this.scene.add(this.bus.root);
     this.bus.setPassengers(this.passengers.count);
-    this.events = new RouteEvents(this.blockade, this.passengers, this.hud, this.bus);
+    this.events = new RouteEvents(this.blockade, this.passengers, this.hud, this.bus, this.ledger);
+    this.fuel = new Fuel(this.hud, this.ledger, this.choice, this.passengers);
+    this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people);
     this.map = new RouteMap(this.road, this.fork.branch, this.roundabouts.sideRoads);
     this.cinematic = new Cinematic(this.cineHost());
 
@@ -231,6 +243,10 @@ class Game {
     $('landing').classList.add('hidden'); $('pretrip').classList.remove('hidden'); this.hud.show(false);
     this.resetRun();
     this.map.drawFull($('pretrip-map') as HTMLCanvasElement, this.mapState());
+    const h = this.clockHour(); const night = h < 6 || h >= 18;
+    const rush = h >= GAMEPLAY.morningRushStart && h < GAMEPLAY.morningRushEnd;
+    const effect = night ? 'রাত — হেডলাইট জ্বলবে, কুয়াশা, স্ট্যান্ডে যাত্রী কম' : rush ? 'সকালের অফিস টাইম — স্ট্যান্ডে যাত্রী দেড় গুণ' : 'দিন — স্বাভাবিক যাত্রী';
+    $('pretrip-clock').textContent = `${bnClock(h)} (${effect})`;
   }
 
   async playIntro() {
@@ -275,7 +291,8 @@ class Game {
   }
   mapState(): MapState {
     return { x: this.cur.x, z: this.cur.z, yaw: this.cur.yaw, s: this.routeS, onBranch: this.onBranch, wrongBranch: this.events.wrongBranch,
-      blockadeActive: this.blockade.active, stoppedAtRajbari: this.events.stoppedAtRajbari, kmh: Math.abs(this.cur.v) * 3.6, northUp: this.settings.value.northUp };
+      blockadeActive: this.blockade.active, stoppedAtRajbari: this.events.stoppedAtRajbari, kmh: Math.abs(this.cur.v) * 3.6, northUp: this.settings.value.northUp,
+      stopsDone: this.events.stops.map((x) => x.done || x.missed), nextStopS: this.events.nextStop(this.routeS) >= 0 ? WORLD.stops[this.events.nextStop(this.routeS)].s : undefined };
   }
 
   resetRun() {
@@ -287,7 +304,15 @@ class Game {
     this.routeS = s0; this.branchS = 0; this.onBranch = false; this.elapsed = 0; this.simTime = 0; this.finished = false;
     this.passengers = new Passengers();
     this.bus.setPassengers(this.passengers.count);
-    this.events = new RouteEvents(this.blockade, this.passengers, this.hud, this.bus);
+    this.ledger.reset(); this.ledger.fares = this.passengers.count * GAMEPLAY.fareKushtiaDhaka; // helper collected at the terminal
+    this.events = new RouteEvents(this.blockade, this.passengers, this.hud, this.bus, this.ledger);
+    this.events.onStopBegin = (i) => this.beginBoarding(i);
+    this.events.onStopEnd = (i) => this.endBoarding(i);
+    if (this.incidents) this.incidents.reset();
+    this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people);
+    this.fuel = new Fuel(this.hud, this.ledger, this.choice, this.passengers);
+    this.fuel.litres = GAMEPLAY.fuelTankLitres * (GAMEPLAY.fuelStartFraction[0] + Math.random() * (GAMEPLAY.fuelStartFraction[1] - GAMEPLAY.fuelStartFraction[0])); // the owner never fills it
+    const hr = this.clockHour(); this.events.waitingMultiplier = hr >= GAMEPLAY.morningRushStart && hr < GAMEPLAY.morningRushEnd ? 1.5 : (hr >= 21 || hr < 5) ? 0.5 : 1;
     this.blockade.reset();
     this.debug.resetMeasure();
     this.input.override = null; this.autopilot = false;
@@ -306,6 +331,7 @@ class Game {
     if (isMobile() || params.get('touch') === '1') { $('touch').classList.remove('hidden'); if (params.get('touch') === '1') $('touch').classList.add('force'); }
     this.running = true;
     this.hud.message('শুভ যাত্রা! আস্তে চালান, যাত্রী নিয়ে ঢাকা চলুন', true, 3500);
+    this.toast(`🕒 আসল সময়: ${bnClock(this.clockHour())} — খেলার দিন-রাত আপনার ঘড়ি অনুযায়ী চলে`, 7000);
     this.bus.setCockpitMode(this.cam.mode === 'cockpit');
     this.tutorialStep = this.settings.value.tutorialSeen ? 99 : 0; this.tutorialTimer = 0;
     this.helperShout();
@@ -385,12 +411,15 @@ class Game {
     this.surf.wet = this.weather.wet > 0.5;
     const trafficWall = this.onBranch || this.cinematicMode ? Infinity : this.traffic.collisionS;
     const islandWall = this.cinematicMode ? Infinity : this.roundabouts.wallDistance(this.cur.x - Math.sin(this.cur.yaw) * 5.6, this.cur.z - Math.cos(this.cur.yaw) * 5.6, this.cur.yaw, loc.s);
-    this.surf.wallDistance = Math.min(this.events.wallDistance(loc.s + 5.6), trafficWall > 0 ? trafficWall : 0, islandWall);
+    const incWall = this.cinematicMode ? Infinity : this.incidents.wallDistance(loc.s + 5.6);
+    this.surf.wallDistance = Math.min(this.events.wallDistance(loc.s + 5.6), trafficWall > 0 ? trafficWall : 0, islandWall, incWall);
     if (trafficWall <= 0.3 && this.cur.v > 2.5 && this.elapsed - this.lastCrash > 4 && !this.cinematicMode) { this.lastCrash = this.elapsed; this.crashPending = true; this.crashKind = 'traffic'; this.crashImpact = this.cur.v; }
-    const inp = this.running && !this.finished && !this.paused ? raw : { throttle: 0, brake: 1, steer: 0, handbrake: true };
-    if (this.events.phase === 'rajbari-stop') { inp.throttle = 0; inp.brake = 1; }
+    const inp = this.running && !this.finished && !this.paused ? { ...raw } : { throttle: 0, brake: 1, steer: 0, handbrake: true };
+    if (this.fuel.engineFactor === 0 && !this.cinematicMode) inp.throttle = 0;
+    if (this.events.phase === 'stop' || this.choice.open) { inp.throttle = 0; inp.brake = 0; inp.handbrake = true; } // handbrake, not brake: holding the brake while stopped would creep into reverse
     copyState(this.prev, this.cur);
     stepVehicle(this.cur, inp, this.surf, dt);
+    if (!this.cinematicMode && this.running) this.fuel.burn(dt, this.cur.throttle, this.cur.rpm);
     // Solid world: resolve against props, parked vehicles, traffic and the police van
     if (!this.cinematicMode) {
       this.dynCircles.length = 0;
@@ -436,7 +465,8 @@ class Game {
       for (const s of shouts) this.hud.bubble(s);
       if (this.events.phase === 'finished') this.finish();
       this.tutorial(dt);
-      this.updateBoarding(dt);
+      this.incidents.update(dt, this.routeS, kmh, this.bus.root.position, this.cur.yaw);
+      void this.fuel.update(dt, this.routeS, kmh, this.lateral, kmh < 2);
       if (this.crashPending) {
         this.crashPending = false;
         const pen = Math.min(15, 3 + this.crashImpact * 0.8);
@@ -446,12 +476,18 @@ class Game {
         this.audio.sting('crash');
       }
     }
+    // Real-time clock: re-read the device time once a minute so the sky keeps moving during a trip
+    if (this.screen === 'driving' && params.get('hour') === null) {
+      this.clockTimer += dt;
+      if (this.clockTimer > 60) { this.clockTimer = 0; const h = this.clockHour(); if (Math.abs(h - this.sky.state.hour) > 1 / 120) { this.sky.setTime(h); this.applyNight(); } }
+    }
     if (!this.paused) {
       this.blockade.update(dt);
       this.traffic.barrierS = this.blockade.active ? WORLD.andolonS - 1.2 : Infinity;
       this.traffic.update(dt, this.routeS, this.lateral, this.cur.v, this.cam.camera.position, this.running && !this.finished && !this.onBranch && !this.cinematicMode);
       this.people.update(dt, this.cam.camera.position);
-      this.stops.update(this.elapsed, Math.abs(this.routeS - WORLD.rajbariStopS) < 150);
+      this.incidentProps.update(dt);
+      this.stops.update(this.elapsed, this.routeS);
     }
 
     // ---- visuals -------------------------------------------------------------
@@ -473,10 +509,12 @@ class Game {
     this.input.analogSteer = this.steeringUI.steer;
 
     if (this.screen === 'driving') {
-      this.hud.update(kmh, this.cur.gear, this.passengers.mood, this.passengers.count, this.elapsed, WORLD.finishS - this.routeS, kmh < 0.5);
+      this.hud.update(kmh, this.cur.gear, this.passengers.mood, this.passengers.count, this.elapsed, WORLD.finishS - this.routeS, kmh < 0.5, this.ledger.net);
+      this.updateBanner();
+      const fv = $('hud-fuel-val'); fv.textContent = bn(Math.round(this.fuel.fraction * 100)) + '%'; fv.classList.toggle('low', this.fuel.fraction < 0.25);
       this.minimapTimer += dt;
       if (this.minimapTimer > 0.1) { this.minimapTimer = 0; const c = $('minimap').querySelector('canvas')!; this.map.drawMini(c, this.mapState()); $('minimap-pct').textContent = this.map.progressPercent(this.routeS); }
-      if (kmh < 1 && (this.routeS < 120 || this.events.phase === 'rajbari-stop')) { this.helperShoutTimer += dt; if (this.helperShoutTimer > 6) { this.helperShoutTimer = 0; this.helperShout(); } }
+      if (kmh < 1 && (this.routeS < 120 || this.events.phase === 'stop')) { this.helperShoutTimer += dt; if (this.helperShoutTimer > 6) { this.helperShoutTimer = 0; this.helperShout(); } }
     }
     this.audio.update(dt, this.cur.rpm, this.cur.throttle, kmh, raw.horn && this.running, this.cur.onRoad, this.weather.wet);
 
@@ -497,6 +535,20 @@ class Game {
     });
   }
 
+  private updateBanner() {
+    const s = this.routeS, e = this.events;
+    if (e.wrongBranch) this.hud.setBanner('রাস্তা ভুল!', 'ঘুরে পদ্মা সেতুর রাস্তায় ফিরুন', true);
+    else if (e.phase === 'stop') this.hud.setBanner(`${WORLD.stops[e.currentStop]?.name ?? ''} বাস স্ট্যান্ড`, 'যাত্রী নামছে / উঠছে…');
+    else if (e.nextStop(s) >= 0 && s > WORLD.stops[e.nextStop(s)].s - 260) this.hud.setBanner(`বাস স্টপ সামনে — ${WORLD.stops[e.nextStop(s)].name}`, 'হলুদ জোনে থেমে যাত্রী তুলুন');
+    else if (this.blockade.active && s > WORLD.andolonS - 300 && s < WORLD.andolonS) this.hud.setBanner(e.phase === 'blockade' ? 'অবরোধ — অপেক্ষা করুন' : 'সামনে অবরোধ!', e.phase === 'blockade' ? 'পুলিশ এলে রাস্তা খুলবে' : 'গতি কমান, থামুন', true);
+    else if (s > WORLD.forkS - 200 && s < WORLD.forkS + 40) this.hud.setBanner('মোড় সামনে', 'ঢাকা ➜ পদ্মা সেতু: সোজা যান');
+    else if (this.incidents.checkpoint === 'approach' || this.incidents.checkpoint === 'stopped') this.hud.setBanner(this.incidents.checkpoint === 'stopped' ? 'চেকপোস্ট — কাগজপত্র চেক' : 'পুলিশ চেকপোস্ট সামনে', this.incidents.checkpoint === 'stopped' ? 'একটু অপেক্ষা করুন' : `${GAMEPLAY.checkpointSpeedLimitKmh} কিমি/ঘ-এর নিচে নামুন`, this.incidents.checkpoint === 'stopped');
+    else if (s > WORLD.speedCameraS - 180 && s < WORLD.speedCameraS) this.hud.setBanner('স্পিড ক্যামেরা সামনে', `সর্বোচ্চ ${WORLD.speedCameraLimitKmh} কিমি/ঘ`);
+    else if (this.fuel.fraction < 0.6 && s > WORLD.pumpS - 220 && s < WORLD.pumpS + 10) this.hud.setBanner('⛽ পাম্প সামনে বামে', 'পাম্পের পাশে থামলে তেল ভরা যাবে');
+    else if (s > WORLD.finishS - 400) this.hud.setBanner('ঢাকা প্রায় এসে গেছে', 'শেষ লাইনের দিকে চালান');
+    else this.hud.setBanner(null);
+  }
+
   /** Landing page: slow orbit around the idling bus at sunrise. */
   private landingCamera(dt: number) {
     this.landingT += dt * 0.12;
@@ -505,24 +557,31 @@ class Game {
     this.freeCam = { pos: new THREE.Vector3(base.x + Math.sin(a) * r, 2.2 + Math.sin(a * 0.7) * 0.6, base.z + Math.cos(a) * r), look: new THREE.Vector3(base.x, 1.8, base.z), fov: 50 };
   }
 
-  /** Rajbari: a few humanoids walk from the shed to the door while the bus dwells. */
-  private updateBoarding(dt: number) {
-    void dt;
-    if (this.events.phase === 'rajbari-stop' && this.boarding.length === 0) {
-      const f = this.road.sample(WORLD.rajbariStopS - 6);
-      const doorW = new THREE.Vector3(-WORLD.laneWidth / 2 - 1.75, 0, 0);
-      doorW.set(this.bus.root.position.x, 0, this.bus.root.position.z).add(new THREE.Vector3(Math.cos(this.cur.yaw), 0, -Math.sin(this.cur.yaw)).multiplyScalar(-2.2)).add(new THREE.Vector3(-Math.sin(this.cur.yaw), 0, -Math.cos(this.cur.yaw)).multiplyScalar(4.0));
-      for (let i = 0; i < 3; i++) {
-        const p = new Person(VARIANTS[(i * 4 + 1) % VARIANTS.length]);
-        p.position.set(f.x + f.rx * -(WORLD.roadWidth / 2 + WORLD.shoulderWidth + 2 + i), 0, f.z + f.rz * -(WORLD.roadWidth / 2 + WORLD.shoulderWidth + 2 + i));
-        p.walkSpeed = 1.2 + i * 0.1;
-        p.walkTo(doorW.clone().addScaledVector(new THREE.Vector3(Math.cos(this.cur.yaw), 0, -Math.sin(this.cur.yaw)), -0.6 * i), 'queue', () => { setTimeout(() => { this.scene.remove(p.root); this.people.remove(p); }, 600 + i * 500); });
-        this.scene.add(p.root); this.people.add(p); this.boarding.push(p);
-      }
-    } else if (this.events.phase !== 'rajbari-stop' && this.boarding.length) {
-      for (const p of this.boarding) { this.scene.remove(p.root); this.people.remove(p); }
-      this.boarding = [];
+  /** Stop dwell: waiting passengers walk to the door and board; alighting passengers step off and walk to the shed. */
+  private beginBoarding(i: number) {
+    if (i === 1) { const r = new THREE.Vector3(Math.cos(this.cur.yaw), 0, -Math.sin(this.cur.yaw)); const f = new THREE.Vector3(-Math.sin(this.cur.yaw), 0, -Math.cos(this.cur.yaw)); const d = new THREE.Vector3(this.bus.root.position.x, 0, this.bus.root.position.z).addScaledVector(r, -2.2).addScaledVector(f, 4.0); void this.incidents.beginAlms(d, f, r); }
+    const right = new THREE.Vector3(Math.cos(this.cur.yaw), 0, -Math.sin(this.cur.yaw));
+    const fwd = new THREE.Vector3(-Math.sin(this.cur.yaw), 0, -Math.cos(this.cur.yaw));
+    const door = new THREE.Vector3(this.bus.root.position.x, 0, this.bus.root.position.z).addScaledVector(right, -2.2).addScaledVector(fwd, 4.0);
+    const want = Math.round(WORLD.stops[i].waiting * this.events.waitingMultiplier);
+    const list = this.stops.waiting[i].slice(0, want);
+    list.forEach((p, k) => {
+      p.walkSpeed = 1.1 + (k % 3) * 0.15;
+      p.walkTo(door.clone().addScaledVector(right, -0.6 * (k % 4)).addScaledVector(fwd, -0.4 * Math.floor(k / 4)), 'queue', () => { setTimeout(() => this.stops.board(i, p), 500 + k * 350); });
+    });
+    // alighting: a few people appear at the door and walk to the shed front
+    const n = Math.min(3, WORLD.stops[i].getOff);
+    for (let k = 0; k < n; k++) {
+      const p = new Person(VARIANTS[(i * 3 + k * 5 + 2) % VARIANTS.length]);
+      p.position.copy(door).addScaledVector(right, -0.3); p.root.visible = false;
+      setTimeout(() => { if (this.events.phase !== 'stop') return; p.root.visible = true; p.walkTo(this.stops.shedFront[i].clone().addScaledVector(fwd, -k * 1.2), 'idle', () => setTimeout(() => { this.scene.remove(p.root); this.people.remove(p); }, 8000)); }, 600 + k * 900);
+      this.scene.add(p.root); this.people.add(p); this.boarding.push(p);
     }
+  }
+  private endBoarding(i: number) {
+    // anyone still queueing boards instantly; the alighters keep walking
+    for (const p of this.stops.waiting[i].slice()) if (p.target || p.action === 'queue') this.stops.board(i, p);
+    this.boarding = this.boarding.filter((p) => p.root.parent);
   }
 
   /** Apply interpolated physics pose to the bus rig. */
@@ -543,6 +602,7 @@ class Game {
     showResults({
       timeSec: this.elapsed, passengers: this.passengers.count, income: this.events.income, mood: this.passengers.mood,
       stars: this.passengers.stars(), shouts: sm.shouts, hardBrakes: sm.hardBrakes, swerves: sm.swerves, stoppedAtRajbari: this.events.stoppedAtRajbari,
+      stopsDone: this.events.stopsDone, stopsTotal: WORLD.stops.filter((x) => x.waiting > 0).length, fares: this.ledger.fares, fines: this.ledger.fines, chada: this.ledger.chada, fuel: this.ledger.fuel, charity: this.ledger.charity,
     }, () => { this.startRun(); });
   }
 
@@ -573,6 +633,9 @@ class Game {
       this.events.update(h, this.routeS, Math.abs(this.cur.v) * 3.6, this.elapsed);
       this.events.updateBranch(h, this.onBranch, this.branchS);
       this.blockade.update(h);
+      this.incidents.update(h, this.routeS, Math.abs(this.cur.v) * 3.6, this.bus.root.position, this.cur.yaw);
+      void this.fuel.update(h, this.routeS, Math.abs(this.cur.v) * 3.6, this.lateral, Math.abs(this.cur.v) * 3.6 < 2);
+      this.incidentProps.update(h);
       this.traffic.barrierS = this.blockade.active ? WORLD.andolonS - 1.2 : Infinity;
       if (i % 4 === 0) this.traffic.update(h * 4, this.routeS, this.lateral, this.cur.v, this.cam.camera.position, !this.onBranch);
       this.elapsed += h;
@@ -600,6 +663,8 @@ class Game {
       blockade: this.blockade.phase, fps: this.debug.fps, worstFrame: this.debug.worstFrame, spikes: this.debug.spikes, avgFrame: this.debug.avgFrame, tier: this.tier, cam: this.cam.mode,
       busProcedural: this.bus.isProcedural, passengers: this.passengers.count, elapsed: this.elapsed, onBranch: this.onBranch, branchS: this.branchS, wrongBranch: this.events.wrongBranch,
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
+      fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
+      checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {
@@ -651,7 +716,6 @@ class Game {
   }
 }
 
-void GAMEPLAY;
 const game = new Game();
 (window as unknown as { __game: Game }).__game = game;
 game.init().catch((e) => { console.error(e); $('start-status').textContent = 'লোড করতে সমস্যা: ' + (e as Error).message; });

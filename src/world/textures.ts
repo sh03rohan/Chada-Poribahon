@@ -27,10 +27,12 @@ export function makeRoadTextures(anisotropy: number): RoadTextures {
   const W = 512, H = 1024;
   const [c, ctx] = canvas(W, H);
   // Asphalt base
-  ctx.fillStyle = '#4a4a4c';
+  ctx.fillStyle = '#56565a';
   ctx.fillRect(0, 0, W, H);
-  speckle(ctx, W, H, 26000, 0.35);
-  speckle(ctx, W, H, 6000, 0.5, false);
+  speckle(ctx, W, H, 60000, 0.22);
+  speckle(ctx, W, H, 9000, 0.45, false);
+  // light aggregate flecks
+  for (let i = 0; i < 9000; i++) { const v = 150 + Math.random() * 70; ctx.fillStyle = `rgba(${v},${v},${v - 6},0.5)`; ctx.fillRect(Math.random() * W, Math.random() * H, 1, 1); }
   // Patches / repairs
   for (let i = 0; i < 6; i++) {
     ctx.fillStyle = `rgba(${30 + Math.random() * 20},${30 + Math.random() * 20},${32 + Math.random() * 20},0.5)`;
@@ -52,12 +54,12 @@ export function makeRoadTextures(anisotropy: number): RoadTextures {
   }
   // Markings
   const lineW = 0.12 / mPerPx;
-  ctx.fillStyle = '#e8e6dc';
+  ctx.fillStyle = '#f4f2ea';
   ctx.fillRect(0.25 / mPerPx, 0, lineW, H);                 // left edge line
   ctx.fillRect(W - 0.25 / mPerPx - lineW, 0, lineW, H);     // right edge line
   // centre broken line: 3 m dash, 7 m gap (10 m tile)
   const dashLen = (3 / WORLD.roadTextureTileLength) * H;
-  ctx.fillStyle = '#f0e9c8';
+  ctx.fillStyle = '#f7f1d4';
   ctx.fillRect(W / 2 - lineW / 2, H * 0.1, lineW, dashLen);
   // paint wear
   ctx.globalCompositeOperation = 'destination-out';
@@ -152,5 +154,122 @@ export function makeTextTexture(lines: string[], opts: { bg: string; fg: string;
   lines.forEach((l, i) => ctx.fillText(l, W / 2, H * (i + 1) / (lines.length + 1), W - 30));
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+
+/** Striped black/white kerb texture (u across the kerb face, v along it; 1 m per repeat). */
+export function makeKerbTexture(anisotropy: number): THREE.CanvasTexture {
+  const W = 64, H = 256;
+  const [c, ctx] = canvas(W, H);
+  ctx.fillStyle = '#e8e6df'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#1f1f22'; ctx.fillRect(0, 0, W, H / 2);
+  speckle(ctx, W, H, 600, 0.25);
+  const g = ctx.createLinearGradient(0, 0, W, 0); g.addColorStop(0, 'rgba(0,0,0,0.25)'); g.addColorStop(0.3, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.2)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  const t = new THREE.CanvasTexture(c); t.wrapS = THREE.ClampToEdgeWrapping; t.wrapT = THREE.RepeatWrapping; t.anisotropy = anisotropy; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/** Paving-tile texture for footpaths (0.5 m tiles, 2 m per repeat). */
+export function makePavementTexture(anisotropy: number): THREE.CanvasTexture {
+  const S = 256;
+  const [c, ctx] = canvas(S, S);
+  ctx.fillStyle = '#9d978d'; ctx.fillRect(0, 0, S, S);
+  const n = 4, cell = S / n;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const v = 140 + Math.random() * 40;
+    ctx.fillStyle = `rgb(${v + 6},${v},${v - 10})`;
+    ctx.fillRect(x * cell + 2, y * cell + 2, cell - 4, cell - 4);
+  }
+  speckle(ctx, S, S, 2500, 0.18);
+  ctx.strokeStyle = 'rgba(40,35,30,0.55)'; ctx.lineWidth = 3;
+  for (let i = 0; i <= n; i++) { ctx.beginPath(); ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, S); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, i * cell); ctx.lineTo(S, i * cell); ctx.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = anisotropy; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/**
+ * Dhaka-style apartment façade: concrete bands, window rows with frames + glass reflections,
+ * balconies with railings, AC units, grime streaks. One repeat = one floor × ~4 m of width.
+ */
+export function makeFacadeTexture(base: string, anisotropy: number, opts: { balconies?: boolean; shopfront?: boolean } = {}): THREE.CanvasTexture {
+  const W = 512, H = 512;  // 2 floors tall × 8 m wide per repeat
+  const [c, ctx] = canvas(W, H);
+  ctx.fillStyle = base; ctx.fillRect(0, 0, W, H);
+  speckle(ctx, W, H, 4000, 0.12);
+  const floorH = H / 2;
+  for (let f = 0; f < 2; f++) {
+    const y0 = f * floorH;
+    // floor slab band
+    ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(0, y0 + floorH - 14, W, 14);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(0, y0 + floorH - 16, W, 2);
+    // windows: 4 per repeat
+    for (let i = 0; i < 4; i++) {
+      const x = 28 + i * 124, w = 68, y = y0 + 52, h = 110;
+      // frame
+      ctx.fillStyle = '#d8d4c8'; ctx.fillRect(x - 5, y - 5, w + 10, h + 10);
+      ctx.fillStyle = '#2b3b4d'; ctx.fillRect(x, y, w, h);
+      // glass reflection gradient + mullion
+      const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, 'rgba(160,200,230,0.45)'); g.addColorStop(0.5, 'rgba(255,255,255,0.08)'); g.addColorStop(1, 'rgba(90,120,150,0.35)');
+      ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = '#c9c5bb'; ctx.fillRect(x + w / 2 - 2, y, 4, h); ctx.fillRect(x, y + h / 2 - 2, w, 4);
+      // curtain / lit window variation
+      if (Math.random() < 0.3) { ctx.fillStyle = 'rgba(230,200,120,0.35)'; ctx.fillRect(x + 4, y + 4, w / 2 - 6, h - 8); }
+      // AC unit under some windows
+      if (Math.random() < 0.4) { ctx.fillStyle = '#e6e6e2'; ctx.fillRect(x + w - 30, y + h + 10, 34, 24); ctx.fillStyle = '#9a9a96'; for (let k = 0; k < 5; k++) ctx.fillRect(x + w - 28, y + h + 14 + k * 4, 30, 2); }
+      // balcony on alternate windows
+      if (opts.balconies && i % 2 === 1) {
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(x - 24, y + h - 30, w + 48, 8);
+        ctx.fillStyle = '#b9b5aa'; ctx.fillRect(x - 24, y + h - 60, w + 48, 6);
+        ctx.strokeStyle = '#7a7670'; ctx.lineWidth = 3;
+        for (let k = 0; k <= 8; k++) { const bx = x - 24 + k * (w + 48) / 8; ctx.beginPath(); ctx.moveTo(bx, y + h - 60); ctx.lineTo(bx, y + h - 30); ctx.stroke(); }
+      }
+    }
+  }
+  if (opts.shopfront) { // ground floor becomes shops with shutters and signs (bottom half)
+    const y0 = floorH;
+    ctx.fillStyle = '#5a5248'; ctx.fillRect(0, y0, W, floorH);
+    for (let i = 0; i < 4; i++) {
+      const x = i * 128;
+      ctx.fillStyle = ['#d8262c', '#1f6fb5', '#1f9d55', '#f2a900'][i % 4]; ctx.fillRect(x + 4, y0 + 10, 120, 44);
+      ctx.fillStyle = i % 2 ? '#7f8a96' : '#2a2a2a'; ctx.fillRect(x + 8, y0 + 60, 112, floorH - 70);
+      if (i % 2) { ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2; for (let k = 0; k < 20; k++) { ctx.beginPath(); ctx.moveTo(x + 8, y0 + 64 + k * 9); ctx.lineTo(x + 120, y0 + 64 + k * 9); ctx.stroke(); } }
+      else { ctx.fillStyle = 'rgba(200,220,240,0.35)'; ctx.fillRect(x + 12, y0 + 64, 104, floorH - 80); }
+    }
+  }
+  // grime streaks from the top + general dirt at the bottom
+  for (let i = 0; i < 12; i++) { ctx.fillStyle = `rgba(30,25,20,${0.05 + Math.random() * 0.1})`; const x = Math.random() * W; ctx.fillRect(x, 0, 6 + Math.random() * 10, 60 + Math.random() * 200); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = anisotropy; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/** Foliage card (alpha) for billboard trees: a soft, clumpy canopy on a trunk. */
+export function makeTreeCardTexture(kind: number): THREE.CanvasTexture {
+  const W = 256, H = 384;
+  const [c, ctx] = canvas(W, H);
+  ctx.clearRect(0, 0, W, H);
+  if (kind === 1) { // palm
+    ctx.strokeStyle = '#7a6a4a'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(W / 2 + 8, H); ctx.quadraticCurveTo(W / 2 - 6, H * 0.5, W / 2, H * 0.22); ctx.stroke();
+    for (let i = 0; i < 9; i++) {
+      const a = -Math.PI / 2 + (i - 4) * 0.42;
+      ctx.strokeStyle = i % 2 ? '#3d7a2a' : '#4f9a35'; ctx.lineWidth = 14; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(W / 2, H * 0.22); ctx.quadraticCurveTo(W / 2 + Math.cos(a) * 70, H * 0.22 + Math.sin(a) * 70 + 10, W / 2 + Math.cos(a) * 110, H * 0.22 + Math.sin(a) * 60 + 50); ctx.stroke();
+    }
+  } else {
+    ctx.fillStyle = '#5a3d22'; ctx.fillRect(W / 2 - 9, H * 0.55, 18, H * 0.45);
+    ctx.fillStyle = '#4a3019'; ctx.fillRect(W / 2 - 9, H * 0.55, 6, H * 0.45);
+    const hue = kind === 2 ? 95 : 110;
+    for (let i = 0; i < 70; i++) {
+      const r = 22 + Math.random() * 36;
+      const ang = Math.random() * Math.PI * 2, rad = Math.random() * 78;
+      const x = W / 2 + Math.cos(ang) * rad, y = H * 0.33 + Math.sin(ang) * rad * 0.8;
+      const l = 22 + Math.random() * 22;
+      ctx.fillStyle = `hsla(${hue + Math.random() * 14 - 7}, 48%, ${l}%, 0.95)`;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+    // lit top highlights
+    for (let i = 0; i < 25; i++) { const ang = Math.random() * Math.PI * 2, rad = Math.random() * 70; ctx.fillStyle = `hsla(${hue}, 55%, ${48 + Math.random() * 10}%, 0.55)`; ctx.beginPath(); ctx.arc(W / 2 + Math.cos(ang) * rad, H * 0.28 + Math.sin(ang) * rad * 0.6, 10 + Math.random() * 14, 0, 7); ctx.fill(); }
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return t;
 }

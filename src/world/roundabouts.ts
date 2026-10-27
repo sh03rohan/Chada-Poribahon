@@ -3,6 +3,9 @@ import { WORLD } from '../config.ts';
 import { Road } from './road.ts';
 import { makeTextTexture } from './textures.ts';
 import { COLLIDERS } from './collision.ts';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+
+function col(geo: THREE.BufferGeometry, c: THREE.ColorRepresentation) { const g = geo.index ? geo.toNonIndexed() : geo; const n = g.attributes.position.count; const cc = new THREE.Color(c); const a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set([cc.r, cc.g, cc.b], i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv'); return g; }
 
 /** Destinations shown on the 4-way sign at each junction: [straight, back, left, right]. */
 const DIRECTIONS: Record<string, [string, string, string, string]> = {
@@ -34,35 +37,29 @@ export class Roundabouts {
       this.centres.push({ x: f.x, z: f.z, s: rb.s });
       const g = new THREE.Group();
       g.position.set(f.x, 0, f.z); g.rotation.y = road.yawAt(rb.s);
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(R, R + 0.3, 0.42, 36), kerb); base.position.y = 0.21; base.receiveShadow = true; g.add(base);
-      const top = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.6, R - 0.6, 0.1, 36), grass); top.position.y = 0.47; g.add(top);
-      // inner ring path + monument (generic: stepped plinth, tapered pillar, golden finial)
-      const ring = new THREE.Mesh(new THREE.RingGeometry(2.2, 3.0, 36), kerb); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.53; g.add(ring);
-      const plinth = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.0, 0.6, 12), white); plinth.position.y = 0.8; plinth.castShadow = true; g.add(plinth);
-      const plinth2 = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.4, 0.5, 12), white); plinth2.position.y = 1.35; g.add(plinth2);
+      const parts: THREE.BufferGeometry[] = [];
+      const add = (geo: THREE.BufferGeometry, c: number, x = 0, y = 0, z = 0) => parts.push(col(geo.translate(x, y, z), c));
+      add(new THREE.CylinderGeometry(R, R + 0.3, 0.42, 36), 0xb9b2a4, 0, 0.21, 0);
+      add(new THREE.CylinderGeometry(R - 0.6, R - 0.6, 0.1, 36), 0x4f7a2e, 0, 0.47, 0);
+      add(new THREE.RingGeometry(2.2, 3.0, 36).rotateX(-Math.PI / 2), 0xb9b2a4, 0, 0.53, 0);
+      add(new THREE.CylinderGeometry(1.6, 2.0, 0.6, 12), 0xf2efe6, 0, 0.8, 0);
+      add(new THREE.CylinderGeometry(1.0, 1.4, 0.5, 12), 0xf2efe6, 0, 1.35, 0);
       const variant = i % 3;
-      if (variant === 0) {        // obelisk
-        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.7, 7, 8), white); pillar.position.y = 5.1; pillar.castShadow = true; g.add(pillar);
-        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.2, 8), gold); tip.position.y = 9.2; g.add(tip);
-      } else if (variant === 1) { // arch of three fins
-        for (const a of [0, 2.1, -2.1]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6.5, 1.6), white); fin.position.set(Math.sin(a) * 1.0, 4.8, Math.cos(a) * 1.0); fin.rotation.y = a; fin.castShadow = true; g.add(fin); }
-        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.9, 14, 10), gold); orb.position.y = 8.6; g.add(orb);
-      } else {                    // boat-like sculpture on a column
-        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 5, 10), white); col.position.y = 4.1; col.castShadow = true; g.add(col);
-        const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.2, 4.4, 8).rotateZ(Math.PI / 2).scale(1, 0.55, 1), gold); hull.position.y = 6.9; g.add(hull);
-        const sail = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.6, 4), white); sail.position.set(0.3, 8.4, 0); g.add(sail);
-      }
-      // flower beds + small lamps around the island
+      if (variant === 0) { add(new THREE.CylinderGeometry(0.35, 0.7, 7, 8), 0xf2efe6, 0, 5.1, 0); add(new THREE.ConeGeometry(0.4, 1.2, 8), 0xd9b64a, 0, 9.2, 0); }
+      else if (variant === 1) { for (const a of [0, 2.1, -2.1]) add(new THREE.BoxGeometry(0.4, 6.5, 1.6).rotateY(a), 0xf2efe6, Math.sin(a) * 1.0, 4.8, Math.cos(a) * 1.0); add(new THREE.SphereGeometry(0.9, 14, 10), 0xd9b64a, 0, 8.6, 0); }
+      else { add(new THREE.CylinderGeometry(0.5, 0.6, 5, 10), 0xf2efe6, 0, 4.1, 0); add(new THREE.CylinderGeometry(0.6, 0.2, 4.4, 8).rotateZ(Math.PI / 2).scale(1, 0.55, 1), 0xd9b64a, 0, 6.9, 0); add(new THREE.ConeGeometry(1.1, 2.6, 4), 0xf2efe6, 0.3, 8.4, 0); }
       for (let k = 0; k < 8; k++) {
         const a = k / 8 * Math.PI * 2;
-        const bed = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), new THREE.MeshStandardMaterial({ color: [0xd8262c, 0xffcc33, 0xef6aa3, 0xf28c1a][k % 4], roughness: 0.9 }));
-        bed.position.set(Math.cos(a) * (R - 1.6), 0.7, Math.sin(a) * (R - 1.6)); bed.scale.y = 0.6; g.add(bed);
+        add(new THREE.SphereGeometry(0.45, 8, 6).scale(1, 0.6, 1), [0xd8262c, 0xffcc33, 0xef6aa3, 0xf28c1a][k % 4], Math.cos(a) * (R - 1.6), 0.7, Math.sin(a) * (R - 1.6));
         if (k % 2 === 0) {
-          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 3.2, 6), new THREE.MeshStandardMaterial({ color: 0x3a3f44, metalness: 0.5 })); post.position.set(Math.cos(a) * (R - 3.6), 2.1, Math.sin(a) * (R - 3.6)); g.add(post);
+          add(new THREE.CylinderGeometry(0.05, 0.07, 3.2, 6), 0x3a3f44, Math.cos(a) * (R - 3.6), 2.1, Math.sin(a) * (R - 3.6));
           const lm = new THREE.MeshStandardMaterial({ color: 0xffe9b0, emissive: 0xffd27a, emissiveIntensity: 0 }); this.lampMaterials.push(lm);
           const globe = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), lm); globe.position.set(Math.cos(a) * (R - 3.6), 3.8, Math.sin(a) * (R - 3.6)); g.add(globe);
         }
       }
+      add(new THREE.CylinderGeometry(0.12, 0.14, 5.2, 8), 0x3a3f44, 0, 2.6, R - 2.6);
+      const island = new THREE.Mesh(mergeGeometries(parts, false)!, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+      island.geometry.computeVertexNormals(); island.castShadow = true; island.receiveShadow = true; g.add(island);
       // Side roads: left (−right) and right (+right), leaving from the island edge
       const yaw = road.yawAt(rb.s);
       for (const side of [-1, 1]) {
@@ -73,7 +70,6 @@ export class Roundabouts {
       // 4-face direction sign on the island: each face is read by traffic arriving from that side
       const dirs = DIRECTIONS[rb.name] ?? ['ঢাকা', 'কুষ্টিয়া', 'বামে', 'ডানে'];
       const [ahead, back, left, right] = dirs;
-      const signPost = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 5.2, 8), new THREE.MeshStandardMaterial({ color: 0x3a3f44, metalness: 0.5 })); signPost.position.set(0, 2.6, R - 2.6); g.add(signPost);
       const faces: [number, string[]][] = [
         [0, [`↑ ${ahead}`, `← ${left}   ${right} →`]],           // seen from the near side (arriving along +route) → faces +z local
         [Math.PI, [`↑ ${back}`, `← ${right}   ${left} →`]],       // seen by opposite traffic

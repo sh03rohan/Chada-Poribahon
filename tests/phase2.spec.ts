@@ -147,7 +147,7 @@ test('map: minimap + full map + fork signboards + wrong branch warning & recover
 });
 
 test('landing + intro: frames at 3/10/16/21/26 s, skip works at every second, intro remembered', async ({ page }) => {
-  test.setTimeout(600_000);
+  test.setTimeout(900_000); // software GL: the 30-skip loop alone runs ~5 min
   const errors = await boot(page, 'quality=low&hour=10'); // low tier keeps the 30-skip loop inside the budget on software GL
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${SHOTS}/landing.png` });
@@ -166,8 +166,8 @@ test('landing + intro: frames at 3/10/16/21/26 s, skip works at every second, in
   expect(await page.locator('#pretrip').isVisible()).toBe(true);
   await page.screenshot({ path: `${SHOTS}/pretrip.png` });
   expect(await g(page, '__game.settings.value.introSeen')).toBe(true);
-  // skip at every second via the button, Esc, Space and tap (timeline runs 6× faster to keep the test short)
-  await g(page, '__game.cinematic.timeScale = 5');
+  // skip at every second via the button, Esc, Space and tap (timeline runs 8× faster to keep the test short)
+  await g(page, '__game.cinematic.timeScale = 8');
   for (let sec = 0; sec <= 29; sec++) {
     await g(page, '(void __game.playIntro(), 0)');
     await page.waitForFunction(() => (window as unknown as { __game: { stats(): { cineActive: boolean } } }).__game.stats().cineActive, null, { timeout: 10_000 });
@@ -201,5 +201,133 @@ test('medium tier: frame time, draw calls, no errors; speed targets unchanged', 
   console.log('speed targets', p);
   expect(p.zeroToSixty).toBeGreaterThan(8.5); expect(p.zeroToSixty).toBeLessThan(11.5);
   expect(p.topSpeed).toBeGreaterThanOrEqual(115);
+  expect(errors).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Phase 2: fares at every stop, chada, checkpoint, speed camera, alms, fuel, rickshaws/overtaking
+// ---------------------------------------------------------------------------------------------
+type P2 = {
+  s: number; kmh: number; phase: string; chada: string[]; chadaRefused: boolean; checkpoint: string; cameraDone: boolean; almsDone: boolean;
+  fuel: number; fuelState: string; refuels: number; ledger: { fares: number; fines: number; chada: number; fuel: number; charity: number; net: number };
+  choiceOpen: boolean; passengers: number; stopsDone: number; stops: { done: boolean; boarded: number; alighted: number }[];
+};
+const sim = (page: Page, sec: number, inp: Record<string, unknown>) => page.evaluate(([sec, inp]) => (window as unknown as { __game: { simulate(s: number, i: unknown): P2 } }).__game.simulate(sec as number, inp), [sec, inp]) as Promise<P2>;
+const stats = (page: Page) => g(page, '__game.stats()') as Promise<P2>;
+async function driveTo(page: Page, target: number) { let st = await stats(page); for (let i = 0; i < 200 && st.s < target; i++) st = await sim(page, 0.5, { throttle: 1, autopilot: true }); return st; }
+async function brakeToStop(page: Page) { let st = await stats(page); for (let i = 0; i < 60 && st.kmh > 2; i++) st = await sim(page, 0.5, { throttle: 0, brake: 1, autopilot: true }); return sim(page, 1.5, { throttle: 0, brake: 0, handbrake: true, autopilot: true }); } // brake, then handbrake (holding the brake while stopped reverses)
+
+test('phase 2: fares at every stop — Faridpur boarding adds fares, alms visitor asks politely', async ({ page }) => {
+  const errors = await boot(page, 'autostart=1&quality=low&hour=12&view=chase');
+  await g(page, '__game.traffic.enabled = false; __game.teleport(3300)');
+  const before = (await stats(page)).ledger.fares;
+  await driveTo(page, 3412); let st = await brakeToStop(page);
+  st = await sim(page, 1, { brake: 1, autopilot: true });
+  expect(st.phase, 'dwelling at Faridpur').toBe('stop');
+  await page.waitForTimeout(3200); // the visitor walks to the door, then asks
+  st = await stats(page);
+  expect(st.choiceOpen, 'alms prompt open').toBe(true);
+  expect(await page.locator('#choice-title').textContent()).toMatch(/দোয়া|আল্লাহর/);
+  await page.screenshot({ path: `${SHOTS}/alms-prompt.png` });
+  await page.click('#choice-a');
+  st = await sim(page, 7, { brake: 1, autopilot: true });
+  expect(st.phase).toBe('driving');
+  expect(st.stops[1].done).toBe(true); expect(st.stops[1].alighted).toBe(6); expect(st.stops[1].boarded).toBe(8);
+  expect(st.ledger.fares - before).toBe(8 * 220);
+  expect(st.ledger.charity).toBe(10);
+  expect(errors).toEqual([]);
+});
+
+test('phase 2: chada — refusing blocks the bus for a while, paying costs ৳200', async ({ page }) => {
+  const errors = await boot(page, 'autostart=1&quality=low&hour=12&view=chase');
+  await g(page, '__game.traffic.enabled = false; __game.teleport(1040)');
+  await driveTo(page, 1128); await brakeToStop(page);
+  await page.waitForTimeout(300);
+  let st = await stats(page);
+  expect(st.chada[0]).toBe('asking'); expect(st.choiceOpen).toBe(true);
+  await page.screenshot({ path: `${SHOTS}/chada-prompt.png` });
+  await page.click('#choice-b'); // refuse
+  st = await sim(page, 4, { throttle: 1, autopilot: true });
+  expect(st.chada[0]).toBe('blocking'); expect(st.chadaRefused).toBe(true);
+  const held = st.s;
+  expect(st.kmh, 'held by the man standing in front').toBeLessThan(1);
+  st = await sim(page, 9, { throttle: 1, autopilot: true });
+  expect(st.chada[0]).toBe('done'); expect(st.s - held, 'released after the block timer').toBeGreaterThan(10);
+  // second collector: pay
+  await g(page, '__game.teleport(4200)');
+  await driveTo(page, 4278); await brakeToStop(page); await page.waitForTimeout(300);
+  st = await stats(page); expect(st.chada[1]).toBe('asking');
+  await page.click('#choice-a');
+  st = await sim(page, 3, { throttle: 1, autopilot: true });
+  expect(st.chada[1]).toBe('done'); expect(st.ledger.chada).toBe(200);
+  expect(errors).toEqual([]);
+});
+
+test('phase 2: police checkpoint — speeding earns a ৳500 fine + hold, slow pass is waved through; speed camera ৳300', async ({ page }) => {
+  const errors = await boot(page, 'autostart=1&quality=low&hour=12&view=chase');
+  await g(page, '__game.traffic.enabled = false; __game.teleport(2820)');
+  let st = await sim(page, 16, { throttle: 1, autopilot: true });
+  expect(st.checkpoint, 'held at the boom').toBe('stopped');
+  expect(st.ledger.fines).toBe(500);
+  expect(st.s, 'stopped before the boom').toBeLessThan(3000);
+  await page.screenshot({ path: `${SHOTS}/checkpoint-fine.png` });
+  st = await sim(page, 14, { throttle: 1, autopilot: true });
+  expect(st.checkpoint).toBe('cleared'); expect(st.s).toBeGreaterThan(3000);
+  // slow pass
+  await g(page, '__game.incidents.reset(); __game.ledger.fines = 0; __game.teleport(2900)');
+  await driveTo(page, 2940); await brakeToStop(page);
+  for (let i = 0; i < 40; i++) { st = await sim(page, 0.5, { throttle: 0.3, autopilot: true }); if (st.kmh > 20) st = await sim(page, 0.5, { throttle: 0, autopilot: true }); if (st.s > 3010) break; }
+  expect(st.checkpoint).toBe('cleared'); expect(st.ledger.fines).toBe(0);
+  // speed camera on the bridge
+  await g(page, '__game.teleport(4560)'); // 340 m run-up: the bus is past 80 km/h at the gantry
+  st = await sim(page, 28, { throttle: 1, autopilot: true });
+  expect(st.cameraDone).toBe(true); expect(st.ledger.fines).toBe(300);
+  expect(errors).toEqual([]);
+});
+
+test('phase 2: fuel — tank starts part-full, burns under load, pump refuels for money, results ledger', async ({ page }) => {
+  const errors = await boot(page, 'autostart=1&quality=low&hour=12&view=chase');
+  await g(page, '__game.traffic.enabled = false');
+  let st = await stats(page);
+  expect(st.fuel).toBeGreaterThan(0.29); expect(st.fuel).toBeLessThan(0.39);
+  await g(page, '__game.teleport(4660)');
+  const f0 = (await stats(page)).fuel;
+  st = await sim(page, 40, { throttle: 1, autopilot: true });
+  const used = (f0 - st.fuel) * 120;
+  console.log('fuel used in 40 s full throttle (L)', used.toFixed(2));
+  expect(used).toBeGreaterThan(1.5); expect(used).toBeLessThan(6);
+  // pull into the pump lay-by and stop
+  await g(page, '__game.teleport(2690); const f = __game.road.sample(2690); __game.cur.x -= f.rx * 2.4; __game.cur.z -= f.rz * 2.4; __game.prev.x = __game.cur.x; __game.prev.z = __game.cur.z');
+  await sim(page, 2, { brake: 1 });
+  await page.waitForTimeout(400);
+  st = await stats(page);
+  expect(st.choiceOpen, 'pump prompt').toBe(true);
+  await page.screenshot({ path: `${SHOTS}/pump-prompt.png` });
+  await page.click('#choice-a');
+  await page.waitForTimeout(300);
+  st = await stats(page);
+  expect(st.refuels).toBe(1); expect(st.ledger.fuel).toBe(40 * 65);
+  // finish: results card shows the ledger
+  await g(page, '__game.teleport(5900)');
+  st = await sim(page, 25, { throttle: 1, autopilot: true });
+  expect(st.phase).toBe('finished');
+  await page.waitForTimeout(500);
+  const grid = await page.locator('#res-grid').textContent();
+  expect(grid).toContain('ভাড়া আদায়'); expect(grid).toContain('জরিমানা'); expect(grid).toContain('তেল'); expect(grid).toContain('স্টপ');
+  await page.screenshot({ path: `${SHOTS}/results-ledger.png` });
+  expect(errors).toEqual([]);
+});
+
+test('phase 2: traffic has rickshaws/vans and overtakes slow vehicles', async ({ page }) => {
+  const errors = await boot(page, 'autostart=1&quality=low&hour=12&view=chase');
+  const r = await g(page, `(() => {
+    const kinds = new Set(__game.traffic.vehicles.map(v => v.type));
+    const seen = new Set(); let maxOT = 0;
+    for (let i = 0; i < 120; i++) { __game.simulate(0.5, { throttle: 0.6, autopilot: true }); let n = 0; for (const v of __game.traffic.vehicles) if (v.overtake) { n++; seen.add(v); } maxOT = Math.max(maxOT, n); }
+    return { kinds: [...kinds], overtakers: seen.size, maxOT };
+  })()`) as { kinds: string[]; overtakers: number; maxOT: number };
+  console.log('traffic', r);
+  expect(r.kinds).toEqual(expect.arrayContaining(['rickshaw', 'van', 'auto', 'car', 'bus', 'truck', 'bike']));
+  expect(r.overtakers, 'some vehicle overtook during 60 s').toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });

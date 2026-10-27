@@ -94,11 +94,12 @@ test('route: Rajbari stop, blockade wait + police clear, finish at Dhaka', async
   await g(page, '__game.teleport(1880)');
   let st = await g(page, '__game.stats()') as Stats;
   for (let i = 0; i < 60 && st.s < 1972; i++) st = await g(page, '__game.simulate(0.5, { throttle: 1, autopilot: true })') as Stats;
-  for (let i = 0; i < 40 && st.kmh > 0.3; i++) st = await g(page, '__game.simulate(0.5, { throttle: 0, brake: 1, autopilot: true })') as Stats;
+  for (let i = 0; i < 40 && st.kmh > 2; i++) st = await g(page, '__game.simulate(0.5, { throttle: 0, brake: 1, autopilot: true })') as Stats;
+  st = await g(page, '__game.simulate(1.5, { throttle: 0, brake: 0, handbrake: true, autopilot: true })') as Stats;
   console.log('at stop', st);
   expect(st.s).toBeGreaterThan(1984); expect(st.s).toBeLessThan(2016);
   st = await g(page, '__game.simulate(1, { throttle: 0, brake: 1, autopilot: true })') as Stats;
-  expect(st.phase, 'stopped at Rajbari').toBe('rajbari-stop');
+  expect(st.phase, 'stopped at Rajbari').toBe('stop');
   st = await g(page, '__game.simulate(6, { throttle: 0, brake: 1, autopilot: true })') as Stats;
   expect(st.passengers).toBe(24 - 7 + 12);
   await page.screenshot({ path: `${SHOTS}/rajbari.png` });

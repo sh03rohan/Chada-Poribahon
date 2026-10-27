@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { WORLD } from '../config.ts';
-import { makeRoadTextures, makeDirtTexture, makeGrassTexture } from './textures.ts';
+import { COLLIDERS } from './collision.ts';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { makeRoadTextures, makeDirtTexture, makeGrassTexture, makeKerbTexture, makePavementTexture } from './textures.ts';
 
 /** Route definition: [length m, total turn deg (+ right, − left)] */
 export const MAIN_ROUTE: [number, number][] = [
@@ -29,6 +31,8 @@ export class Road {
   /** Extra lateral half-width at s (the road splits around roundabout islands). 0 elsewhere. */
   bulge(s: number): number {
     let b = 0;
+    // divided highway: both carriageways shift outward to make room for the median (60 m ramp)
+    if (s > WORLD.highwayStartS - 60) b = (WORLD.medianWidth / 2 + 0.4) * Math.min(1, (s - (WORLD.highwayStartS - 60)) / 60);
     for (const sc of this.roundabouts) {
       const d = Math.abs(s - sc) / WORLD.roundaboutHalfLength;
       if (d < 1) b = Math.max(b, WORLD.roundaboutBulge * (0.5 - 0.5 * Math.cos(Math.PI * (1 - d))));
@@ -191,6 +195,7 @@ export class Road {
     const shR = new THREE.Mesh(makeStrip(hw - 0.02, hw + sh, -0.012, GROUND_Y, 4, 1), dirtMat);
     shL.receiveShadow = shR.receiveShadow = true;
     this.group.add(shL, shR);
+    if (withGround) this.buildKerbsAndMedian(anisotropy, hw, sh, GROUND_Y);
 
     if (!withGround) return;
     // Ground plane (subdivided so no single triangle spans kilometres)
@@ -204,6 +209,78 @@ export class Road {
     ground.position.set((b.minX + b.maxX) / 2, GROUND_Y, (b.minZ + b.maxZ) / 2);
     ground.receiveShadow = true; ground.name = 'ground';
     this.group.add(ground);
+  }
+
+  /** Height of the footpath surface beside the road at s (kerbed town sections are raised). */
+  footpathHeight(s: number): number {
+    for (const [a, b] of WORLD.kerbRanges) if (s >= a && s <= b) return 0.16;
+    return 0;
+  }
+
+  /** Town sections: raised footpath with paving + striped kerb face; Dhaka: divided highway median. */
+  private buildKerbsAndMedian(anisotropy: number, hw: number, sh: number, groundY: number) {
+    const kerbTex = makeKerbTexture(anisotropy);
+    const kerbMat = new THREE.MeshStandardMaterial({ map: kerbTex, roughness: 0.85 });
+    const paveTex = makePavementTexture(anisotropy); paveTex.repeat.set(1, 1);
+    const paveMat = new THREE.MeshStandardMaterial({ map: paveTex, roughness: 0.95 });
+    const kerbH = 0.16;
+    const strip = (s0: number, s1: number, offA: number, offB: number, yA: number, yB: number, mat: THREE.Material, uScale: number, vScale: number, applyBulge = true) => {
+      const i0 = Math.max(0, Math.floor(s0 / this.spacing)), i1 = Math.min(this.count - 1, Math.ceil(s1 / this.spacing));
+      const n = i1 - i0 + 1; if (n < 2) return;
+      const pos = new Float32Array(n * 6), uv = new Float32Array(n * 4), idx: number[] = [];
+      for (let k = 0; k < n; k++) {
+        const i = i0 + k; const rx = -this.tz[i], rz = this.tx[i]; const bl = applyBulge ? this.bulge(i * this.spacing) : 0;
+        const oa = offA + Math.sign(offA) * bl, ob = offB + Math.sign(offB) * bl;
+        pos.set([this.px[i] + rx * oa, yA, this.pz[i] + rz * oa, this.px[i] + rx * ob, yB, this.pz[i] + rz * ob], k * 6);
+        uv.set([0, i * this.spacing / vScale, uScale, i * this.spacing / vScale], k * 4);
+        if (k < n - 1) { const a = k * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+      let arr = stripBuckets.get(mat); if (!arr) { arr = []; stripBuckets.set(mat, arr); } arr.push(g.toNonIndexed());
+    };
+    const stripBuckets = new Map<THREE.Material, THREE.BufferGeometry[]>();
+    const flushStrips = () => { for (const [mat, geos] of stripBuckets) { const m = new THREE.Mesh(mergeGeometries(geos, false)!, mat); m.receiveShadow = true; this.group.add(m); } stripBuckets.clear(); };
+    for (const [s0, s1] of WORLD.kerbRanges) {
+      for (const side of [-1, 1]) {
+        // kerb face (vertical) then paved footpath on top of the shoulder
+        strip(s0, s1, side * hw, side * (hw + 0.02), 0, kerbH, kerbMat, 1, 1);
+        strip(s0, s1, side * (hw + 0.02), side * (hw + sh + 1.2), kerbH, kerbH, paveMat, (sh + 1.2) / 2, 2);
+        strip(s0, s1, side * (hw + sh + 1.2), side * (hw + sh + 1.3), kerbH, groundY, kerbMat, 1, 1);
+      }
+    }
+    // Divided highway: planted median with railing between the two lanes near Dhaka
+    const mw = WORLD.medianWidth / 2;
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x4f7a2e, roughness: 1 });
+    const s0 = WORLD.highwayStartS, s1 = this.length;
+    strip(s0, s1, -mw, -(mw - 0.02), 0, kerbH, kerbMat, 1, 1, false);
+    strip(s0, s1, (mw - 0.02), mw, kerbH, 0, kerbMat, 1, 1, false);
+    strip(s0, s1, -(mw - 0.02), (mw - 0.02), kerbH + 0.05, kerbH + 0.05, grassMat, 1, 1, false);
+    flushStrips();
+    // hedge + railing posts along the median
+    const hedgeMat = new THREE.MeshStandardMaterial({ color: 0x3f6b28, roughness: 1 });
+    const postMat = new THREE.MeshStandardMaterial({ color: 0xcfd4d8, roughness: 0.4, metalness: 0.6 });
+    const hedgeGeo = new THREE.BoxGeometry(1.2, 0.7, 3.4).translate(0, 0.55, 0);
+    const postGeo = new THREE.BoxGeometry(0.08, 0.9, 0.08).translate(0, 0.6, 0);
+    const nH = Math.floor((s1 - s0) / 4);
+    const hedges = new THREE.InstancedMesh(hedgeGeo, hedgeMat, nH), posts = new THREE.InstancedMesh(postGeo, postMat, nH * 2);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+    const nearIsland = (s: number) => this.roundabouts.some((rs) => Math.abs(s - rs) < WORLD.islandRadius + 6);
+    for (let i = 0; i < nH; i++) {
+      const s = s0 + 2 + i * 4; const f = this.sample(s); const yaw = Math.atan2(-f.tx, -f.tz);
+      if (nearIsland(s)) { m.compose(v.set(0, -20, 0), q, one); hedges.setMatrixAt(i, m); posts.setMatrixAt(i * 2, m); posts.setMatrixAt(i * 2 + 1, m); continue; }
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+      m.compose(v.set(f.x, 0, f.z), q, one); hedges.setMatrixAt(i, m);
+      COLLIDERS.add(f.x, f.z, 0.9);
+      for (const side of [-1, 1]) { m.compose(v.set(f.x + f.rx * side * (mw - 0.15), 0, f.z + f.rz * side * (mw - 0.15)), q, one); posts.setMatrixAt(i * 2 + (side > 0 ? 1 : 0), m); }
+    }
+    hedges.instanceMatrix.needsUpdate = true; posts.instanceMatrix.needsUpdate = true;
+    hedges.castShadow = true; this.group.add(hedges, posts);
+    // rail bars as line segments
+    const pts: number[] = [];
+    for (const side of [-1, 1]) { let prev: THREE.Vector3 | null = null; for (let s = s0; s <= s1; s += 4) { const f = this.sample(s); const p = new THREE.Vector3(f.x + f.rx * side * (mw - 0.15), 1.05, f.z + f.rz * side * (mw - 0.15)); if (nearIsland(s)) { prev = null; continue; } if (prev) pts.push(prev.x, prev.y, prev.z, p.x, p.y, p.z, prev.x, 0.6, prev.z, p.x, 0.6, p.z); prev = p; } }
+    const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
+    const rails = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xd8dde2 })); rails.frustumCulled = false; this.group.add(rails);
   }
 
   /** Wet look: lower roughness, slightly darker. */

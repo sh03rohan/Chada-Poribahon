@@ -5,9 +5,11 @@ import { bn, bnKm, bnTime } from '../util/bangla.ts';
 export interface MapState {
   x: number; z: number; yaw: number; s: number; onBranch: boolean; wrongBranch: boolean;
   blockadeActive: boolean; stoppedAtRajbari: boolean; kmh: number; northUp: boolean;
+  /** per-stop served/missed flags (Phase 2) */
+  stopsDone?: boolean[]; nextStopS?: number;
 }
 
-const WAYPOINTS: [number, string][] = [[40, 'কুষ্টিয়া'], [WORLD.rajbariStopS, 'রাজবাড়ী'], [WORLD.forkS, 'দৌলতদিয়া মোড়'], [WORLD.andolonS, 'ফরিদপুর'], [(WORLD.bridgeStartS + WORLD.bridgeEndS) / 2, 'পদ্মা সেতু'], [WORLD.finishS, 'ঢাকা']];
+const WAYPOINTS: [number, string][] = [[40, 'কুষ্টিয়া'], [WORLD.stops[0].s, 'রাজবাড়ী'], [WORLD.forkS, 'দৌলতদিয়া মোড়'], [WORLD.stops[1].s, 'ফরিদপুর'], [WORLD.stops[2].s, 'ভাঙ্গা'], [(WORLD.bridgeStartS + WORLD.bridgeEndS) / 2, 'পদ্মা সেতু'], [WORLD.finishS, 'ঢাকা']];
 
 /**
  * 2D map rendering shared by the HUD minimap, the full map and the pre-trip screen.
@@ -25,6 +27,7 @@ export class RouteMap {
 
   /** Full route map in a canvas (north up, fitted). */
   drawFull(canvas: HTMLCanvasElement, st: MapState | null, info?: { remaining: number; eta: number }) {
+    const st2 = st;
     const ctx = canvas.getContext('2d')!, W = canvas.width, H = canvas.height;
     const b = this.road.bounds; const pad = 60;
     const sx = (W - pad * 2) / (b.maxX - b.minX || 1), sz = (H - pad * 2) / (b.maxZ - b.minZ || 1);
@@ -64,7 +67,7 @@ export class RouteMap {
     ctx.fillStyle = '#666'; ctx.font = '700 15px "Hind Siliguri"'; ctx.fillText('দৌলতদিয়া ঘাট (ভুল রাস্তা)', bx + 10, by);
     // andolon warning
     if (st?.blockadeActive) { const f = this.road.sample(WORLD.andolonS); const [cx, cy] = P(f.x, f.z); this.icon(ctx, cx, cy, '⚠️', 22); }
-    { const f = this.road.sample(WORLD.rajbariStopS); const [cx, cy] = P(f.x, f.z); this.icon(ctx, cx, cy - 18, '🚏', 20); }
+    WORLD.stops.forEach((st, i) => { if (st.waiting === 0) return; const f = this.road.sample(st.s); const [cx, cy] = P(f.x, f.z); this.icon(ctx, cx, cy - 18, st2?.stopsDone?.[i] ? '✅' : '🚏', 20); });
     { const f = this.road.sample(WORLD.finishS); const [cx, cy] = P(f.x, f.z); this.icon(ctx, cx, cy - 18, '🏁', 22); }
     if (st) {
       const [cx, cy] = P(st.x, st.z);
@@ -105,11 +108,11 @@ export class RouteMap {
     ctx.strokeStyle = '#d8262c'; ctx.lineWidth = 4; ctx.stroke();
     // icons
     const put = (s: number, glyph: string, cond = true) => { if (!cond) return; const f = this.road.sample(s); const [x, y] = T(f.x, f.z); ctx.save(); ctx.translate(x, y); ctx.rotate(st.northUp ? -Math.PI : Math.PI - st.yaw); this.icon(ctx, 0, 0, glyph, 18); ctx.restore(); };
-    put(WORLD.rajbariStopS, '🚏', !st.stoppedAtRajbari);
+    WORLD.stops.forEach((sp, i) => put(sp.s, '🚏', sp.waiting > 0 && !(st.stopsDone?.[i])));
     put(WORLD.andolonS, '⚠️', st.blockadeActive);
     put(WORLD.finishS, '🏁');
     // next objective
-    const next = !st.stoppedAtRajbari && st.s < WORLD.rajbariStopS ? WORLD.rajbariStopS : st.blockadeActive && st.s < WORLD.andolonS ? WORLD.andolonS : WORLD.finishS;
+    const next = st.nextStopS ?? (st.blockadeActive && st.s < WORLD.andolonS ? WORLD.andolonS : WORLD.finishS);
     { const f = this.road.sample(next); const [x, y] = T(f.x, f.z); ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 12, 0, 7); ctx.stroke(); }
     if (st.wrongBranch) { const f = this.road.sample(WORLD.forkS); const [x, y] = T(f.x, f.z); ctx.strokeStyle = '#1f6fb5'; ctx.lineWidth = 3; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(x, y); ctx.stroke(); ctx.setLineDash([]); }
     ctx.restore();

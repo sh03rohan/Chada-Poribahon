@@ -18,3 +18,12 @@ export function bnKm(metres: number): string {
 export function bnTaka(amount: number): string {
   return '৳' + bn(Math.round(amount).toLocaleString('en-US'));
 }
+
+/** "রাত ১০:৩০" style clock label for a decimal hour. */
+export function bnClock(hour: number): string {
+  const h = ((hour % 24) + 24) % 24;
+  const hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+  const part = hh < 4 ? 'রাত' : hh < 6 ? 'ভোর' : hh < 12 ? 'সকাল' : hh < 15 ? 'দুপুর' : hh < 18 ? 'বিকেল' : hh < 20 ? 'সন্ধ্যা' : 'রাত';
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${part} ${bn(h12)}:${bn(String(mm).padStart(2, '0'))}`;
+}

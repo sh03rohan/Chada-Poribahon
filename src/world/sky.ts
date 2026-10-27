@@ -28,8 +28,8 @@ export class SkySystem {
     if (shadows) {
       this.sun.shadow.mapSize.set(shadowMapSize, shadowMapSize);
       const c = this.sun.shadow.camera;
-      c.near = 1; c.far = 160; c.left = -45; c.right = 45; c.top = 45; c.bottom = -45;
-      this.sun.shadow.bias = -0.0005; this.sun.shadow.normalBias = 0.03;
+      c.near = 1; c.far = 220; c.left = -60; c.right = 60; c.top = 60; c.bottom = -60;
+      this.sun.shadow.bias = -0.0004; this.sun.shadow.normalBias = 0.05; this.sun.shadow.radius = 2;
     }
     scene.add(this.sun, this.sun.target, this.hemi);
     // Visible sun (disc + soft glow), moon and stars; drawn beyond the fog

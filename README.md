@@ -1,7 +1,7 @@
-# চাঁদা পরিবহন (Chada Poribohon) — Phase 1
+# চাঁদা পরিবহন (Chada Poribohon) — Phase 2
 
 A browser-based Bangladeshi bus-driving game. Vite + TypeScript + three.js, no framework.
-Route: কুষ্টিয়া → রাজবাড়ী (stop) → ফরিদপুর (andolon) → পদ্মা → ঢাকা, ~6 km, left-hand traffic.
+Route: কুষ্টিয়া → রাজবাড়ী (stop) → ফরিদপুর (stop, andolon) → ভাঙ্গা (stop) → পদ্মা সেতু → গাবতলী, ঢাকা, ~6 km, left-hand traffic.
 
 ```
 npm install
@@ -65,7 +65,7 @@ turnaround pad: "রাস্তা ভুল!" warning, mood drain, reroute arr
   Impacts > 2 m/s cost mood (3–15), show a message and play a thump.
 * **Ride**: no camera shake on tarmac and only a 2 mm road bounce (`CAMERA.shake*`, `PHYSICS.roughness*`) — the
   bus is meant to feel heavy and smooth; off-road keeps a mild shake.
-* **Sky**: visible sun disc + glow, moon and stars at night (the dome goes properly dark, exposure 0.32), a cloud
+* **Sky**: driven by the device clock (re-read every minute while driving, so dusk falls mid-trip); visible sun disc + glow, moon and stars at night (the dome goes properly dark, exposure 0.32), a cloud
   dome that thickens and darkens with rain, fog/light/exposure all re-derived on every time or weather change.
 * **Mobile**: the first menu tap requests fullscreen + `screen.orientation.lock('landscape')` (Android); where
   locking is unsupported (iOS) a portrait overlay asks the player to rotate. `manifest.webmanifest` declares
@@ -125,7 +125,7 @@ button (persisted in `localStorage`) or `?quality=`.
 | Tier   | Pixel ratio | Shadows             | Bloom | Rain particles | Props |
 |--------|-------------|---------------------|-------|----------------|-------|
 | low    | 1.0         | blob shadow only    | no    | 1200           | 45 %  |
-| medium | ≤1.5        | blob shadow only    | no    | 2600           | 75 %  |
+| medium | ≤1.5        | PCF soft shadow map (1k) | no | 2600         | 75 %  |
 | high   | ≤2.0        | PCF soft shadow map | off*  | 5000           | 100 % |
 
 \* The bloom pass (`QUALITY.high.bloom`) exists but is off: the procedural sky's radiance is well above 1, so every
@@ -219,15 +219,58 @@ rig has no interior passenger instances or canvas speedometer.
   driver IK (hand-to-rim error < 6 cm) + glass still transparent, steering schemes + settings persistence across reload,
   minimap/full map/fork signboards + wrong-branch warning and recovery, landing + intro frames at 3/10/16/21/26 s with
   skip at every second, medium-tier draw-call budget and unchanged speed targets.
+* **phase 2 gameplay** (same file) — Faridpur dwell with fares (+8 × ৳220) and the alms prompt,
+  chada refuse (bus held, then released) and pay (−৳200), checkpoint speeding fine + hold vs. slow
+  wave-through, speed camera fine, fuel burn + pump refuel + ledger on the results card, traffic mix
+  (rickshaw/van present) and overtaking.
 
 `window.__game` exposes `simulate(seconds, input)`, `teleport(s)`, `stats()`, `switchCamera(mode)`,
 `toggleWeather()`, `setFreeCamera(pos, look)` for ad-hoc checks in the console.
 
-## Extension points (Phase 2+)
+## Phase 2 — money, incidents and fuel
+
+The run is now a small economy. The HUD money pill shows the **net** (`game/ledger.ts`:
+fares + tips − fines − chada − fuel − charity) and the results card breaks it down.
+
+* **Stops at every town** (`WORLD.stops`): Rajbari, Faridpur, Bhanga and the Gabtoli terminal each
+  have a yellow zone, a shed with a name board and waiting humanoids. Stop in the zone → the door
+  opens, `getOff` passengers walk to the shed, up to `waiting` board (× 1.5 in the 7–10 am rush,
+  × 0.5 at night, capped by free seats) and the helper collects `fare` per head. Driving past a
+  zone marks the stop missed (mood penalty, shouts). The minimap ticks stops off as ✅.
+* **Chada** (`WORLD.chadaSpots`, `game/incidents.ts`): a man under an umbrella waves the bus down.
+  Stop near him and a two-button prompt (`#choice`, keys 1/2) asks for ৳200. Pay → ledger.chada;
+  refuse → he stands in front of the bus for 8 s (physics wall), mood drains and the checkpoint
+  later "gets a complaint". Driving past without stopping has a 50 % chance of the same complaint.
+* **Police checkpoint** (`WORLD.checkpointS`): drums, a striped boom and two officers. Approach under
+  30 km/h with no complaint → the boom lifts and you are waved through. Over the limit in the last
+  25 m, or with a complaint → the boom stays down, the bus is held 12 s and fined ৳500.
+* **Speed camera** on the bridge (`WORLD.speedCameraS`, limit 80 km/h): flash + ৳300.
+* **Alms at Faridpur**: during the dwell a person (a beggar or a member of the hijra community —
+  written respectfully, no caricature) walks to the door and asks for ৳10; give (charity, +mood) or
+  decline politely.
+* **Fuel** (`game/fuel.ts`): the tank starts 30–38 % full (the owner never fills it); burn scales
+  with throttle × rpm (`GAMEPLAY.fuelBurnPerSec`, arcade-scaled so a hard-driven 6 km run uses
+  ~20 % of the tank). A filling station sits in a lay-by on the left before the Faridpur junction
+  (`WORLD.pumpS`): stop beside the pumps and the attendant offers 40 L for ৳2,600. An empty tank
+  cuts the engine; a jerrycan rescue costs ৳800 and 20 s.
+* **Traffic**: cycle-rickshaws and goods vans crawl in the kerb lane; cars, autos and bikes overtake
+  slow leaders when the oncoming lane is clear (`overtake`), and CNG autos cut in ahead of a moving
+  bus (`cutin`). Everything is still a collision circle — hitting it is still a crash.
+* **Time of day** (real clock, re-read every minute): morning rush multiplies waiting passengers,
+  night halves them, adds fog and lights lamps/headlights; the pre-trip card says which applies.
+
+Tuning: `GAMEPLAY` in `src/config.ts` (`chadaAmount`, `checkpointFine`, `cameraFine`,
+`fuelPricePerLitre`, `fuelPumpLitres`, `emptyTankRescue*`, rush hours) and `WORLD.stops`.
+`__game.stats()` reports `ledger`, `chada[]`, `checkpoint`, `fuel`, `stops[]` and `choiceOpen`
+for scripted checks; `scripts/probe-phase2.mjs` walks every incident with screenshots.
+
+## Extension points
 
 `game/events.ts` is a small state machine keyed on route distance — add stops / events there.
 `world/props.ts` clusters, `world/road.ts` `ROUTE` segments and `passengers.ts` `LINES` are data.
-`vehicle/audio.ts` `EngineSource` interface lets recorded samples replace the synth. Traffic, fuel,
-chada and other events are deliberately not in Phase 1.
+`vehicle/audio.ts` `EngineSource` interface lets recorded samples replace the synth. Incidents are
+independent classes (`game/incidents.ts`, `game/fuel.ts`) that read route distance and speed and talk
+to the HUD, ledger and the choice panel — a new event is one more `updateX()` there plus its props in
+`world/incidentProps.ts`.
 
 All names are fictional; no real companies, parties or politicians.

@@ -19,20 +19,19 @@
     <!-- HUD -->
     <div id="hud" class="hidden">
       <div id="hud-top">
-        <div class="hud-box" id="hud-route">কুষ্টিয়া → ঢাকা</div>
-        <div class="hud-box" id="hud-time">০০:০০</div>
-        <div class="hud-box" id="hud-dist">—</div>
+        <div class="pill" id="hud-money"><span class="ico">৳</span><div><small>আয়</small><b id="hud-money-val">৳০</b></div></div>
+        <div class="pill" id="hud-pass-pill"><span class="ico">👥</span><div><small>যাত্রী</small><b id="hud-pass">০ / ৩৬</b></div></div>
+        <div class="pill route" id="hud-route"><span class="ico">📍</span><div><small>রুট</small><b>কুষ্টিয়া → ঢাকা</b></div></div>
+        <div class="pill" id="hud-time-pill"><span class="ico">⏱</span><div><small>সময়</small><b id="hud-time">০০:০০</b></div></div>
+        <div class="pill" id="hud-fuel"><span class="ico">⛽</span><div><small>তেল</small><b id="hud-fuel-val">১০০%</b></div></div>
+        <div class="pill" id="hud-speed"><span class="ico">⏲</span><div><small>গতি</small><b><span id="hud-speed-num">০</span> কিমি/ঘ <span id="hud-gear">N</span></b></div></div>
       </div>
-      <div id="hud-mood-wrap" class="hud-box">
+      <div id="hud-mood-wrap" class="pill">
         <div class="hud-label">যাত্রীর মেজাজ</div>
         <div id="hud-mood"><div id="hud-mood-fill"></div></div>
-        <div class="hud-label" id="hud-pass">যাত্রী: ০</div>
+        <div class="hud-label" id="hud-dist">—</div>
       </div>
-      <div id="hud-speed" class="hud-box">
-        <div id="hud-speed-num">০</div>
-        <div id="hud-speed-unit">কিমি/ঘ</div>
-        <div id="hud-gear">N</div>
-      </div>
+      <div id="hud-banner" class="hidden"><span class="ico">🚌</span><div><b id="hud-banner-title"></b><small id="hud-banner-sub"></small></div></div>
       <div id="hud-msg"></div>
       <div id="bubbles"></div>
       <div id="hud-buttons">
@@ -41,6 +40,7 @@
         <button class="icon-btn" id="btn-map" title="ম্যাপ">🗺️</button>
         <button class="icon-btn" id="btn-pause" title="বিরতি">⏸</button>
       </div>
+      <div id="hud-hint"><span class="ico">ℹ️</span><span id="hud-hint-text">আস্তে চালান, রাজবাড়ীর হলুদ জোনে থামুন, মোড়ে সাইনবোর্ড দেখুন।</span></div>
     </div>
 
     <!-- Touch controls (steering scheme + side are rebuilt from settings) -->
@@ -92,6 +92,7 @@
         </div>
         <canvas id="pretrip-map" width="900" height="420"></canvas>
         <p class="hint">রাজবাড়ীতে থামুন, ফরিদপুরের কাছে অবরোধ হতে পারে, আর দৌলতদিয়ার মোড়ে ভুল করবেন না — পদ্মা সেতুর রাস্তাই ঢাকা।</p>
+        <p class="hint clock-note">🕒 <b>আসল সময়ের দিন-রাত:</b> খেলার আলো আপনার ফোনের ঘড়ি অনুযায়ী চলে — এখন <span id="pretrip-clock">—</span>। রাতে খেললে রাত, ভোরে খেললে ভোর।</p>
         <button id="pretrip-go" class="btn-primary">যাত্রা শুরু</button>
       </div>
     </div>
@@ -137,12 +138,22 @@
           <li>মোড়ে সাইনবোর্ড দেখুন: ঢাকা ➜ পদ্মা সেতু। ফেরি ঘাটের রাস্তা ভুল!</li>
           <li>অবরোধে থামুন, ধৈর্য ধরুন — পুলিশ এলে রাস্তা খুলবে।</li>
           <li>রাস্তার ট্রাফিক দেখে চালান; পেছন থেকে ধাক্কা দিলে যাত্রী ভয় পায়।</li>
+          <li>🕒 দিন-রাত আসল সময়ে চলে: আপনার ঘড়িতে যখন যা, খেলাতেও তাই — রাতে হেডলাইট, বিকেলে সোনালি আলো।</li>
         </ul>
         <button id="howto-close" class="btn-primary">বুঝেছি</button>
       </div>
     </div>
 
     <div id="toasts"></div>
+
+    <!-- Two-option prompt (chada, pump, alms…) -->
+    <div id="choice" class="hidden">
+      <div class="choice-box">
+        <b id="choice-title"></b><small id="choice-sub"></small>
+        <div class="row"><button id="choice-a" class="btn-primary"></button><button id="choice-b"></button></div>
+        <small class="choice-keys">কীবোর্ড: ১ / ২</small>
+      </div>
+    </div>
 
     <!-- Portrait phones: ask to rotate (the game is landscape-only on mobile) -->
     <div id="rotate-overlay">

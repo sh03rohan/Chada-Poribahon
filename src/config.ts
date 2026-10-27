@@ -117,6 +117,19 @@ export const WORLD = {
   /** s positions of key events in metres along the route. */
   rajbariStopS: 2000,
   stopZoneLength: 32,
+  /** Every passenger stop on the route (s, name, people waiting, how many aboard get off, fare to Dhaka). */
+  stops: [
+    { s: 2000, name: 'রাজবাড়ী', waiting: 12, getOff: 7, fare: 300 },
+    { s: 3440, name: 'ফরিদপুর', waiting: 8, getOff: 6, fare: 220 },
+    { s: 4480, name: 'ভাঙ্গা', waiting: 6, getOff: 4, fare: 150 },
+    { s: 5850, name: 'গাবতলী (ঢাকা)', waiting: 0, getOff: 10, fare: 0 },
+  ],
+  /** Phase 2 incidents (metres along the route) */
+  chadaSpots: [1150, 4300],
+  checkpointS: 3000,
+  speedCameraS: 4900,
+  speedCameraLimitKmh: 80,
+  pumpS: 2700,
   forkS: 2460,          // wrong-turn fork (Daulatdia ghat branch)
   andolonS: 3850,
   bridgeStartS: 4650,
@@ -132,6 +145,10 @@ export const WORLD = {
   treesPerKm: 170,
   polesSpacing: 42,
   fogDensity: 0.00085,
+  /** Kerbed footpaths + striped kerbs along these s ranges (towns); the Dhaka approach is a divided highway. */
+  kerbRanges: [[1750, 2550], [3250, 3950], [5450, 6150]] as [number, number][],
+  highwayStartS: 5400,   // divided highway with a planted median from here to the finish
+  medianWidth: 2.4,
 };
 
 export const GAMEPLAY = {
@@ -141,6 +158,29 @@ export const GAMEPLAY = {
   fareRajbariDhaka: 300,
   rajbariGetOff: 7,
   rajbariGetOn: 12,
+  /** Phase 2 economy */
+  chadaAmount: 200,
+  chadaRefuseBlockSec: 8,
+  chadaRefusePenalty: 5,
+  checkpointFine: 500,
+  checkpointSpeedLimitKmh: 30,
+  checkpointDelaySec: 12,
+  cameraFine: 300,
+  begAmount: 10,
+  fuelTankLitres: 120,
+  fuelPricePerLitre: 65,
+  /** litres the pump attendant fills per visit (enough to reach Dhaka) */
+  fuelPumpLitres: 40,
+  /** litres per second at full throttle + redline; scales with throttle × rpm */
+  /** litres per second at full throttle near redline (arcade-scaled so the pump matters on a 6 km run) */
+  fuelBurnPerSec: 0.1,
+  /** tank fraction at the start of a run, random in this range */
+  fuelStartFraction: [0.3, 0.38] as [number, number],
+  fuelIdlePerSec: 0.004,
+  emptyTankRescueCost: 800,
+  emptyTankRescueLitres: 20,
+  emptyTankRescueSec: 20,
+  morningRushStart: 7, morningRushEnd: 10,
   stopDwellTime: 5,       // s doors open
   /** Mood */
   moodStart: 75,
@@ -184,7 +224,7 @@ export const QUALITY: Record<QualityTier, {
   anisotropy: number; envMapSize: number; shadowMapSize: number;
 }> = {
   low: { pixelRatio: 1, shadows: false, bloom: false, rainCount: 1200, anisotropy: 2, envMapSize: 128, shadowMapSize: 1024 },
-  medium: { pixelRatio: 1.5, shadows: false, bloom: false, rainCount: 2600, anisotropy: 4, envMapSize: 256, shadowMapSize: 2048 },
+  medium: { pixelRatio: 1.5, shadows: true, bloom: false, rainCount: 2600, anisotropy: 4, envMapSize: 256, shadowMapSize: 1024 },
   // bloom is off: the procedural sky is HDR-bright, so any bloom threshold spreads sky light over the frame
   high: { pixelRatio: 2, shadows: true, bloom: false, rainCount: 5000, anisotropy: 8, envMapSize: 256, shadowMapSize: 2048 },
 };

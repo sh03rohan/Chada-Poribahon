@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { WORLD, type QualityTier } from '../config.ts';
 import type { Road } from './road.ts';
-import { makeTextTexture, makeWallTexture } from './textures.ts';
+import { makeTextTexture, makeWallTexture, makeFacadeTexture, makeTreeCardTexture } from './textures.ts';
 import { COLLIDERS } from './collision.ts';
 
 /** Deterministic PRNG so the world is identical on every run. */
@@ -55,10 +55,38 @@ function treeGeometry(kind: number): THREE.BufferGeometry {
   return mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)), false)!;
 }
 
+/** BoxGeometry whose UVs are pre-scaled per face so one shared RepeatWrapping texture tiles correctly. */
+function texturedBox(w: number, h: number, d: number, uPerM: number, vPerM: number): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(w, h, d);
+  const uv = g.attributes.uv as THREE.BufferAttribute;
+  // face order: +x, -x, +y, -y, +z, -z — 4 verts each
+  const scales: [number, number][] = [[d * uPerM, h * vPerM], [d * uPerM, h * vPerM], [w * uPerM, d * uPerM], [w * uPerM, d * uPerM], [w * uPerM, h * vPerM], [w * uPerM, h * vPerM]];
+  for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) { const k = f * 4 + i; uv.setXY(k, uv.getX(k) * scales[f][0], uv.getY(k) * scales[f][1]); }
+  return g;
+}
+
 export class Props {
   readonly group = new THREE.Group();
   readonly nightEmissives: THREE.MeshStandardMaterial[] = [];
   private rand = rng(1234);
+  private townFacades: THREE.CanvasTexture[] = [];
+  /** merge buckets → one draw call per texture (buildings/shops) + one vertex-colour mesh for all extras */
+  private buckets = new Map<THREE.Texture, THREE.BufferGeometry[]>();
+  private extras: THREE.BufferGeometry[] = [];
+  private pushBucket(tex: THREE.Texture, geo: THREE.BufferGeometry) { let a = this.buckets.get(tex); if (!a) { a = []; this.buckets.set(tex, a); } a.push(geo.index ? geo.toNonIndexed() : geo); }
+  private pushExtra(geo: THREE.BufferGeometry, color: THREE.ColorRepresentation) { this.extras.push(colored(geo, color)); }
+  private flushBuckets(shadows: boolean) {
+    for (const [tex, geos] of this.buckets) {
+      const g = mergeGeometries(geos, false)!; g.computeVertexNormals();
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1, 1); tex.needsUpdate = true;
+      const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 })); m.castShadow = shadows; m.receiveShadow = true; this.group.add(m);
+    }
+    if (this.extras.length) {
+      const g = mergeGeometries(this.extras, false)!; g.computeVertexNormals();
+      const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })); m.castShadow = shadows; this.group.add(m);
+    }
+    this.buckets.clear(); this.extras = [];
+  }
 
   /**
    * @param exclude returns true where nothing may be placed (branch road / junction side-road corridors).
@@ -68,34 +96,39 @@ export class Props {
     this.addTrees(density);
     this.addPoles();
     this.addLampPosts();
+    this.townFacades = [makeFacadeTexture('#e8dcc4', anisotropy, { shopfront: true }), makeFacadeTexture('#cfd8dc', anisotropy, { balconies: true }), makeFacadeTexture('#e6c9a0', anisotropy, { shopfront: true, balconies: true })];
     this.addShopsAndBuildings(anisotropy);
     this.addSigns();
     this.addBridge(tier);
     this.addMilestones();
+    this.flushBuckets(tier === 'high');
   }
 
   private addTrees(density: number) {
+    // Billboard trees: two crossed foliage cards per tree (cheap, soft silhouette, reads well at distance)
     const total = Math.floor((this.road.length / 1000) * WORLD.treesPerKm * density);
-    const kinds = [treeGeometry(0), treeGeometry(1), treeGeometry(2)];
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 });
-    const perKind = [Math.floor(total * 0.55), Math.floor(total * 0.25), Math.floor(total * 0.2)];
-    kinds.forEach((geo, k) => {
-      const mesh = new THREE.InstancedMesh(geo, mat, perKind[k]);
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      for (let i = 0; i < perKind[k]; i++) {
+    const kinds = [0, 1, 2];
+    const counts = [Math.floor(total * 0.55), Math.floor(total * 0.25), Math.floor(total * 0.2)];
+    const card = new THREE.PlaneGeometry(1, 1.5).translate(0, 0.75, 0);
+    const cross = mergeGeometries([card.clone(), card.clone().rotateY(Math.PI / 2)])!;
+    kinds.forEach((k) => {
+      const tex = makeTreeCardTexture(k);
+      const mat = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1, transparent: false });
+      const mesh = new THREE.InstancedMesh(cross, mat, counts[k]);
+      mesh.castShadow = true; mesh.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: tex, alphaTest: 0.5 });
+      for (let i = 0; i < counts[k]; i++) {
         const s = this.rand() * this.road.length;
         const side = this.rand() < 0.5 ? -1 : 1;
         const near = this.rand() < 0.55;
-        const lat = side * (near ? 7.5 + this.rand() * 9 : 18 + this.rand() * 45);
-        // No trees in the river section
+        const lat = side * (near ? 8 + this.rand() * 9 : 18 + this.rand() * 45);
         if (s > WORLD.bridgeStartS - 40 && s < WORLD.bridgeEndS + 40) { _s.setScalar(0.0001); _m.compose(_p.set(0, -10, 0), _q, _s); mesh.setMatrixAt(i, _m); continue; }
         const { pos, yaw } = placeAt(this.road, s, lat);
         if (this.exclude(pos.x, pos.z)) { _s.setScalar(0.0001); _m.compose(_p.set(0, -10, 0), _q, _s); mesh.setMatrixAt(i, _m); continue; }
         _q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw + this.rand() * 6.28);
-        const sc = 0.75 + this.rand() * 0.6;
-        _s.set(sc, sc * (0.9 + this.rand() * 0.3), sc);
+        const h = (k === 1 ? 9 : k === 2 ? 4.5 : 8) * (0.8 + this.rand() * 0.5);
+        _s.set(h * 0.75, h, h * 0.75);
         _m.compose(pos, _q, _s); mesh.setMatrixAt(i, _m);
-        COLLIDERS.add(pos.x, pos.z, k === 2 ? 0.6 * sc : 0.4 * sc);
+        COLLIDERS.add(pos.x, pos.z, k === 2 ? 0.5 : 0.45);
       }
       mesh.instanceMatrix.needsUpdate = true;
       this.group.add(mesh);
@@ -202,19 +235,13 @@ export class Props {
         const w = 3 + this.rand() * 3, d = 2.5 + this.rand() * 2, h = 2.6 + this.rand() * 0.8;
         const { pos, yaw } = placeAt(this.road, s, side * (WORLD.roadWidth / 2 + WORLD.shoulderWidth + 2.2 + d / 2 + this.rand() * 2));
         if (this.exclude(pos.x, pos.z)) continue;
-        const shop = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: wallTex[i % 3], roughness: 0.9 }));
-        body.position.y = h / 2; body.castShadow = true; body.receiveShadow = true;
-        const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.08, d + 0.8), tinMat);
-        roof.position.set(0, h + 0.05, -0.2); roof.rotation.x = 0.08;
-        const sign = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.9, w * 0.9 / 4), new THREE.MeshStandardMaterial({ map: signTex[i % signTex.length], roughness: 0.6 }));
-        sign.position.set(0, h - 0.4, d / 2 + 0.03);
-        shop.add(body, roof, sign);
-        // face the road: the front (+z local) toward road centre
-        shop.position.copy(pos);
-        shop.rotation.y = yaw + (side > 0 ? Math.PI / 2 : -Math.PI / 2);
-        this.group.add(shop);
-        COLLIDERS.addBox(pos.x, pos.z, shop.rotation.y, w, d);
+        const rot = yaw + (side > 0 ? Math.PI / 2 : -Math.PI / 2); // front (+z local) toward the road
+        const M = new THREE.Matrix4().compose(pos.clone().setY(0), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot), new THREE.Vector3(1, 1, 1));
+        this.pushBucket(wallTex[i % 3], texturedBox(w, h, d, 1 / 3, 1 / 3).translate(0, h / 2, 0).applyMatrix4(M));
+        this.pushExtra(new THREE.BoxGeometry(w + 0.6, 0.08, d + 0.8).rotateX(0.08).translate(0, h + 0.05, -0.2).applyMatrix4(M), 0x8a8f94);
+        this.pushBucket(signTex[i % signTex.length], new THREE.PlaneGeometry(w * 0.9, w * 0.9 / 4).translate(0, h - 0.4, d / 2 + 0.03).applyMatrix4(M));
+        void tinMat;
+        COLLIDERS.addBox(pos.x, pos.z, rot, w, d);
       }
     }
     // Faridpur: mid-rise cluster around the roundabout
@@ -223,15 +250,13 @@ export class Props {
       const side = this.rand() < 0.5 ? -1 : 1;
       const floors = 2 + Math.floor(this.rand() * 4);
       const w = 8 + this.rand() * 6, d = 7 + this.rand() * 5, h = floors * 3.1;
-      const { pos, yaw } = placeAt(this.road, s, side * (20 + this.rand() * 16));
+      const { pos, yaw } = placeAt(this.road, s, side * (14 + this.rand() * 16));
       if (this.exclude(pos.x, pos.z)) continue;
-      const tex = makeWallTexture(['#cfd4d8', '#e0c9a8', '#b9c7d1'][i % 3], anisotropy); tex.repeat.set(w / 4, floors); tex.needsUpdate = true;
-      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
-      b.position.copy(pos).setY(h / 2); b.rotation.y = yaw; b.castShadow = true; COLLIDERS.addBox(b.position.x, b.position.z, b.rotation.y, w, d);
-      this.group.add(b);
+      this.building(pos, yaw, w, d, floors, this.townFacades[i % this.townFacades.length]);
     }
-    // Taller buildings near Dhaka
-    const bTex = [makeWallTexture('#cfd4d8', anisotropy), makeWallTexture('#e0c9a8', anisotropy), makeWallTexture('#b9c7d1', anisotropy)];
+    // Taller buildings near Dhaka: apartment façades with balconies, shopfronts at street level, rooftop tanks
+    const bTex = [makeFacadeTexture('#d9d4c8', anisotropy, { balconies: true, shopfront: true }), makeFacadeTexture('#e3cdb0', anisotropy, { balconies: true }), makeFacadeTexture('#c2cfd8', anisotropy, { shopfront: true }), makeFacadeTexture('#d8b9a6', anisotropy, { balconies: true, shopfront: true })];
+    void makeWallTexture;
     for (let i = 0; i < 26; i++) {
       const s = WORLD.finishS - 600 + this.rand() * 560;
       const side = this.rand() < 0.5 ? -1 : 1;
@@ -250,13 +275,21 @@ export class Props {
       const s = WORLD.rajbariStopS - 250 + this.rand() * 500;
       const side = this.rand() < 0.5 ? -1 : 1;
       const w = 7 + this.rand() * 5, d = 6 + this.rand() * 4, h = 2 * 3.1;
-      const { pos, yaw } = placeAt(this.road, s, side * (16 + this.rand() * 14));
+      const { pos, yaw } = placeAt(this.road, s, side * (13 + this.rand() * 12));
       if (this.exclude(pos.x, pos.z)) continue;
-      const tex = bTex[(i + 1) % 3].clone(); tex.repeat.set(w / 4, 2); tex.needsUpdate = true;
-      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
-      b.position.copy(pos).setY(h / 2); b.rotation.y = yaw; b.castShadow = true; COLLIDERS.addBox(b.position.x, b.position.z, b.rotation.y, w, d);
-      this.group.add(b);
+      void h; this.building(pos, yaw, w, d, 2, this.townFacades[(i + 1) % this.townFacades.length]);
     }
+  }
+
+  /** Apartment block → façade bucket (one draw call per texture) + extras bucket (parapet, stair box, tanks). */
+  private building(pos: THREE.Vector3, yaw: number, w: number, d: number, floors: number, facade: THREE.CanvasTexture) {
+    const h = floors * 3.1;
+    const M = new THREE.Matrix4().compose(new THREE.Vector3(pos.x, 0, pos.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw), new THREE.Vector3(1, 1, 1));
+    this.pushBucket(facade, texturedBox(w, h, d, 1 / 8, 1 / 6.2).translate(0, h / 2, 0).applyMatrix4(M));
+    this.pushExtra(new THREE.BoxGeometry(w + 0.3, 0.6, d + 0.3).translate(0, h + 0.3, 0).applyMatrix4(M), 0xb8b2a6);
+    this.pushExtra(new THREE.BoxGeometry(2.6, 2.4, 3).translate(w * 0.25, h + 1.2, -d * 0.2).applyMatrix4(M), 0xcfc9bd);
+    for (let k = 0; k < 1 + Math.floor(this.rand() * 3); k++) this.pushExtra(new THREE.CylinderGeometry(0.55, 0.55, 1.1, 8).translate(-w * 0.3 + k * 1.4, h + 0.85, d * 0.25).applyMatrix4(M), 0x1b1b1b);
+    COLLIDERS.addBox(pos.x, pos.z, yaw, w, d);
   }
 
   private addSigns() {

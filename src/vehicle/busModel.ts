@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeStaticMeshes } from './mergeStatic.ts';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BUS_DIMENSIONS as D, PHYSICS } from '../config.ts';
 import { Person, DRIVER_VARIANT, HELPER_VARIANT, VARIANTS, type PeopleManager, type Action } from '../world/people.ts';
@@ -452,6 +453,11 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   const gripL = new THREE.Vector3(), gripR = new THREE.Vector3();
   let hornTimer = 0, idleHand = 0;
   const driverHandOverride: { L: THREE.Vector3 | null; R: THREE.Vector3 | null } = { L: null, R: null };
+
+  // ---- Draw-call merge: static parts → a few vertex-coloured meshes -------------
+  const skip = new Set<THREE.Object3D>([door, steeringWheel, ...wipers, driver.root, helper.root, ...riders.map((r) => r.root), seats, skinMesh, clothMesh, hairMesh, speedoMesh, rearView]);
+  mergeStaticMeshes(body, skip, opts.shadows);
+  for (const g of [door, steeringWheel, ...wipers, ...wheelSpin]) mergeStaticMeshes(g, new Set(), opts.shadows);
 
   // ---- Blob shadow (used on tiers without shadow maps) -----------------------
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(W + 1.2, L + 0.8), new THREE.MeshBasicMaterial({ map: makeBlobShadow(), transparent: true, depthWrite: false }));
