@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="bn">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#1b1b1b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>চাঁদা পরিবহন</title>
+    <link rel="preload" href="/fonts/hind-siliguri-bengali-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+      <div id="hud-top">
+        <div class="hud-box" id="hud-route">কুষ্টিয়া → ঢাকা</div>
+        <div class="hud-box" id="hud-time">০০:০০</div>
+        <div class="hud-box" id="hud-dist">—</div>
+      </div>
+      <div id="hud-mood-wrap" class="hud-box">
+        <div class="hud-label">যাত্রীর মেজাজ</div>
+        <div id="hud-mood"><div id="hud-mood-fill"></div></div>
+        <div class="hud-label" id="hud-pass">যাত্রী: ০</div>
+      </div>
+      <div id="hud-speed" class="hud-box">
+        <div id="hud-speed-num">০</div>
+        <div id="hud-speed-unit">কিমি/ঘ</div>
+        <div id="hud-gear">N</div>
+      </div>
+      <div id="hud-msg"></div>
+      <div id="bubbles"></div>
+      <div id="hud-buttons">
+        <button class="icon-btn" id="btn-cam" title="ক্যামেরা">📷</button>
+        <button class="icon-btn" id="btn-weather" title="রোদ/বৃষ্টি">🌧️</button>
+        <button class="icon-btn" id="btn-map" title="ম্যাপ">🗺️</button>
+        <button class="icon-btn" id="btn-pause" title="বিরতি">⏸</button>
+      </div>
+    </div>
+
+    <!-- Touch controls (steering scheme + side are rebuilt from settings) -->
+    <div id="touch" class="hidden">
+      <div id="touch-steer"></div>
+      <div id="touch-pedals">
+        <button class="tbtn small" data-act="horn">📯</button>
+        <button class="tbtn" data-act="brake">ব্রেক</button>
+        <button class="tbtn" data-act="gas">গ্যাস</button>
+      </div>
+    </div>
+
+    <!-- Minimap -->
+    <div id="minimap" class="hidden"><canvas width="220" height="220"></canvas><div id="minimap-pct">০%</div></div>
+
+    <!-- Landing / main menu (3D bus renders behind) -->
+    <div id="landing">
+      <div class="landing-inner">
+        <h1 class="title-big">চাঁদা পরিবহন</h1>
+        <p class="sub">কুষ্টিয়া → রাজবাড়ী → ফরিদপুর → পদ্মা → ঢাকা</p>
+        <div class="menu">
+          <button id="menu-start" class="btn-primary">শুরু করুন</button>
+          <button id="menu-settings">সেটিংস</button>
+          <button id="menu-howto">কীভাবে খেলবেন</button>
+          <button id="menu-intro">ইন্ট্রো আবার দেখুন</button>
+        </div>
+        <div id="start-status">ফন্ট লোড হচ্ছে…</div>
+      </div>
+    </div>
+
+    <!-- Intro cinematic overlay -->
+    <div id="cinematic" class="hidden">
+      <div id="cine-bars-top"></div><div id="cine-bars-bottom"></div>
+      <div id="cine-title" class="hidden"></div>
+      <div id="cine-caption"></div>
+      <button id="cine-skip">স্কিপ ▶</button>
+      <div id="cine-slides" class="hidden"></div>
+    </div>
+
+    <!-- Pre-trip map / route select -->
+    <div id="pretrip" class="hidden">
+      <div class="panel pretrip-panel">
+        <h2>আজকের রুট</h2>
+        <div class="route-select">
+          <button class="route on">কুষ্টিয়া → ঢাকা (পদ্মা সেতু)</button>
+          <button class="route" disabled>ঢাকা → সিলেট <span class="soon">শিগগিরই</span></button>
+          <button class="route" disabled>ঢাকা → চট্টগ্রাম <span class="soon">শিগগিরই</span></button>
+        </div>
+        <canvas id="pretrip-map" width="900" height="420"></canvas>
+        <p class="hint">রাজবাড়ীতে থামুন, ফরিদপুরের কাছে অবরোধ হতে পারে, আর দৌলতদিয়ার মোড়ে ভুল করবেন না — পদ্মা সেতুর রাস্তাই ঢাকা।</p>
+        <button id="pretrip-go" class="btn-primary">যাত্রা শুরু</button>
+      </div>
+    </div>
+
+    <!-- Full map (M) -->
+    <div id="fullmap" class="hidden">
+      <div class="panel map-panel">
+        <h2>রুট ম্যাপ</h2>
+        <canvas id="fullmap-canvas" width="900" height="420"></canvas>
+        <div id="fullmap-info"></div>
+        <button id="fullmap-close" class="btn-primary">ফিরে যান (M)</button>
+      </div>
+    </div>
+
+    <!-- Pause -->
+    <div id="pause" class="hidden">
+      <div class="panel">
+        <h2>বিরতি</h2>
+        <div class="menu">
+          <button id="pause-resume" class="btn-primary">চালিয়ে যান</button>
+          <button id="pause-map">ম্যাপ</button>
+          <button id="pause-settings">সেটিংস</button>
+          <button id="pause-howto">কীভাবে খেলবেন</button>
+          <button id="pause-menu">মূল মেনু</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings (built by settings.ts) -->
+    <div id="settings" class="hidden"></div>
+
+    <!-- How to play -->
+    <div id="howto" class="hidden">
+      <div class="panel">
+        <h2>কীভাবে খেলবেন</h2>
+        <div class="controls-help">
+          <span>W/↑ গ্যাস</span><span>S/↓ ব্রেক</span><span>A/D স্টিয়ারিং</span>
+          <span>Space হ্যান্ডব্রেক</span><span>H হর্ন</span><span>C ক্যামেরা</span><span>M ম্যাপ</span><span>Esc বিরতি</span>
+        </div>
+        <ul class="howto-list">
+          <li>যাত্রীদের মেজাজ ঠিক রাখুন: আস্তে ব্রেক, মসৃণ স্টিয়ারিং, ৯০ কিমি/ঘ-এর নিচে।</li>
+          <li>রাজবাড়ীর হলুদ জোনে থামুন — যাত্রী নামবে, উঠবে, ভাড়া পাবেন।</li>
+          <li>মোড়ে সাইনবোর্ড দেখুন: ঢাকা ➜ পদ্মা সেতু। ফেরি ঘাটের রাস্তা ভুল!</li>
+          <li>অবরোধে থামুন, ধৈর্য ধরুন — পুলিশ এলে রাস্তা খুলবে।</li>
+          <li>রাস্তার ট্রাফিক দেখে চালান; পেছন থেকে ধাক্কা দিলে যাত্রী ভয় পায়।</li>
+        </ul>
+        <button id="howto-close" class="btn-primary">বুঝেছি</button>
+      </div>
+    </div>
+
+    <div id="toasts"></div>
+
+    <!-- Results -->
+    <div id="results" class="hidden">
+      <div class="panel">
+        <h2>ঢাকায় পৌঁছে গেছেন!</h2>
+        <div id="res-stars"></div>
+        <div id="res-grid"></div>
+        <p id="res-news"></p>
+        <div class="row">
+          <button id="btn-share">ছবি শেয়ার করুন</button>
+          <button id="btn-again">আবার খেলুন</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="debug" class="hidden"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
