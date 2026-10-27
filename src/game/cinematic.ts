@@ -43,6 +43,8 @@ export class Cinematic {
   private el = { root: document.getElementById('cinematic')!, cap: document.getElementById('cine-caption')!, title: document.getElementById('cine-title')!, skip: document.getElementById('cine-skip')! as HTMLButtonElement, slides: document.getElementById('cine-slides')! };
   private onKey = (e: KeyboardEvent) => { if (e.code === 'Escape' || e.code === 'Space') { e.preventDefault(); this.skip(); } };
   private slideCanvas: HTMLCanvasElement | null = null;
+  private fade = 0;
+  private fadeEl = document.getElementById('cine-fade')!;
   readonly duration: number;
   /** test hook: run the timeline faster than real time */
   timeScale = 1;
@@ -89,7 +91,7 @@ export class Cinematic {
       // 0–3 title card: sunrise, bus silhouette, engine start sting
       { at: 0, dur: 3, title: 'চাঁদা পরিবহন', caption: 'কুষ্টিয়া থেকে ঢাকা, একটাই রাস্তা।',
         enter: () => { H.setHour(6.05); H.teleport(STAND); H.drive(0, 1, false); H.audioSting('start'); },
-        update: (k) => this.cam(k, [-16, 1.2, 14], [-13, 1.6, 9], [0, 1.8, 0], [0, 2.0, -1], true, 50) },
+        update: (k) => this.cam(k, [-19, 1.0, 16], [-11, 1.9, 7], [0, 1.6, 2], [0.5, 2.1, -2], true, 46) },
       // 3–8 bus stand: helper shouting, passengers boarding with bags, hawker at the window, conductor counting notes
       { at: 3, dur: 5, caption: '“ঢাকা ঢাকা! সিট আছে, উঠেন!” — হেল্পার হাঁকছে',
         enter: () => {
@@ -104,7 +106,7 @@ export class Cinematic {
           cond.lookAt(doorX, doorZ);
           H.helper?.setAction('hang');
         },
-        update: (k, t) => { if (t < 2.6) this.cam(k / 0.52, [-9, 1.9, 2], [-6.5, 1.7, -1.5], [-1.2, 1.6, -4], [-1.3, 1.5, -4.2]); else this.cam((k - 0.52) / 0.48, [-5, 2.4, -10], [-4, 2.2, -7], [-1.2, 2.2, -4.5], [-1.3, 2.0, -3.6]); },
+        update: (k, t) => { if (t < 2.6) this.cam(k / 0.52, [-10, 1.6, 3.5], [-6.5, 1.5, -1.0], [-1.2, 1.5, -4], [-1.3, 1.6, -4.2], true, 48); else this.cam((k - 0.52) / 0.48, [-6.5, 2.6, -11], [-4.2, 2.0, -7.5], [-1.2, 2.2, -4.5], [-1.3, 1.9, -3.8], true, 50); },
         exit: () => this.clearActors() },
       // 8–13 on the road: interior + driver's hands + speed
       { at: 8, dur: 5, caption: 'রাস্তায় গল্প, গান, ভিডিও — আর ড্রাইভারের হাতে স্টিয়ারিং',
@@ -132,7 +134,8 @@ export class Cinematic {
           if (t > 1.6) H.drive(0, 1, true);
           if (t > 2.2) { H.setHour(10 + (t - 2.2) * 2.2); if (t > 3) H.setPassengerPose(t < 4.3 ? 'fan' : 'sleep'); }
           if (t < 2.4) { const f = H.roadSample(WORLD.andolonS - 12); this.cam(k / 0.4, [f.x + f.rx * 9, 3.5, f.z + f.rz * 9 - f.tz * 10], [f.x + f.rx * 7, 2.5, f.z + f.rz * 7], [f.x, 1.5, f.z], [f.x - f.tx * 8, 1.2, f.z - f.tz * 8], false, 55); }
-          else this.cam((k - 0.4) / 0.6, [0.2, 2.3, -2.8], [-0.2, 2.3, -2.6], [0, 1.9, 3], [0.4, 1.8, 3], true, 60);
+          else if (t < 4.2) this.cam((k - 0.4) / 0.3, [-1.6, 2.5, 4.2], [-1.4, 2.4, 2.0], [0.3, 1.9, -3], [0.4, 1.8, -3.5], true, 50);   // aisle from the back, looking forward past the riders
+          else this.cam((k - 0.7) / 0.3, [6, 2.0, -1], [4.5, 1.9, 0.5], [0, 1.8, 0], [0.3, 1.8, 0.4], true, 42);                      // through the side windows: fanning, sleeping
         } },
       // 24–28 police arrive, crowd walks away, fine slip
       { at: 24, dur: 4, caption: '“সবই কপাল।” — জরিমানা ৫০০ টাকা',
@@ -165,7 +168,7 @@ export class Cinematic {
   /** Plays the intro; resolves 'done' or 'skipped'. Low tier → illustrated slides with the same captions. */
   play(forceSlides = false): Promise<'done' | 'skipped'> {
     this.t = 0; this.idx = -1; this.running = true;
-    this.slides = forceSlides || this.host.isLowTier;
+    this.slides = forceSlides; // 3D on every tier; slides only when WebGL is unavailable
     this.el.root.classList.remove('hidden');
     this.el.title.classList.add('hidden');
     addEventListener('keydown', this.onKey);
@@ -180,7 +183,7 @@ export class Cinematic {
     removeEventListener('keydown', this.onKey);
     const cur = this.shots[this.idx]; cur?.exit?.();
     this.clearActors(); this.unstamp();
-    this.el.root.classList.add('hidden'); this.el.slides.classList.add('hidden'); this.el.slides.innerHTML = '';
+    this.el.root.classList.add('hidden'); this.el.slides.classList.add('hidden'); this.el.slides.innerHTML = ''; this.fadeEl.style.opacity = '0';
     this.host.drive(0, 1, false);
     this.host.setPassengerPose('idle');
     this.resolve?.(r); this.resolve = null;
@@ -198,11 +201,16 @@ export class Cinematic {
       this.idx = next;
       const sh = this.shots[this.idx];
       sh.enter?.();
+      this.fade = 1;
       this.el.cap.textContent = sh.caption ?? ''; this.el.cap.style.opacity = sh.caption ? '1' : '0';
       this.el.title.textContent = sh.title ?? ''; this.el.title.classList.toggle('hidden', !sh.title);
     }
     const sh = this.shots[this.idx];
     if (sh) { const local = this.t - sh.at; sh.update?.(Math.min(1, local / sh.dur), local); if (sh.title && local > 1.6) this.el.title.classList.add('hidden'); }
+    // fade in after a cut, fade out at the end of the film
+    this.fade = Math.max(0, this.fade - dt * 2.2);
+    const tail = this.duration - this.t;
+    this.fadeEl.style.opacity = String(Math.max(this.fade, tail < 0.8 ? 1 - tail / 0.8 : 0));
     if (this.t >= this.duration) this.finish('done');
   }
 

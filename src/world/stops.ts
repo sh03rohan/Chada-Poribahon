@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { WORLD } from '../config.ts';
 import type { Road } from './road.ts';
 import { makeTextTexture } from './textures.ts';
+import { COLLIDERS } from './collision.ts';
 
 /**
  * Static route landmarks: Rajbari bus-stand shed + painted stop zone, Dhaka finish gate,
@@ -73,6 +74,7 @@ export class Stops {
     }
     g.position.copy(pos); g.rotation.y = yaw + Math.PI / 2; // shed's +z (front/open side) faces the road
     this.group.add(g);
+    COLLIDERS.addBox(pos.x, pos.z, g.rotation.y, 8, 3.2);
   }
 
   private buildGate(s: number, lines: string[]) {
@@ -90,6 +92,7 @@ export class Stops {
     const board2 = board.clone(); board2.position.z = -0.3; board2.rotation.y = Math.PI; g.add(board2);
     g.position.copy(pos); g.rotation.y = yaw;
     this.group.add(g);
+    for (const x of [-w / 2, w / 2]) { const px = pos.x + Math.cos(yaw) * x, pz = pos.z - Math.sin(yaw) * x; COLLIDERS.add(px, pz, 0.4); }
   }
 
   /** Pulse the zone when the player is near. */

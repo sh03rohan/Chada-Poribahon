@@ -53,10 +53,18 @@ turnaround pad: "রাস্তা ভুল!" warning, mood drain, reroute arr
 
 ### Cities, roundabouts, weather, mobile
 
-* **গোল চত্বর** at Rajbari (2.13 km), Faridpur (3.56 km) and Dhaka (5.72 km): the road widens (`Road.bulge`, up to
-  `WORLD.roundaboutBulge` m per side) and splits around a kerbed island with a monument, flower beds, lamps and a
-  name board (`src/world/roundabouts.ts`). Traffic, pedestrians and the autopilot follow the widened lanes;
-  driving onto the island stops the bus (`Roundabouts.wallDistance`). Positions/radius live in `WORLD.roundabouts`.
+* **চত্বর / 4-way junctions** at Rajbari (2.13 km), Faridpur (3.56 km) and Dhaka (5.72 km): the main road widens
+  (`Road.bulge`) and splits around a kerbed island with a monument, flower beds and lamps; two side roads leave
+  left and right, and a 4-face direction sign on the island tells arriving traffic where each road goes
+  (`DIRECTIONS` in `src/world/roundabouts.ts`). Traffic, pedestrians and the autopilot follow the widened lanes;
+  the island is solid; the side roads count as road surface (`Roundabouts.onSideRoad`) but lead off-route.
+* **Solid world** (`src/world/collision.ts`): every placed prop registers a collider circle (trees, poles, lamp
+  posts, signs, shops, buildings as rows of circles, shed, gate and gantry posts, bridge railings, ferry-queue
+  trucks, islands); traffic vehicles and the police van are added per step. The bus is 5 circles; penetrations
+  are pushed out and the velocity into the obstacle removed, so it stops against things or slides along them.
+  Impacts > 2 m/s cost mood (3–15), show a message and play a thump.
+* **Ride**: no camera shake on tarmac and only a 2 mm road bounce (`CAMERA.shake*`, `PHYSICS.roughness*`) — the
+  bus is meant to feel heavy and smooth; off-road keeps a mild shake.
 * **Sky**: visible sun disc + glow, moon and stars at night (the dome goes properly dark, exposure 0.32), a cloud
   dome that thickens and darkens with rain, fog/light/exposure all re-derived on every time or weather change.
 * **Mobile**: the first menu tap requests fullscreen + `screen.orientation.lock('landscape')` (Android); where
@@ -155,8 +163,8 @@ dispersal is by walking, police use megaphone / hand-signal poses.
 A keyframe timeline: `Shot[]` with `at`, `dur`, `caption`, optional `title`, `enter()` (stage actors / teleport the
 bus / set the hour), `update(k, t)` (camera via `host.setCamera`, bus-local or world keyframes eased with smoothstep)
 and `exit()`. Captions are Bangla; all actors come from the people factory and the game world (no video).
-`prefers-reduced-motion` shortens shots and turns camera moves into cuts. Low tier or a lost WebGL context plays
-the same captions over illustrated canvas slides. Storyboard: 0–3 title/sunrise · 3–8 bus stand · 8–13 on the
+`prefers-reduced-motion` shortens shots and turns camera moves into cuts. The 3D intro runs on every quality tier;
+only a lost WebGL context falls back to the same captions over illustrated canvas slides. Storyboard: 0–3 title/sunrise · 3–8 bus stand · 8–13 on the
 road/interior/hands · 13–18 chada hand-over · 18–24 andolon + time-lapse · 24–28 police + fine slip · 28–30 your turn.
 
 ## Bus model

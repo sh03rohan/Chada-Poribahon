@@ -1,18 +1,29 @@
 import * as THREE from 'three';
 import { WORLD } from '../config.ts';
-import type { Road } from './road.ts';
+import { Road } from './road.ts';
 import { makeTextTexture } from './textures.ts';
+import { COLLIDERS } from './collision.ts';
+
+/** Destinations shown on the 4-way sign at each junction: [straight, back, left, right]. */
+const DIRECTIONS: Record<string, [string, string, string, string]> = {
+  'রাজবাড়ী': ['ঢাকা', 'কুষ্টিয়া', 'পাংশা', 'গোয়ালন্দ ঘাট'],
+  'ফরিদপুর': ['ঢাকা', 'রাজবাড়ী', 'ভাঙ্গা', 'মধুখালী'],
+  'ঢাকা': ['ঢাকা শহর', 'পদ্মা সেতু', 'গাবতলী', 'সায়েদাবাদ'],
+};
 
 /**
- * City roundabouts: a kerbed island with a monument, flower beds, lamps and a name board, sitting
- * in the widened section of road (see Road.bulge). `wallDistance` keeps the bus from driving onto it.
+ * City junctions (গোল চত্বর): a 4-way crossing — the main road splits around a kerbed island
+ * (see Road.bulge) and two side roads leave left and right. A 4-face direction sign stands on the
+ * island telling which road goes where. `wallDistance` / `inside` keep the bus off the island;
+ * `onSideRoad` lets it drive down the side roads.
  */
 export class Roundabouts {
   readonly group = new THREE.Group();
   private centres: { x: number; z: number; s: number }[] = [];
   readonly lampMaterials: THREE.MeshStandardMaterial[] = [];
+  readonly sideRoads: Road[] = [];
 
-  constructor(private road: Road) {
+  constructor(private road: Road, anisotropy = 4) {
     const kerb = new THREE.MeshStandardMaterial({ color: 0xb9b2a4, roughness: 0.9 });
     const grass = new THREE.MeshStandardMaterial({ color: 0x4f7a2e, roughness: 1 });
     const white = new THREE.MeshStandardMaterial({ color: 0xf2efe6, roughness: 0.6 });
@@ -52,12 +63,41 @@ export class Roundabouts {
           const globe = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), lm); globe.position.set(Math.cos(a) * (R - 3.6), 3.8, Math.sin(a) * (R - 3.6)); g.add(globe);
         }
       }
-      // name board facing arriving traffic
-      const board = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 1.1), new THREE.MeshStandardMaterial({ map: makeTextTexture([`${rb.name} গোল চত্বর`], { bg: '#1f6fb5', fg: '#fff', w: 1024, h: 268, border: '#fff' }), roughness: 0.5, side: THREE.DoubleSide }));
-      board.position.set(0, 2.6, R - 0.2); g.add(board);
-      const board2 = board.clone(); board2.position.z = -(R - 0.2); board2.rotation.y = Math.PI; g.add(board2);
+      // Side roads: left (−right) and right (+right), leaving from the island edge
+      const yaw = road.yawAt(rb.s);
+      for (const side of [-1, 1]) {
+        const sr = new Road(anisotropy, { route: [[40, 0], [120, side * 14], [160, 0]], start: { x: f.x + f.rx * side * (R - 2), z: f.z + f.rz * side * (R - 2), yaw: yaw - side * Math.PI / 2 }, ground: false });
+        sr.group.position.y = -0.004;
+        this.group.add(sr.group); this.sideRoads.push(sr);
+      }
+      // 4-face direction sign on the island: each face is read by traffic arriving from that side
+      const dirs = DIRECTIONS[rb.name] ?? ['ঢাকা', 'কুষ্টিয়া', 'বামে', 'ডানে'];
+      const [ahead, back, left, right] = dirs;
+      const signPost = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 5.2, 8), new THREE.MeshStandardMaterial({ color: 0x3a3f44, metalness: 0.5 })); signPost.position.set(0, 2.6, R - 2.6); g.add(signPost);
+      const faces: [number, string[]][] = [
+        [0, [`↑ ${ahead}`, `← ${left}   ${right} →`]],           // seen from the near side (arriving along +route) → faces +z local
+        [Math.PI, [`↑ ${back}`, `← ${right}   ${left} →`]],       // seen by opposite traffic
+        [Math.PI / 2, [`↑ ${right}`, `← ${ahead}   ${back} →`]],  // seen from the left side road
+        [-Math.PI / 2, [`↑ ${left}`, `← ${back}   ${ahead} →`]],  // seen from the right side road
+      ];
+      for (const [rot, lines] of faces) {
+        const b = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.5), new THREE.MeshStandardMaterial({ map: makeTextTexture(lines, { bg: '#1f6fb5', fg: '#fff', w: 1024, h: 450, border: '#fff' }), roughness: 0.5 }));
+        b.position.set(Math.sin(rot) * 0.1, 4.4, R - 2.6 + Math.cos(rot) * 0.1); b.rotation.y = rot; g.add(b);
+      }
+      const nameBoard = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.7), new THREE.MeshStandardMaterial({ map: makeTextTexture([`${rb.name} চত্বর`], { bg: '#d8262c', fg: '#fff', w: 1024, h: 210, border: '#fff' }), roughness: 0.5, side: THREE.DoubleSide }));
+      nameBoard.position.set(0, 3.2, R - 2.6); g.add(nameBoard);
       this.group.add(g);
+      COLLIDERS.add(f.x, f.z, R + 0.3);
     });
+  }
+
+  /** True when (x,z) is on one of the junction side roads (incl. shoulder). */
+  onSideRoad(x: number, z: number): boolean {
+    for (const sr of this.sideRoads) {
+      const l = sr.locate(x, z, 0);
+      if (l.s > 0 && l.s < sr.length && Math.abs(l.lateral) < WORLD.roadWidth / 2 + WORLD.shoulderWidth * 0.6) return true;
+    }
+    return false;
   }
 
   /** True when (x,z) lies on an island (kerb included). */

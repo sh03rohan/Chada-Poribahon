@@ -199,6 +199,24 @@ export class Traffic {
     });
   }
 
+  /** Collision circles of vehicles near route distance s (each vehicle = a row of circles along its length). */
+  nearbyCircles(s: number, range: number, out: { x: number; z: number; r: number }[] = []) {
+    if (!this.enabled) return out;
+    for (const vh of this.vehicles) {
+      if (Math.abs(vh.s - s) > range) continue;
+      const f = this.road.sample(vh.s);
+      const lat = vh.lateral + vh.swerve - vh.dir * this.road.bulge(vh.s);
+      const cx = f.x + f.rx * lat, cz = f.z + f.rz * lat;
+      const r = vh.type === 'bike' ? 0.45 : vh.type === 'auto' ? 0.7 : 1.15;
+      const n = Math.max(1, Math.round(vh.len / (r * 1.6)));
+      for (let i = 0; i < n; i++) {
+        const o = (i - (n - 1) / 2) * (vh.len - r * 2) / Math.max(1, n - 1);
+        out.push({ x: cx + f.tx * o, z: cz + f.tz * o, r });
+      }
+    }
+    return out;
+  }
+
   /** Distance from the player's front to the nearest same-direction vehicle directly ahead in the same lane. */
   aheadDistance(playerS: number, playerLateral: number): number {
     let best = Infinity;
@@ -262,15 +280,19 @@ export class Traffic {
       if (playerActive && vh.dir === -1) {
         const d = vh.s - playerS - 5.6 - vh.len / 2; // distance from the oncoming vehicle's nose to the bus front
         const overlap = Math.abs(playerLateral - vh.lateral) < 3.2;
-        if (d > -2 && d < 70 && overlap) {
-          swerveT = 3.2;
+        if (d > -4 && d < 70 && overlap) swerveT = 3.2;
+        // brake only while the bus front is still ahead of our nose; once level, roll on past it
+        if (d > 0.5 && d < 70 && overlap) {
           const room = d - 6;
           const allowed = room <= 0 ? 0 : Math.sqrt(2 * 4.5 * room);
           target = Math.min(target, Math.max(0, allowed), 9);
-          if (d < 2) target = 0;
-        }
+          if (d < 2.5) target = 0;
+        } else if (d <= 0.5 && d > -vh.len - 12 && overlap) target = Math.min(target, 4); // creeping past the bus
       }
-      vh.swerve += (swerveT - vh.swerve) * Math.min(1, dt * 1.5);
+      // an oncoming vehicle that has come to a stop next to / in front of the bus always edges aside
+      if (playerActive && vh.dir === -1 && vh.speed < 0.5 && Math.abs(vh.s - playerS) < 14 && Math.abs(vh.lateral + vh.swerve - playerLateral) < 3.5) swerveT = Math.max(swerveT, 3.2);
+      // move aside while rolling; a vehicle that had to stop for the bus still edges over slowly
+      if (vh.speed > 1.5 || swerveT > 0) vh.swerve += (swerveT - vh.swerve) * Math.min(1, dt * (vh.speed > 1.5 ? 1.5 : 0.5));
       const accel = target > vh.speed ? 2.2 : 7.5;
       vh.speed += THREE.MathUtils.clamp(target - vh.speed, -accel * dt, accel * dt);
       vh.s += vh.speed * vh.dir * dt;

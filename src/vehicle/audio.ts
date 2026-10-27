@@ -23,59 +23,59 @@ function noiseBuffer(ctx: AudioContext, seconds = 2): AudioBuffer {
 }
 
 /**
- * Synth diesel for a 12-tonne bus: low firing fundamental (rpm/60 × 1.5), a slow "chug" that
- * modulates gain at firing rate, sub-bass, heavy low-pass and lots of exhaust noise. Everything
- * sits below ~600 Hz so it rumbles instead of buzzing like a two-wheeler.
+ * Smooth bus engine hum: a low fundamental (2 × rps) with soft harmonics, a slow vibrato for life,
+ * a gentle noise bed, and a resonant low-pass that opens with throttle. No amplitude chopping —
+ * the sound rises smoothly with rpm instead of putt-putting.
  */
 class SynthEngine implements EngineSource {
   private out: GainNode;
-  private osc1: OscillatorNode; private osc2: OscillatorNode; private sub: OscillatorNode; private chug: OscillatorNode;
-  private chugGain: GainNode; private filt: BiquadFilterNode; private filt2: BiquadFilterNode;
+  private osc1: OscillatorNode; private osc2: OscillatorNode; private osc3: OscillatorNode; private sub: OscillatorNode;
+  private lfo: OscillatorNode; private lfoGain: GainNode;
+  private filt: BiquadFilterNode; private filt2: BiquadFilterNode;
   private noiseGain: GainNode; private noiseFilt: BiquadFilterNode;
   private smoothed = PHYSICS.idleRpm;
 
   constructor(private ctx: AudioContext, noise: AudioBuffer) {
     this.out = ctx.createGain(); this.out.gain.value = 0;
-    // two cascaded low-pass stages = 24 dB/oct roll-off above the rumble
-    this.filt = ctx.createBiquadFilter(); this.filt.type = 'lowpass'; this.filt.frequency.value = 220; this.filt.Q.value = 1.1;
-    this.filt2 = ctx.createBiquadFilter(); this.filt2.type = 'lowpass'; this.filt2.frequency.value = 420; this.filt2.Q.value = 0.7;
-    // chug: amplitude modulation at firing rate so each "bang" is audible at idle
-    this.chug = ctx.createOscillator(); this.chug.type = 'square';
-    this.chugGain = ctx.createGain(); this.chugGain.gain.value = 0.35;
-    const amp = ctx.createGain(); amp.gain.value = 0.65;
-    this.chug.connect(this.chugGain).connect(amp.gain);
-    this.filt.connect(this.filt2).connect(amp).connect(this.out);
+    this.filt = ctx.createBiquadFilter(); this.filt.type = 'lowpass'; this.filt.frequency.value = 320; this.filt.Q.value = 0.9;
+    this.filt2 = ctx.createBiquadFilter(); this.filt2.type = 'lowpass'; this.filt2.frequency.value = 900; this.filt2.Q.value = 0.5;
+    this.filt.connect(this.filt2).connect(this.out);
     this.osc1 = ctx.createOscillator(); this.osc1.type = 'sawtooth';
     this.osc2 = ctx.createOscillator(); this.osc2.type = 'triangle';
+    this.osc3 = ctx.createOscillator(); this.osc3.type = 'sine';
     this.sub = ctx.createOscillator(); this.sub.type = 'sine';
-    const g1 = ctx.createGain(); g1.gain.value = 0.5; this.osc1.connect(g1).connect(this.filt);
-    const g2 = ctx.createGain(); g2.gain.value = 0.35; this.osc2.connect(g2).connect(this.filt);
-    const g3 = ctx.createGain(); g3.gain.value = 0.9; this.sub.connect(g3).connect(this.filt);
+    const g1 = ctx.createGain(); g1.gain.value = 0.22; this.osc1.connect(g1).connect(this.filt);
+    const g2 = ctx.createGain(); g2.gain.value = 0.3; this.osc2.connect(g2).connect(this.filt);
+    const g3 = ctx.createGain(); g3.gain.value = 0.18; this.osc3.connect(g3).connect(this.filt);
+    const g4 = ctx.createGain(); g4.gain.value = 0.55; this.sub.connect(g4).connect(this.filt);
+    // slow vibrato on the harmonics (±0.6 %) so the hum does not sound like a test tone
+    this.lfo = ctx.createOscillator(); this.lfo.type = 'sine'; this.lfo.frequency.value = 4.5;
+    this.lfoGain = ctx.createGain(); this.lfoGain.gain.value = 0.4;
+    this.lfo.connect(this.lfoGain); this.lfoGain.connect(this.osc1.detune); this.lfoGain.connect(this.osc2.detune);
     const ns = ctx.createBufferSource(); ns.buffer = noise; ns.loop = true;
-    this.noiseFilt = ctx.createBiquadFilter(); this.noiseFilt.type = 'bandpass'; this.noiseFilt.frequency.value = 110; this.noiseFilt.Q.value = 0.6;
-    this.noiseGain = ctx.createGain(); this.noiseGain.gain.value = 0.6;
+    this.noiseFilt = ctx.createBiquadFilter(); this.noiseFilt.type = 'bandpass'; this.noiseFilt.frequency.value = 180; this.noiseFilt.Q.value = 0.5;
+    this.noiseGain = ctx.createGain(); this.noiseGain.gain.value = 0.25;
     ns.connect(this.noiseFilt).connect(this.noiseGain).connect(this.filt);
-    this.osc1.start(); this.osc2.start(); this.sub.start(); this.chug.start(); ns.start();
+    this.osc1.start(); this.osc2.start(); this.osc3.start(); this.sub.start(); this.lfo.start(); ns.start();
   }
 
   connect(dest: AudioNode) { this.out.connect(dest); }
 
   update(rpm: number, throttle: number, dt: number) {
-    this.smoothed += (rpm - this.smoothed) * Math.min(1, dt * 6);
+    this.smoothed += (rpm - this.smoothed) * Math.min(1, dt * 4);
     const t = this.ctx.currentTime;
-    const rps = this.smoothed / 60;
-    const fire = rps * 1.5;                   // perceived firing rate of a big slow diesel
-    this.osc1.frequency.setTargetAtTime(fire, t, 0.03);
-    this.osc2.frequency.setTargetAtTime(fire * 2.01, t, 0.03);
-    this.sub.frequency.setTargetAtTime(Math.max(20, fire * 0.5), t, 0.03);
-    this.chug.frequency.setTargetAtTime(Math.max(8, fire), t, 0.03);
-    const load = 0.3 + throttle * 0.7;
-    this.filt.frequency.setTargetAtTime(140 + this.smoothed * 0.09 + throttle * 160, t, 0.08);
-    this.filt2.frequency.setTargetAtTime(300 + this.smoothed * 0.12 + throttle * 220, t, 0.08);
-    this.chugGain.gain.setTargetAtTime(0.45 - Math.min(0.35, this.smoothed / PHYSICS.redlineRpm * 0.4), t, 0.1);
-    this.noiseFilt.frequency.setTargetAtTime(90 + this.smoothed * 0.06, t, 0.1);
-    this.noiseGain.gain.setTargetAtTime(0.4 + throttle * 0.7, t, 0.08);
-    this.out.gain.setTargetAtTime(AUDIO.engineGain * (0.5 + 0.5 * load) * (0.7 + 0.3 * this.smoothed / PHYSICS.redlineRpm), t, 0.06);
+    const f0 = this.smoothed / 60 * 2;             // 22 Hz idle → 90 Hz redline
+    this.osc1.frequency.setTargetAtTime(f0 * 2, t, 0.05);
+    this.osc2.frequency.setTargetAtTime(f0 * 3.0, t, 0.05);
+    this.osc3.frequency.setTargetAtTime(f0 * 4.0, t, 0.05);
+    this.sub.frequency.setTargetAtTime(Math.max(24, f0), t, 0.05);
+    this.lfoGain.gain.setTargetAtTime(6 + throttle * 6, t, 0.2);
+    this.filt.frequency.setTargetAtTime(260 + this.smoothed * 0.12 + throttle * 260, t, 0.12);
+    this.filt2.frequency.setTargetAtTime(700 + this.smoothed * 0.25 + throttle * 500, t, 0.12);
+    this.noiseFilt.frequency.setTargetAtTime(150 + this.smoothed * 0.1, t, 0.15);
+    this.noiseGain.gain.setTargetAtTime(0.18 + throttle * 0.3, t, 0.12);
+    const load = 0.35 + throttle * 0.65;
+    this.out.gain.setTargetAtTime(AUDIO.engineGain * (0.55 + 0.45 * load) * (0.75 + 0.25 * this.smoothed / PHYSICS.redlineRpm), t, 0.1);
   }
 }
 
@@ -155,9 +155,16 @@ export class BusAudio {
   setVolume(v: number) { this.volume = Math.max(0, Math.min(1, v)); if (this.master && !this.muted) this.master.gain.value = AUDIO.masterGain * this.volume; }
   private volume = 1;
   /** Short synthesised stings for the intro. */
-  sting(kind: 'start' | 'horn') {
+  sting(kind: 'start' | 'horn' | 'crash') {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
+    if (kind === 'crash') {
+      const o = this.ctx.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(30, t + 0.35);
+      const g = this.ctx.createGain(); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 400;
+      o.connect(f).connect(g).connect(this.master); o.start(t); o.stop(t + 0.45);
+      return;
+    }
     if (kind === 'horn') { this.hornGain.gain.cancelScheduledValues(t); this.hornGain.gain.setValueAtTime(AUDIO.hornGain, t); this.hornGain.gain.setTargetAtTime(0, t + 0.6, 0.1); return; }
     // engine start: crank then rev
     const o = this.ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(18, t); o.frequency.linearRampToValueAtTime(70, t + 1.2); o.frequency.exponentialRampToValueAtTime(140, t + 2.2);

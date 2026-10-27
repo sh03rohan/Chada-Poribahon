@@ -3,6 +3,7 @@ import { WORLD } from '../config.ts';
 import { Road, BRANCH_ROUTE } from './road.ts';
 import { makeTextTexture } from './textures.ts';
 import { Person, PeopleManager, VARIANTS } from './people.ts';
+import { COLLIDERS } from './collision.ts';
 
 /**
  * The route fork: a branch road peels off to the right toward "দৌলতদিয়া ঘাট" and dead-ends in a
@@ -40,6 +41,7 @@ export class Fork {
     boardR.position.set(2.9, 5.6, 0.2); gantry.add(boardR);
     gantry.position.set(sf.x, 0, sf.z); gantry.rotation.y = main.yawAt(this.forkS - 90);
     this.group.add(gantry);
+    for (const x of [-w / 2, w / 2]) COLLIDERS.add(sf.x + Math.cos(gantry.rotation.y) * x, sf.z - Math.sin(gantry.rotation.y) * x, 0.35);
     // Roadside repeat sign right at the split
     const ss = this.branch.sample(70);
     const side = new THREE.Group();
@@ -48,6 +50,7 @@ export class Fork {
     sb.position.y = 3.5; side.add(sb);
     side.position.set(ss.x + ss.rx * -5.5, 0, ss.z + ss.rz * -5.5); side.rotation.y = this.branch.yawAt(70);
     this.group.add(side);
+    COLLIDERS.add(side.position.x, side.position.z, 0.15);
 
     // Ferry queue: parked trucks/buses along the right of the branch + people waiting
     const truckMat = new THREE.MeshStandardMaterial({ color: 0x3a5a9a, roughness: 0.7 });
@@ -61,6 +64,7 @@ export class Fork {
       t.add(cab, box);
       t.position.set(q.x + q.rx * 1.8, 0, q.z + q.rz * 1.8); t.rotation.y = this.branch.yawAt(s);
       this.group.add(t);
+      COLLIDERS.addBox(t.position.x, t.position.z, t.rotation.y, 2.4, 8.4);
     }
     for (let i = 0; i < 6; i++) {
       const s = this.branch.length - 50 - i * 9;

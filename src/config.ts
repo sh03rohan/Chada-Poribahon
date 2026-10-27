@@ -85,10 +85,10 @@ export const PHYSICS = {
   bodyZeta: 0.42,          // damping ratio (<1 → slight overshoot, feels alive)
   maxRoll: 0.16,
   maxPitch: 0.09,
-  heaveOmega: 11,
-  heaveZeta: 0.35,
-  roughnessAmplitude: 0.012,   // m, base road roughness bounce
-  roughnessOffRoad: 0.05,
+  heaveOmega: 9,
+  heaveZeta: 0.6,
+  roughnessAmplitude: 0.002,   // m, base road roughness bounce (barely perceptible)
+  roughnessOffRoad: 0.045,
 };
 
 export const CAMERA = {
@@ -102,8 +102,8 @@ export const CAMERA = {
   bonnet: { forward: 5.9, up: 2.25 },
   cockpit: { x: 0.85, y: 2.18, z: -3.95, lookDown: 5.5 }, // driver eye (right-hand drive), bus local; lookDown = metres below eye level at 30 m
   shakeHighSpeedKmh: 70,
-  shakeAmplitude: 0.035,
-  shakeRoughAmplitude: 0.08,
+  shakeAmplitude: 0.0,      // no camera shake on tarmac — the ride must feel smooth
+  shakeRoughAmplitude: 0.03, // only off-road
   transitionTime: 0.6,
 };
 

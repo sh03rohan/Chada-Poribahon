@@ -16,7 +16,9 @@ const WAYPOINTS: [number, string][] = [[40, 'কুষ্টিয়া'], [WOR
 export class RouteMap {
   private pts: [number, number][] = [];
   private branchPts: [number, number][] = [];
-  constructor(private road: Road, branch: Road) {
+  private sidePts: [number, number][][] = [];
+  constructor(private road: Road, branch: Road, sideRoads: Road[] = []) {
+    for (const sr of sideRoads) { const pts: [number, number][] = []; for (let s = 0; s <= sr.length; s += 10) { const f = sr.sample(s); pts.push([f.x, f.z]); } this.sidePts.push(pts); }
     for (let s = 0; s <= road.length; s += 10) { const f = road.sample(s); this.pts.push([f.x, f.z]); }
     for (let s = 0; s <= branch.length; s += 10) { const f = branch.sample(s); this.branchPts.push([f.x, f.z]); }
   }
@@ -39,6 +41,9 @@ export class RouteMap {
     ctx.strokeStyle = '#8fb8d8'; ctx.lineWidth = 46; ctx.lineCap = 'round';
     const rm = P((r0.x + r1.x) / 2, (r0.z + r1.z) / 2); const rd = P(r0.x + r0.rx * 300, r0.z + r0.rz * 300); const rd2 = P(r0.x - r0.rx * 300, r0.z - r0.rz * 300);
     ctx.beginPath(); ctx.moveTo(rd[0], rd[1]); ctx.lineTo(rm[0], rm[1]); ctx.lineTo(rd2[0], rd2[1]); ctx.stroke();
+    // junction side roads (thin grey)
+    ctx.strokeStyle = '#a89f8c'; ctx.lineWidth = 4; ctx.setLineDash([]);
+    for (const sp of this.sidePts) { ctx.beginPath(); sp.forEach(([x, z], i) => { const [cx, cy] = P(x, z); i ? ctx.lineTo(cx, cy) : ctx.moveTo(cx, cy); }); ctx.stroke(); }
     // wrong branch (grey)
     ctx.strokeStyle = '#9a9a9a'; ctx.lineWidth = 6; ctx.setLineDash([8, 6]); ctx.beginPath();
     this.branchPts.forEach(([x, z], i) => { const [cx, cy] = P(x, z); i ? ctx.lineTo(cx, cy) : ctx.moveTo(cx, cy); }); ctx.stroke(); ctx.setLineDash([]);
@@ -88,6 +93,8 @@ export class RouteMap {
     if (!st.northUp) ctx.rotate(-(Math.PI - st.yaw));
     else ctx.rotate(Math.PI);  // north (-z) up in north-up mode
     const T = (x: number, z: number): [number, number] => [(x - st.x) * sc, (z - st.z) * sc];
+    ctx.strokeStyle = '#a89f8c'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    for (const sp of this.sidePts) { ctx.beginPath(); sp.forEach(([x, z], i) => { const [cx, cy] = T(x, z); i ? ctx.lineTo(cx, cy) : ctx.moveTo(cx, cy); }); ctx.stroke(); }
     // branch
     ctx.strokeStyle = st.wrongBranch ? '#1f6fb5' : '#8a8a8a'; ctx.lineWidth = 5; ctx.setLineDash([5, 4]); ctx.beginPath();
     this.branchPts.forEach(([x, z], i) => { const [cx, cy] = T(x, z); i ? ctx.lineTo(cx, cy) : ctx.moveTo(cx, cy); }); ctx.stroke(); ctx.setLineDash([]);

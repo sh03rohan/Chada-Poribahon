@@ -22,6 +22,7 @@ import { Blockade } from './world/blockade.ts';
 import { Traffic } from './world/traffic.ts';
 import { Fork } from './world/fork.ts';
 import { Roundabouts } from './world/roundabouts.ts';
+import { resolveBusCollisions, COLLIDERS, type Circle } from './world/collision.ts';
 import { CameraRig, type CameraMode } from './game/camera.ts';
 import { Passengers } from './game/passengers.ts';
 import { Hud } from './game/hud.ts';
@@ -57,6 +58,8 @@ class Game {
   passengers = new Passengers();
   events!: RouteEvents;
   people = new PeopleManager();
+  /** test hook: the static collider grid */
+  colliders = COLLIDERS;
   steeringUI!: SteeringUI;
   map!: RouteMap;
   cinematic!: Cinematic;
@@ -78,7 +81,8 @@ class Game {
   private surf = { onRoad: true, wet: false, wallDistance: Infinity };
   private tmpV = new THREE.Vector3();
   private lastDt = 1 / 60;
-  private lastCrash = -10; private crashPending = false;
+  private lastCrash = -10; private crashPending = false; private crashKind: 'traffic' | 'object' = 'traffic'; private crashImpact = 0;
+  private dynCircles: Circle[] = []; private colScratch: Circle[] = [];
   private helperShoutTimer = 0;
   private boarding: Person[] = [];
   private landingT = 0;
@@ -128,16 +132,24 @@ class Game {
 
     this.road = new Road(maxAniso, { roundabouts: WORLD.roundabouts.map((r) => r.s) });
     this.scene.add(this.road.group);
-    this.props = new Props(this.road, this.tier, maxAniso);
+    this.roundabouts = new Roundabouts(this.road, maxAniso);
+    this.scene.add(this.roundabouts.group);
+    this.fork = new Fork(this.road, maxAniso, this.people);
+    this.scene.add(this.fork.group);
+    // Nothing may be placed on the branch road or the junction side roads (they leave the main corridor)
+    const corridor = 12;
+    const exclude = (x: number, z: number) => {
+      const b = this.fork.branch.locate(x, z, 0);
+      if (b.s > 20 && b.s < this.fork.branch.length && Math.abs(b.lateral) < corridor + 10) return true;
+      for (const sr of this.roundabouts.sideRoads) { const l = sr.locate(x, z, 0); if (l.s > -5 && l.s < sr.length + 5 && Math.abs(l.lateral) < corridor) return true; }
+      return false;
+    };
+    this.props = new Props(this.road, this.tier, maxAniso, exclude);
     this.scene.add(this.props.group);
     this.stops = new Stops(this.road);
     this.scene.add(this.stops.group);
     this.blockade = new Blockade(this.road, this.tier === 'low', this.people);
     this.scene.add(this.blockade.group);
-    this.roundabouts = new Roundabouts(this.road);
-    this.scene.add(this.roundabouts.group);
-    this.fork = new Fork(this.road, maxAniso, this.people);
-    this.scene.add(this.fork.group);
     this.traffic = new Traffic(this.road, this.tier, this.people);
     this.scene.add(this.traffic.group);
     this.sky = new SkySystem(this.renderer, this.scene, q.shadows, q.shadowMapSize);
@@ -148,7 +160,7 @@ class Game {
     this.scene.add(this.bus.root);
     this.bus.setPassengers(this.passengers.count);
     this.events = new RouteEvents(this.blockade, this.passengers, this.hud, this.bus);
-    this.map = new RouteMap(this.road, this.fork.branch);
+    this.map = new RouteMap(this.road, this.fork.branch, this.roundabouts.sideRoads);
     this.cinematic = new Cinematic(this.cineHost());
 
     if (q.bloom) {
@@ -369,16 +381,24 @@ class Game {
     const branchOn = br.onBranch && Math.abs(br.lateral) < WORLD.roadWidth / 2 + WORLD.shoulderWidth * 0.6;
     this.onBranch = br.onBranch && !mainOn;
     if (this.onBranch) { this.routeS = WORLD.forkS; this.lateral = br.lateral; } else { this.routeS = loc.s; this.lateral = loc.lateral; }
-    this.surf.onRoad = mainOn || branchOn || (br.onBranch && br.s > this.fork.branch.length - 30 && Math.abs(br.lateral) < 16);
+    this.surf.onRoad = mainOn || branchOn || (br.onBranch && br.s > this.fork.branch.length - 30 && Math.abs(br.lateral) < 16) || (bl > 0.2 || Math.abs(loc.lateral) > WORLD.roadWidth / 2 ? this.roundabouts.onSideRoad(this.cur.x, this.cur.z) : false);
     this.surf.wet = this.weather.wet > 0.5;
     const trafficWall = this.onBranch || this.cinematicMode ? Infinity : this.traffic.collisionS;
     const islandWall = this.cinematicMode ? Infinity : this.roundabouts.wallDistance(this.cur.x - Math.sin(this.cur.yaw) * 5.6, this.cur.z - Math.cos(this.cur.yaw) * 5.6, this.cur.yaw, loc.s);
     this.surf.wallDistance = Math.min(this.events.wallDistance(loc.s + 5.6), trafficWall > 0 ? trafficWall : 0, islandWall);
-    if (trafficWall <= 0.3 && this.cur.v > 2.5 && this.elapsed - this.lastCrash > 4 && !this.cinematicMode) { this.lastCrash = this.elapsed; this.crashPending = true; }
+    if (trafficWall <= 0.3 && this.cur.v > 2.5 && this.elapsed - this.lastCrash > 4 && !this.cinematicMode) { this.lastCrash = this.elapsed; this.crashPending = true; this.crashKind = 'traffic'; this.crashImpact = this.cur.v; }
     const inp = this.running && !this.finished && !this.paused ? raw : { throttle: 0, brake: 1, steer: 0, handbrake: true };
     if (this.events.phase === 'rajbari-stop') { inp.throttle = 0; inp.brake = 1; }
     copyState(this.prev, this.cur);
     stepVehicle(this.cur, inp, this.surf, dt);
+    // Solid world: resolve against props, parked vehicles, traffic and the police van
+    if (!this.cinematicMode) {
+      this.dynCircles.length = 0;
+      if (!this.onBranch) this.traffic.nearbyCircles(this.routeS, 40, this.dynCircles);
+      this.blockade.vanCircles(this.dynCircles);
+      const col = resolveBusCollisions(this.cur, this.dynCircles, this.colScratch);
+      if (col.hit && col.impact > 2.0 && this.elapsed - this.lastCrash > 2.5) { this.lastCrash = this.elapsed; this.crashPending = true; this.crashKind = 'object'; this.crashImpact = col.impact; }
+    }
     this.simTime += dt;
     this.debug.physicsSample(this.cur.v * 3.6, inp.throttle, this.simTime);
   }
@@ -417,7 +437,14 @@ class Game {
       if (this.events.phase === 'finished') this.finish();
       this.tutorial(dt);
       this.updateBoarding(dt);
-      if (this.crashPending) { this.crashPending = false; this.passengers.mood = Math.max(0, this.passengers.mood - 6); this.hud.message('সামনের গাড়িতে ধাক্কা! সাবধানে!'); this.passengers.shout('brake', true); }
+      if (this.crashPending) {
+        this.crashPending = false;
+        const pen = Math.min(15, 3 + this.crashImpact * 0.8);
+        this.passengers.mood = Math.max(0, this.passengers.mood - pen);
+        this.hud.message(this.crashKind === 'traffic' ? 'সামনের গাড়িতে ধাক্কা! সাবধানে!' : 'ধাক্কা লেগেছে! রাস্তায় থাকুন');
+        this.passengers.shout(this.crashKind === 'traffic' ? 'brake' : 'swerve', true);
+        this.audio.sting('crash');
+      }
     }
     if (!this.paused) {
       this.blockade.update(dt);
@@ -572,7 +599,7 @@ class Game {
       zeroToSixty: this.debug.zeroToSixty, topSpeed: this.debug.topSpeed, onRoad: this.cur.onRoad, phase: this.events.phase,
       blockade: this.blockade.phase, fps: this.debug.fps, worstFrame: this.debug.worstFrame, spikes: this.debug.spikes, avgFrame: this.debug.avgFrame, tier: this.tier, cam: this.cam.mode,
       busProcedural: this.bus.isProcedural, passengers: this.passengers.count, elapsed: this.elapsed, onBranch: this.onBranch, branchS: this.branchS, wrongBranch: this.events.wrongBranch,
-      screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
+      colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {

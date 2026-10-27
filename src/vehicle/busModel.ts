@@ -402,21 +402,34 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   // Grab poles + ceiling rail
   for (const z of [-1.5, 1.0, 3.5]) for (const x of [-0.22, 0.22]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, D.height - D.floorHeight - 0.2, 8), chrome); p.position.set(x, (D.height + D.floorHeight) / 2 - 0.1, z); body.add(p); }
   for (const x of [-0.22, 0.22]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 8.5, 8).rotateX(Math.PI / 2), chrome); r.position.set(x, D.height - 0.25, 0.8); body.add(r); }
-  // Seated passenger silhouettes (instanced): head with hair cap, neck, shoulders, torso — not capsules
-  const personGeo = mergeGeometries([
+  // Seated passenger silhouettes: two instanced meshes so skin and clothing get separate colours
+  const skinGeo = mergeGeometries([
+    new THREE.SphereGeometry(0.11, 9, 7).scale(0.95, 1.1, 0.95).translate(0, 1.25, 0.01),            // head
+    new THREE.CylinderGeometry(0.045, 0.05, 0.08, 6).translate(0, 1.1, 0),                           // neck
+    new THREE.SphereGeometry(0.045, 6, 5).translate(-0.24, 0.6, 0.12), new THREE.SphereGeometry(0.045, 6, 5).translate(0.24, 0.6, 0.12), // hands
+  ].map((g) => g.index ? g.toNonIndexed() : g))!;
+  const clothGeo = mergeGeometries([
     new THREE.CylinderGeometry(0.16, 0.19, 0.5, 8).scale(1, 1, 0.65).translate(0, 0.75, 0),          // torso
     new THREE.CylinderGeometry(0.19, 0.14, 0.12, 8).scale(1.25, 1, 0.7).translate(0, 1.02, 0),       // shoulders
-    new THREE.CylinderGeometry(0.045, 0.05, 0.08, 6).translate(0, 1.1, 0),                           // neck
-    new THREE.SphereGeometry(0.11, 9, 7).scale(0.95, 1.1, 0.95).translate(0, 1.25, 0.01),           // head
-    new THREE.SphereGeometry(0.115, 9, 5, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 1.05, 1).translate(0, 1.27, -0.01), // hair
-    new THREE.CapsuleGeometry(0.045, 0.3, 2, 6).rotateZ(0.25).translate(-0.2, 0.75, 0.02),          // arms
-    new THREE.CapsuleGeometry(0.045, 0.3, 2, 6).rotateZ(-0.25).translate(0.2, 0.75, 0.02),
+    new THREE.CapsuleGeometry(0.045, 0.3, 2, 6).rotateZ(0.25).translate(-0.2, 0.78, 0.04),          // arms
+    new THREE.CapsuleGeometry(0.045, 0.3, 2, 6).rotateZ(-0.25).translate(0.2, 0.78, 0.04),
   ].map((g) => g.index ? g.toNonIndexed() : g))!;
-  const personMat = new THREE.MeshStandardMaterial({ roughness: 0.9 });
-  const passengers = new THREE.InstancedMesh(personGeo, personMat, seatPositions.length);
+  const hairGeo = new THREE.SphereGeometry(0.115, 9, 5, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 1.05, 1).translate(0, 1.27, -0.01).toNonIndexed();
+  const silMat = new THREE.MeshStandardMaterial({ roughness: 0.9 });
+  const skinMesh = new THREE.InstancedMesh(skinGeo, silMat, seatPositions.length);
+  const clothMesh = new THREE.InstancedMesh(clothGeo, silMat, seatPositions.length);
+  const hairMesh = new THREE.InstancedMesh(hairGeo, new THREE.MeshStandardMaterial({ color: 0x17110d, roughness: 0.95 }), seatPositions.length);
+  const SKIN = [0x8d5a3b, 0xa56a45, 0xc58a62, 0x6f452b, 0xb07a55];
+  const CLOTH = [0xe9e4d6, 0x1f6fb5, 0xd8262c, 0x1f9d55, 0xf2a900, 0x6b3fa0, 0xffffff, 0x2f3a4a, 0xef6aa3, 0x8a2d3a];
   const col = new THREE.Color();
-  seatPositions.forEach((p, i) => { m4.makeTranslation(p.x, p.y + 0.02, p.z - 0.05); passengers.setMatrixAt(i, m4); col.setHSL((i * 0.37) % 1, 0.45, 0.3); passengers.setColorAt(i, col); });
-  passengers.instanceMatrix.needsUpdate = true; passengers.count = 0; body.add(passengers);
+  seatPositions.forEach((p, i) => {
+    m4.makeTranslation(p.x, p.y + 0.02, p.z - 0.05);
+    skinMesh.setMatrixAt(i, m4); clothMesh.setMatrixAt(i, m4); hairMesh.setMatrixAt(i, m4);
+    skinMesh.setColorAt(i, col.set(SKIN[(i * 3) % SKIN.length]));
+    clothMesh.setColorAt(i, col.set(CLOTH[(i * 7) % CLOTH.length]));
+  });
+  for (const mm of [skinMesh, clothMesh, hairMesh]) { mm.instanceMatrix.needsUpdate = true; if (mm.instanceColor) mm.instanceColor.needsUpdate = true; mm.count = 0; body.add(mm); }
+  const passengers = { set count(n: number) { skinMesh.count = clothMesh.count = hairMesh.count = n; }, get count() { return skinMesh.count; } };
   // Driver (humanoid, RHD seat, hands held on the wheel by 2-bone IK) + door helper
   const driver = new Person(DRIVER_VARIANT);
   driver.root.position.set(0.85, D.floorHeight, zF + 1.78); driver.root.rotation.y = Math.PI; // faces -Z (forward)

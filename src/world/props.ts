@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { WORLD, type QualityTier } from '../config.ts';
 import type { Road } from './road.ts';
 import { makeTextTexture, makeWallTexture } from './textures.ts';
+import { COLLIDERS } from './collision.ts';
 
 /** Deterministic PRNG so the world is identical on every run. */
 export function rng(seed: number) {
@@ -59,7 +60,10 @@ export class Props {
   readonly nightEmissives: THREE.MeshStandardMaterial[] = [];
   private rand = rng(1234);
 
-  constructor(private road: Road, tier: QualityTier, anisotropy: number) {
+  /**
+   * @param exclude returns true where nothing may be placed (branch road / junction side-road corridors).
+   */
+  constructor(private road: Road, tier: QualityTier, anisotropy: number, private exclude: (x: number, z: number) => boolean = () => false) {
     const density = WORLD.propDensity[tier];
     this.addTrees(density);
     this.addPoles();
@@ -86,10 +90,12 @@ export class Props {
         // No trees in the river section
         if (s > WORLD.bridgeStartS - 40 && s < WORLD.bridgeEndS + 40) { _s.setScalar(0.0001); _m.compose(_p.set(0, -10, 0), _q, _s); mesh.setMatrixAt(i, _m); continue; }
         const { pos, yaw } = placeAt(this.road, s, lat);
+        if (this.exclude(pos.x, pos.z)) { _s.setScalar(0.0001); _m.compose(_p.set(0, -10, 0), _q, _s); mesh.setMatrixAt(i, _m); continue; }
         _q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw + this.rand() * 6.28);
         const sc = 0.75 + this.rand() * 0.6;
         _s.set(sc, sc * (0.9 + this.rand() * 0.3), sc);
         _m.compose(pos, _q, _s); mesh.setMatrixAt(i, _m);
+        COLLIDERS.add(pos.x, pos.z, k === 2 ? 0.6 * sc : 0.4 * sc);
       }
       mesh.instanceMatrix.needsUpdate = true;
       this.group.add(mesh);
@@ -115,6 +121,7 @@ export class Props {
       const { pos, yaw } = placeAt(this.road, s, lat);
       _q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
       _m.compose(pos, _q, _s.set(1, 1, 1)); mesh.setMatrixAt(i, _m);
+      COLLIDERS.add(pos.x, pos.z, 0.22);
       // wire anchor points (3 wires on the crossarms)
       const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
       const anchors = [
@@ -166,6 +173,7 @@ export class Props {
       // arm points toward the road
       _q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw + (side > 0 ? Math.PI : 0));
       _m.compose(pos, _q, _s.set(1, 1, 1)); mesh.setMatrixAt(i, _m);
+      COLLIDERS.add(pos.x, pos.z, 0.18);
       const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
       _m.compose(pos.clone().addScaledVector(right, -side * 1.75).add(new THREE.Vector3(0, 6.95, 0)), _q, _s); lamps.setMatrixAt(i, _m);
     });
@@ -193,6 +201,7 @@ export class Props {
         const side = this.rand() < 0.5 ? -1 : 1;
         const w = 3 + this.rand() * 3, d = 2.5 + this.rand() * 2, h = 2.6 + this.rand() * 0.8;
         const { pos, yaw } = placeAt(this.road, s, side * (WORLD.roadWidth / 2 + WORLD.shoulderWidth + 2.2 + d / 2 + this.rand() * 2));
+        if (this.exclude(pos.x, pos.z)) continue;
         const shop = new THREE.Group();
         const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: wallTex[i % 3], roughness: 0.9 }));
         body.position.y = h / 2; body.castShadow = true; body.receiveShadow = true;
@@ -205,6 +214,7 @@ export class Props {
         shop.position.copy(pos);
         shop.rotation.y = yaw + (side > 0 ? Math.PI / 2 : -Math.PI / 2);
         this.group.add(shop);
+        COLLIDERS.addBox(pos.x, pos.z, shop.rotation.y, w, d);
       }
     }
     // Faridpur: mid-rise cluster around the roundabout
@@ -214,9 +224,10 @@ export class Props {
       const floors = 2 + Math.floor(this.rand() * 4);
       const w = 8 + this.rand() * 6, d = 7 + this.rand() * 5, h = floors * 3.1;
       const { pos, yaw } = placeAt(this.road, s, side * (20 + this.rand() * 16));
+      if (this.exclude(pos.x, pos.z)) continue;
       const tex = makeWallTexture(['#cfd4d8', '#e0c9a8', '#b9c7d1'][i % 3], anisotropy); tex.repeat.set(w / 4, floors); tex.needsUpdate = true;
       const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
-      b.position.copy(pos).setY(h / 2); b.rotation.y = yaw; b.castShadow = true;
+      b.position.copy(pos).setY(h / 2); b.rotation.y = yaw; b.castShadow = true; COLLIDERS.addBox(b.position.x, b.position.z, b.rotation.y, w, d);
       this.group.add(b);
     }
     // Taller buildings near Dhaka
@@ -227,6 +238,7 @@ export class Props {
       const floors = 3 + Math.floor(this.rand() * 6);
       const w = 8 + this.rand() * 8, d = 8 + this.rand() * 6, h = floors * 3.1;
       const { pos, yaw } = placeAt(this.road, s, side * (18 + this.rand() * 20));
+      if (this.exclude(pos.x, pos.z)) continue;
       const tex = bTex[i % 3].clone(); tex.repeat.set(w / 4, floors / 1.0); tex.needsUpdate = true;
       const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
       b.position.copy(pos).setY(h / 2); b.rotation.y = yaw + (this.rand() - 0.5) * 0.4;
@@ -239,9 +251,10 @@ export class Props {
       const side = this.rand() < 0.5 ? -1 : 1;
       const w = 7 + this.rand() * 5, d = 6 + this.rand() * 4, h = 2 * 3.1;
       const { pos, yaw } = placeAt(this.road, s, side * (16 + this.rand() * 14));
+      if (this.exclude(pos.x, pos.z)) continue;
       const tex = bTex[(i + 1) % 3].clone(); tex.repeat.set(w / 4, 2); tex.needsUpdate = true;
       const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
-      b.position.copy(pos).setY(h / 2); b.rotation.y = yaw; b.castShadow = true;
+      b.position.copy(pos).setY(h / 2); b.rotation.y = yaw; b.castShadow = true; COLLIDERS.addBox(b.position.x, b.position.z, b.rotation.y, w, d);
       this.group.add(b);
     }
   }
@@ -267,6 +280,7 @@ export class Props {
       g.add(post, panel);
       g.position.copy(place.pos); g.rotation.y = place.yaw; // plane faces +z local = toward oncoming driver
       this.group.add(g);
+      COLLIDERS.add(place.pos.x, place.pos.z, 0.15);
     }
   }
 
@@ -318,6 +332,7 @@ export class Props {
         const { pos, yaw } = placeAt(this.road, s, side * (WORLD.roadWidth / 2 + WORLD.shoulderWidth));
         _q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
         _m.compose(pos, _q, _s.set(1, 1, 1)); posts.setMatrixAt(i++, _m);
+        COLLIDERS.add(pos.x, pos.z, 0.5);
         if (prev) for (const y of [0.5, 1.05]) railPts.push(prev.x, prev.y + y, prev.z, pos.x, pos.y + y, pos.z);
         prev = pos;
       }
@@ -339,6 +354,7 @@ export class Props {
         const { pos, yaw } = placeAt(this.road, s, side * (WORLD.roadWidth / 2 + WORLD.shoulderWidth + 0.8));
         _q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
         _m.compose(pos, _q, _s.set(1, 1, 1)); py.setMatrixAt(j++, _m);
+        COLLIDERS.add(pos.x, pos.z, 0.9);
       }
       py.count = j; py.instanceMatrix.needsUpdate = true;
       this.group.add(py);

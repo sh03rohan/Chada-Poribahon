@@ -147,6 +147,14 @@ export class Blockade {
 
   get active(): boolean { return this.phase !== 'cleared'; }
 
+  /** Collision circles for the parked police van (world space). */
+  vanCircles(out: { x: number; z: number; r: number }[] = []) {
+    if (!this.van.visible) return out;
+    const p = new THREE.Vector3();
+    for (const o of [-1.8, 0, 1.8]) { p.set(this.van.position.x, 0, this.van.position.z + o); this.group.localToWorld(p); out.push({ x: p.x, z: p.z, r: 1.15 }); }
+    return out;
+  }
+
   /** Cinematic hooks: jump the event forward. */
   forcePolice() { if (this.phase === 'idle' || this.phase === 'waiting') { this.phase = 'police'; this.timer = 0; this.van.visible = true; } }
   forceDisperse() { if (this.phase !== 'cleared' && this.phase !== 'dispersing') { this.phase = 'dispersing'; this.timer = 0; this.police.forEach((p, i) => { p.root.visible = true; p.position.copy(this.policeTarget[i]); p.setAction(i === 0 ? 'megaphone' : 'signal'); }); this.disperse(); } }
