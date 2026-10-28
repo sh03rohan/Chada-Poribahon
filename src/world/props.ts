@@ -4,6 +4,7 @@ import { WORLD, type QualityTier } from '../config.ts';
 import type { Road } from './road.ts';
 import { makeTextTexture, makeWallTexture, makeFacadeTexture, makeTreeCardTexture } from './textures.ts';
 import { COLLIDERS } from './collision.ts';
+import { ROUTE } from '../routes.ts';
 
 /** Deterministic PRNG so the world is identical on every run. */
 export function rng(seed: number) {
@@ -219,14 +220,7 @@ export class Props {
     const wallTex = [makeWallTexture('#c9b98a', anisotropy, false), makeWallTexture('#9fb8c2', anisotropy, false), makeWallTexture('#d8c8b0', anisotropy, false)];
     const tinMat = new THREE.MeshStandardMaterial({ color: 0x8a8f94, roughness: 0.55, metalness: 0.6 });
     const signTex = shopNames.map((n, i) => makeTextTexture([n], { bg: ['#d8262c', '#1f6fb5', '#1f9d55', '#f2a900'][i % 4], fg: '#fff', w: 512, h: 128, border: '#fff' }));
-    const clusters = [
-      { s: WORLD.rajbariStopS, n: 10, spread: 160 },
-      { s: 1150, n: 4, spread: 90 },
-      { s: WORLD.andolonS - 300, n: 5, spread: 120 },
-      { s: 4450, n: 4, spread: 80 },
-      { s: 3560, n: 9, spread: 150 },
-      { s: WORLD.finishS - 350, n: 16, spread: 260 },
-    ];
+    const clusters = ROUTE.clusters;
     for (const c of clusters) {
       for (let i = 0; i < c.n; i++) {
         const s = c.s + (this.rand() - 0.5) * c.spread * 2;
@@ -293,14 +287,7 @@ export class Props {
   }
 
   private addSigns() {
-    const signs: [number, string[], string][] = [
-      [350, ['রাজবাড়ী ১.৬ কিমি', 'ঢাকা ৫.৭ কিমি'], '#1f6fb5'],
-      [1700, ['রাজবাড়ী বাস স্ট্যান্ড', 'সামনে থামুন'], '#1f9d55'],
-      [2600, ['ফরিদপুর', 'সাবধানে চালান'], '#1f6fb5'],
-      [3400, ['গতিসীমা', '৮০'], '#d8262c'],
-      [WORLD.bridgeStartS - 120, ['পদ্মা সেতু', 'গতি কমান'], '#1f6fb5'],
-      [WORLD.finishS - 700, ['ঢাকা ০.৭ কিমি', 'স্বাগতম'], '#1f9d55'],
-    ];
+    const signs: [number, string[], string][] = ROUTE.signs;
     const postMat = new THREE.MeshStandardMaterial({ color: 0x5a5f66, roughness: 0.6, metalness: 0.5 });
     for (const [s, lines, bg] of signs) {
       const tex = makeTextTexture(lines, { bg, fg: '#fff', w: 512, h: 256, border: '#fff' });

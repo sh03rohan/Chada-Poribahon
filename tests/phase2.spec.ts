@@ -125,8 +125,8 @@ test('map: minimap + full map + fork signboards + wrong branch warning & recover
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/fork-signboards.png` });
   await g(page, '__game.setFreeCamera(null)');
-  // take the wrong branch
-  await g(page, '__game.teleport(2380); __game.autopilotRoad = __game.fork.branch');
+  // take the wrong branch (traffic off: a random collision would overwrite the HUD message)
+  await g(page, '__game.traffic.enabled = false; __game.teleport(2380); __game.autopilotRoad = __game.fork.branch');
   let st = await g(page, '__game.simulate(24, { throttle: 0.9, autopilot: true })') as { onBranch: boolean; wrongBranch: boolean; mood: number; branchS: number };
   console.log('on branch', st);
   expect(st.onBranch).toBe(true); expect(st.wrongBranch).toBe(true);

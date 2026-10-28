@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WORLD } from '../config.ts';
+import { ROUTE } from '../routes.ts';
 import { Road } from './road.ts';
 import { makeTextTexture } from './textures.ts';
 import { COLLIDERS } from './collision.ts';
@@ -68,7 +69,7 @@ export class Roundabouts {
         this.group.add(sr.group); this.sideRoads.push(sr);
       }
       // 4-face direction sign on the island: each face is read by traffic arriving from that side
-      const dirs = DIRECTIONS[rb.name] ?? ['ঢাকা', 'কুষ্টিয়া', 'বামে', 'ডানে'];
+      const dirs = ROUTE.directions[rb.name] ?? DIRECTIONS[rb.name] ?? [ROUTE.to, ROUTE.from, 'বামে', 'ডানে'];
       const [ahead, back, left, right] = dirs;
       const faces: [number, string[]][] = [
         [0, [`↑ ${ahead}`, `← ${left}   ${right} →`]],           // seen from the near side (arriving along +route) → faces +z local

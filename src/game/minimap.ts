@@ -1,4 +1,5 @@
 import { WORLD } from '../config.ts';
+import { ROUTE } from '../routes.ts';
 import type { Road } from '../world/road.ts';
 import { bn, bnKm, bnTime } from '../util/bangla.ts';
 
@@ -9,7 +10,7 @@ export interface MapState {
   stopsDone?: boolean[]; nextStopS?: number;
 }
 
-const WAYPOINTS: [number, string][] = [[40, 'কুষ্টিয়া'], [WORLD.stops[0].s, 'রাজবাড়ী'], [WORLD.forkS, 'দৌলতদিয়া মোড়'], [WORLD.stops[1].s, 'ফরিদপুর'], [WORLD.stops[2].s, 'ভাঙ্গা'], [(WORLD.bridgeStartS + WORLD.bridgeEndS) / 2, 'পদ্মা সেতু'], [WORLD.finishS, 'ঢাকা']];
+const WAYPOINTS = (): [number, string][] => ROUTE.waypoints;
 
 /**
  * 2D map rendering shared by the HUD minimap, the full map and the pre-trip screen.
@@ -57,14 +58,14 @@ export class RouteMap {
     ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 2; ctx.setLineDash([10, 10]); ctx.stroke(); ctx.setLineDash([]);
     // waypoints
     ctx.font = '700 18px "Hind Siliguri"'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    for (const [s, name] of WAYPOINTS) {
+    for (const [s, name] of WAYPOINTS()) {
       const f = this.road.sample(s); const [cx, cy] = P(f.x, f.z);
       ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2a1a0a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, 8, 0, 7); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#2a1a0a'; ctx.fillText(name, cx + 14, cy - 2);
     }
     // branch label
     const be = this.branchPts[this.branchPts.length - 1]; const [bx, by] = P(be[0], be[1]);
-    ctx.fillStyle = '#666'; ctx.font = '700 15px "Hind Siliguri"'; ctx.fillText('দৌলতদিয়া ঘাট (ভুল রাস্তা)', bx + 10, by);
+    ctx.fillStyle = '#666'; ctx.font = '700 15px "Hind Siliguri"'; ctx.fillText(ROUTE.names.branchLabel, bx + 10, by);
     // andolon warning
     if (st?.blockadeActive) { const f = this.road.sample(WORLD.andolonS); const [cx, cy] = P(f.x, f.z); this.icon(ctx, cx, cy, '⚠️', 22); }
     WORLD.stops.forEach((st, i) => { if (st.waiting === 0) return; const f = this.road.sample(st.s); const [cx, cy] = P(f.x, f.z); this.icon(ctx, cx, cy - 18, st2?.stopsDone?.[i] ? '✅' : '🚏', 20); });

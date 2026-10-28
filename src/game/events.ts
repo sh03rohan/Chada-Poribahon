@@ -1,5 +1,6 @@
 import { WORLD, GAMEPLAY as G } from '../config.ts';
 import { bn, bnTaka } from '../util/bangla.ts';
+import { ROUTE } from '../routes.ts';
 import type { Blockade } from '../world/blockade.ts';
 import type { Passengers } from './passengers.ts';
 import type { Hud } from './hud.ts';
@@ -53,11 +54,11 @@ export class RouteEvents {
     if (onBranch && !this.wrongBranch && branchS > 45) {
       this.wrongBranch = true; this.wrongBranchCount++;
       this.passengers.mood = Math.max(0, this.passengers.mood - G.wrongBranchEnterPenalty);
-      this.hud.message('রাস্তা ভুল! এটা ফেরি ঘাটের রাস্তা — ঘুরে পদ্মা সেতুর পথে ফিরুন', false, 5000);
+      this.hud.message(`রাস্তা ভুল! এটা ফেরি ঘাটের রাস্তা — ঘুরে ${ROUTE.names.bridge}র পথে ফিরুন`, false, 5000);
       this.passengers.shout('wait', true);
     } else if (!onBranch && this.wrongBranch) {
       this.wrongBranch = false; this.branchTimer = 0;
-      this.hud.message('ঠিক রাস্তায় ফিরেছেন — ঢাকা ➜ পদ্মা সেতু', true, 3500);
+      this.hud.message(`ঠিক রাস্তায় ফিরেছেন — ${ROUTE.names.correctWay}`, true, 3500);
     }
     if (this.wrongBranch) {
       this.branchTimer += dt;

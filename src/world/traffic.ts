@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { WORLD, type QualityTier } from '../config.ts';
 import type { Road } from './road.ts';
 import type { Circle, Contact } from './collision.ts';
+import { ROUTE } from '../routes.ts';
 import { Person, PeopleManager, VARIANTS, HAWKER_VARIANT, makeVariant } from './people.ts';
 
 /**
@@ -241,7 +242,7 @@ export class Traffic {
       p.walkSpeed = 0.9 + Math.random() * 0.5;
       this.group.add(p.root); people.add(p);
     }
-    const hawkSpots = [WORLD.rajbariStopS - 40, WORLD.rajbariStopS + 60, 1150, WORLD.finishS - 300, WORLD.finishS - 420, WORLD.andolonS - 300];
+    const hawkSpots = ROUTE.hawkerSpots;
     hawkSpots.forEach((s, i) => {
       const p = new Person(i % 2 ? HAWKER_VARIANT : makeVariant({ id: 'hawker2', outfit: 'lungi-shirt', top: '#f2e2b0', bottom: '#2a4a2a', hair: 'cap', accent: '#d8262c', prop: 'basket', height: 1.68 }));
       const side = i % 2 ? -1 : 1;

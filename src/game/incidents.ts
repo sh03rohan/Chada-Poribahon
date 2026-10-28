@@ -1,5 +1,6 @@
 import { WORLD, GAMEPLAY as G } from '../config.ts';
 import { bnTaka } from '../util/bangla.ts';
+import { ROUTE } from '../routes.ts';
 import type { IncidentProps } from '../world/incidentProps.ts';
 import type { EventProps } from '../world/eventProps.ts';
 import type { Passengers } from './passengers.ts';
@@ -64,7 +65,7 @@ export class Incidents {
   private updateToll(dt: number, s: number, kmh: number) {
     void dt;
     const d = WORLD.tollS - s;
-    if (this.toll === 'idle' && d < 200 && d > 0) { this.toll = 'approach'; this.hud.message(`সামনে পদ্মা সেতু টোল প্লাজা — থামুন, টোল ${bnTaka(G.tollAmount)}`, true, 4000); }
+    if (this.toll === 'idle' && d < 200 && d > 0) { this.toll = 'approach'; this.hud.message(`সামনে ${ROUTE.names.bridge} টোল প্লাজা — থামুন, টোল ${bnTaka(G.tollAmount)}`, true, 4000); }
     else if (this.toll === 'approach' && d < 9 && d > -2 && kmh < 1 && !this.choice.open) { this.toll = 'asking'; void this.askToll(); }
   }
   private async askToll() {

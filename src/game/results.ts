@@ -2,6 +2,7 @@ import { bn, bnTime, bnTaka } from '../util/bangla.ts';
 import { BANGLA_FONT } from '../util/fonts.ts';
 import type { RunOutcome } from './career.ts';
 import { LEVEL_TITLES } from './career.ts';
+import { ROUTE } from '../routes.ts';
 
 export interface RunResult {
   timeSec: number; passengers: number; income: number; mood: number; stars: number; shouts: number;
@@ -16,16 +17,17 @@ export interface RunResult {
 }
 
 const NEWS = [
-  (r: RunResult) => `কুষ্টিয়া-ঢাকা বাস ${bn(Math.round(r.timeSec / 60))} মিনিটে পৌঁছাল, যাত্রীর গালি ${bn(r.shouts)} টা।`,
+  (r: RunResult) => `${ROUTE.from}-${ROUTE.to} বাস ${bn(Math.round(r.timeSec / 60))} মিনিটে পৌঁছাল, যাত্রীর গালি ${bn(r.shouts)} টা।`,
   (r: RunResult) => `"${bn(r.hardBrakes)} বার হার্ড ব্রেক, তবু জীবিত" — চাঁদা পরিবহনের যাত্রীরা স্বস্তিতে।`,
-  (r: RunResult) => `রেকর্ড: ${bn(r.passengers)} জন যাত্রী নিয়ে বাস ঢাকায়, ড্রাইভারের মেজাজ রেটিং ${bn(Math.round(r.mood))}/১০০।`,
-  (r: RunResult) => `অবরোধ পেরিয়ে ঢাকায় চাঁদা পরিবহন; যাত্রীরা বললেন "${r.stars >= 4 ? 'আবার যাব' : 'আর না'}"।`,
+  (r: RunResult) => `রেকর্ড: ${bn(r.passengers)} জন যাত্রী নিয়ে বাস ${ROUTE.toLoc}, ড্রাইভারের মেজাজ রেটিং ${bn(Math.round(r.mood))}/১০০।`,
+  (r: RunResult) => `অবরোধ পেরিয়ে ${ROUTE.toLoc} চাঁদা পরিবহন; যাত্রীরা বললেন "${r.stars >= 4 ? 'আবার যাব' : 'আর না'}"।`,
 ];
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export function showResults(r: RunResult, onAgain: () => void) {
   const root = $('results');
+  $('res-title').textContent = `${ROUTE.toLoc} পৌঁছে গেছেন!`;
   $('res-stars').textContent = '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars);
   $('res-grid').innerHTML = [
     ['সময়', bnTime(r.timeSec)], ['যাত্রী', bn(r.passengers)], ['নিট আয়', bnTaka(r.income)], ['মেজাজ', bn(Math.round(r.mood)) + '%'],
@@ -70,7 +72,7 @@ export async function shareImage(r: RunResult, news: string) {
   ctx.fillText('চাঁদা পরিবহন', W / 2, 150);
   ctx.shadowColor = 'transparent';
   ctx.fillStyle = '#2a1a0a'; ctx.font = `700 46px "${BANGLA_FONT}"`;
-  ctx.fillText('কুষ্টিয়া → ঢাকা', W / 2, 240);
+  ctx.fillText(ROUTE.label, W / 2, 240);
   ctx.fillStyle = '#c99400'; ctx.font = `700 120px "${BANGLA_FONT}"`;
   ctx.fillText('★'.repeat(r.stars) + '☆'.repeat(5 - r.stars), W / 2, 360);
   const rows: [string, string][] = [['সময়', bnTime(r.timeSec)], ['যাত্রী', bn(r.passengers)], ['আয়', bnTaka(r.income)], ['যাত্রীর মেজাজ', bn(Math.round(r.mood)) + '%'], ['যাত্রীর চিৎকার', bn(r.shouts)]];

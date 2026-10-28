@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { WORLD } from '../config.ts';
-import { Road, BRANCH_ROUTE } from './road.ts';
+import { Road } from './road.ts';
+import { ROUTE } from '../routes.ts';
 import { makeTextTexture } from './textures.ts';
 import { Person, PeopleManager, VARIANTS } from './people.ts';
 import { COLLIDERS } from './collision.ts';
@@ -18,7 +19,7 @@ export class Fork {
   constructor(main: Road, anisotropy: number, people: PeopleManager) {
     const f = main.sample(this.forkS);
     // branch starts on the main centreline, same heading
-    this.branch = new Road(anisotropy, { route: BRANCH_ROUTE, start: { x: f.x, z: f.z, yaw: main.yawAt(this.forkS) }, ground: false });
+    this.branch = new Road(anisotropy, { route: ROUTE.branch, start: { x: f.x, z: f.z, yaw: main.yawAt(this.forkS) }, ground: false });
     this.branch.group.position.y = -0.004; // sits a hair below the main road where they overlap
     this.group.add(this.branch.group);
 
@@ -35,9 +36,9 @@ export class Fork {
     const w = WORLD.roadWidth + WORLD.shoulderWidth * 2 + 2;
     for (const x of [-w / 2, w / 2]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.35, 7, 0.35), post); p.position.set(x, 3.5, 0); gantry.add(p); }
     const beam = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.3, 0.3), post); beam.position.y = 7; gantry.add(beam);
-    const boardL = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.0), new THREE.MeshStandardMaterial({ map: makeTextTexture(['ঢাকা ➜ পদ্মা সেতু', '↑ সোজা'], { bg: '#1f6fb5', fg: '#fff', w: 1024, h: 400, border: '#fff' }), roughness: 0.5, side: THREE.DoubleSide }));
+    const boardL = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.0), new THREE.MeshStandardMaterial({ map: makeTextTexture([ROUTE.names.correctWay, '↑ সোজা'], { bg: '#1f6fb5', fg: '#fff', w: 1024, h: 400, border: '#fff' }), roughness: 0.5, side: THREE.DoubleSide }));
     boardL.position.set(-2.9, 5.6, 0.2); gantry.add(boardL);
-    const boardR = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.0), new THREE.MeshStandardMaterial({ map: makeTextTexture(['দৌলতদিয়া ঘাট ➜', 'ফেরি'], { bg: '#1f9d55', fg: '#fff', w: 1024, h: 400, border: '#fff' }), roughness: 0.5, side: THREE.DoubleSide }));
+    const boardR = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.0), new THREE.MeshStandardMaterial({ map: makeTextTexture(ROUTE.names.wrongWayBoard, { bg: '#1f9d55', fg: '#fff', w: 1024, h: 400, border: '#fff' }), roughness: 0.5, side: THREE.DoubleSide }));
     boardR.position.set(2.9, 5.6, 0.2); gantry.add(boardR);
     gantry.position.set(sf.x, 0, sf.z); gantry.rotation.y = main.yawAt(this.forkS - 90);
     this.group.add(gantry);
@@ -46,7 +47,7 @@ export class Fork {
     const ss = this.branch.sample(70);
     const side = new THREE.Group();
     const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.5, 6), post); sp.position.y = 1.75; side.add(sp);
-    const sb = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.3), new THREE.MeshStandardMaterial({ map: makeTextTexture(['ফেরি ঘাট ২ কিমি', 'ভারী যানবাহন লাইন'], { bg: '#d8262c', fg: '#fff', w: 1024, h: 440, border: '#fff' }), roughness: 0.5, side: THREE.DoubleSide }));
+    const sb = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.3), new THREE.MeshStandardMaterial({ map: makeTextTexture(ROUTE.names.ghatSign, { bg: '#d8262c', fg: '#fff', w: 1024, h: 440, border: '#fff' }), roughness: 0.5, side: THREE.DoubleSide }));
     sb.position.y = 3.5; side.add(sb);
     side.position.set(ss.x + ss.rx * -5.5, 0, ss.z + ss.rz * -5.5); side.rotation.y = this.branch.yawAt(70);
     this.group.add(side);

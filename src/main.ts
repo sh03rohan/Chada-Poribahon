@@ -30,6 +30,8 @@ import { RouteEvents } from './game/events.ts';
 import { DebugOverlay } from './game/debug.ts';
 import { showResults } from './game/results.ts';
 import { Career, LIVERIES } from './game/career.ts';
+import { ROUTE, ROUTES, applyRoute, savedRouteId, selectRoute } from './routes.ts';
+import { buildScenery, sceneryExcludes } from './world/scenery.ts';
 import { Damage } from './game/damage.ts';
 import { evaluateAchievements } from './game/achievements.ts';
 import { buildRecordsPanel } from './game/records.ts';
@@ -157,7 +159,7 @@ class Game {
     const q = QUALITY[this.tier];
     const maxAniso = Math.min(q.anisotropy, this.renderer.capabilities.getMaxAnisotropy());
 
-    this.road = new Road(maxAniso, { roundabouts: WORLD.roundabouts.map((r) => r.s), tollS: WORLD.tollS });
+    this.road = new Road(maxAniso, { route: ROUTE.route, roundabouts: WORLD.roundabouts.map((r) => r.s), tollS: WORLD.tollS });
     this.scene.add(this.road.group);
     this.roundabouts = new Roundabouts(this.road, maxAniso);
     this.scene.add(this.roundabouts.group);
@@ -165,13 +167,16 @@ class Game {
     this.scene.add(this.fork.group);
     // Nothing may be placed on the branch road or the junction side roads (they leave the main corridor)
     const corridor = 12;
+    const sceneryEx = sceneryExcludes(this.road, ROUTE.scenery);
     const exclude = (x: number, z: number) => {
+      if (sceneryEx(x, z)) return true;
       const b = this.fork.branch.locate(x, z, 0);
       if (b.s > 20 && b.s < this.fork.branch.length && Math.abs(b.lateral) < corridor + 10) return true;
       for (const sr of this.roundabouts.sideRoads) { const l = sr.locate(x, z, 0); if (l.s > -5 && l.s < sr.length + 5 && Math.abs(l.lateral) < corridor) return true; }
       return false;
     };
     this.props = new Props(this.road, this.tier, maxAniso, exclude);
+    this.scene.add(buildScenery(this.road, ROUTE.scenery, this.tier));
     this.scene.add(this.props.group);
     this.stops = new Stops(this.road, this.people);
     this.scene.add(this.stops.group);
@@ -262,6 +267,12 @@ class Game {
     $('pause-garage').onclick = () => this.openGarage();
     this.applyUpgrades();
     this.refreshCareerChip();
+    // route label + pre-trip route picker (switching routes reloads so the world is rebuilt)
+    ($('hud-route').querySelector('b') as HTMLElement).textContent = ROUTE.label;
+    $('hud-hint-text').textContent = `আস্তে চালান, ${WORLD.stops[0].name}র হলুদ জোনে থামুন, মোড়ে সাইনবোর্ড দেখুন।`;
+    const sel = document.querySelector('.route-select') as HTMLElement;
+    sel.innerHTML = ROUTES.map((r) => `<button class="route ${r.id === ROUTE.id ? 'on' : ''}" data-route="${r.id}" ${r.available ? '' : 'disabled'}>${r.label}${r.available ? '' : ' <span class="soon">শিগগিরই</span>'}</button>`).join('');
+    sel.querySelectorAll<HTMLButtonElement>('button[data-route]').forEach((b) => b.onclick = () => { if (b.dataset.route !== ROUTE.id) { selectRoute(b.dataset.route as typeof ROUTE.id); const u = new URL(location.href); u.searchParams.delete('route'); location.href = u.toString(); } });
     $('menu-howto').onclick = () => $('howto').classList.remove('hidden');
     $('howto-close').onclick = () => $('howto').classList.add('hidden');
     $('pretrip-go').onclick = () => this.startRun();
@@ -388,7 +399,7 @@ class Game {
     if (this.contract) this.toast(`📜 কন্ট্রাক্ট: ${this.contract.name} — ${this.contract.desc}`, 9000);
     if (isMobile() || params.get('touch') === '1') { $('touch').classList.remove('hidden'); if (params.get('touch') === '1') $('touch').classList.add('force'); }
     this.running = true;
-    this.hud.message('শুভ যাত্রা! আস্তে চালান, যাত্রী নিয়ে ঢাকা চলুন', true, 3500);
+    this.hud.message(`শুভ যাত্রা! আস্তে চালান, যাত্রী নিয়ে ${ROUTE.to} চলুন`, true, 3500);
     this.toast(`🕒 আসল সময়: ${bnClock(this.clockHour())} — খেলার দিন-রাত আপনার ঘড়ি অনুযায়ী চলে`, 7000);
     this.bus.setCockpitMode(this.cam.mode === 'cockpit');
     this.tutorialStep = this.settings.value.tutorialSeen ? 99 : 0; this.tutorialTimer = 0;
@@ -427,13 +438,13 @@ class Game {
   private tutorial(dt: number) {
     if (this.tutorialStep >= 5) return;
     this.tutorialTimer += dt;
-    const steps = ['গ্যাস চেপে চলা শুরু করুন — ধীরে ধীরে, যাত্রীরা দেখছে', 'A/D বা স্টিয়ারিং দিয়ে বাঁয়ে-ডানে — রাস্তার বাম লেনে থাকুন', 'ব্রেক আস্তে চাপুন; হঠাৎ ব্রেকে যাত্রীর মেজাজ পড়ে', 'C চেপে ক্যামেরা বদলান, M চেপে ম্যাপ দেখুন', 'মিনিম্যাপে 🚏 = পরের স্টপ। রাজবাড়ীর হলুদ জোনে থামুন'];
+    const steps = ['গ্যাস চেপে চলা শুরু করুন — ধীরে ধীরে, যাত্রীরা দেখছে', 'A/D বা স্টিয়ারিং দিয়ে বাঁয়ে-ডানে — রাস্তার বাম লেনে থাকুন', 'ব্রেক আস্তে চাপুন; হঠাৎ ব্রেকে যাত্রীর মেজাজ পড়ে', 'C চেপে ক্যামেরা বদলান, M চেপে ম্যাপ দেখুন', `মিনিম্যাপে 🚏 = পরের স্টপ। ${WORLD.stops[0].name}র হলুদ জোনে থামুন`];
     const at = [1, 7, 15, 24, 34];
     if (this.tutorialTimer > at[this.tutorialStep]) { this.toast(steps[this.tutorialStep]); this.tutorialStep++; if (this.tutorialStep >= 5) this.settings.set('tutorialSeen', true); }
   }
   private helperShout() {
     if (!this.bus.helper) return;
-    this.hud.bubble({ kind: 'good', text: 'ঢাকা ঢাকা! সিট আছে — উঠেন!' });
+    this.hud.bubble({ kind: 'good', text: `${ROUTE.to} ${ROUTE.to}! সিট আছে — উঠেন!` });
   }
 
   // ---- Cinematic host -------------------------------------------------------
@@ -609,15 +620,15 @@ class Game {
 
   private updateBanner() {
     const s = this.routeS, e = this.events;
-    if (e.wrongBranch) this.hud.setBanner('রাস্তা ভুল!', 'ঘুরে পদ্মা সেতুর রাস্তায় ফিরুন', true);
+    if (e.wrongBranch) this.hud.setBanner('রাস্তা ভুল!', `ঘুরে ${ROUTE.names.bridge}র রাস্তায় ফিরুন`, true);
     else if (e.phase === 'stop') this.hud.setBanner(`${WORLD.stops[e.currentStop]?.name ?? ''} বাস স্ট্যান্ড`, 'যাত্রী নামছে / উঠছে…');
     else if (e.nextStop(s) >= 0 && s > WORLD.stops[e.nextStop(s)].s - 260) this.hud.setBanner(`বাস স্টপ সামনে — ${WORLD.stops[e.nextStop(s)].name}`, 'হলুদ জোনে থেমে যাত্রী তুলুন');
     else if (this.blockade.active && s > WORLD.andolonS - 300 && s < WORLD.andolonS) this.hud.setBanner(e.phase === 'blockade' ? 'অবরোধ — অপেক্ষা করুন' : 'সামনে অবরোধ!', e.phase === 'blockade' ? 'পুলিশ এলে রাস্তা খুলবে' : 'গতি কমান, থামুন', true);
-    else if (s > WORLD.forkS - 200 && s < WORLD.forkS + 40) this.hud.setBanner('মোড় সামনে', 'ঢাকা ➜ পদ্মা সেতু: সোজা যান');
+    else if (s > WORLD.forkS - 200 && s < WORLD.forkS + 40) this.hud.setBanner('মোড় সামনে', `${ROUTE.names.correctWay}: সোজা যান`);
     else if (this.incidents.checkpoint === 'approach' || this.incidents.checkpoint === 'stopped') this.hud.setBanner(this.incidents.checkpoint === 'stopped' ? 'চেকপোস্ট — কাগজপত্র চেক' : 'পুলিশ চেকপোস্ট সামনে', this.incidents.checkpoint === 'stopped' ? 'একটু অপেক্ষা করুন' : `${GAMEPLAY.checkpointSpeedLimitKmh} কিমি/ঘ-এর নিচে নামুন`, this.incidents.checkpoint === 'stopped');
     else if (s > WORLD.speedCameraS - 180 && s < WORLD.speedCameraS) this.hud.setBanner('স্পিড ক্যামেরা সামনে', `সর্বোচ্চ ${WORLD.speedCameraLimitKmh} কিমি/ঘ`);
     else if (this.fuel.fraction < 0.6 && s > WORLD.pumpS - 220 && s < WORLD.pumpS + 10) this.hud.setBanner('⛽ পাম্প সামনে বামে', 'সবুজ জোনে থামলে তেল ভরা যাবে');
-    else if (s > WORLD.finishS - 400) this.hud.setBanner('ঢাকা প্রায় এসে গেছে', 'শেষ লাইনের দিকে চালান');
+    else if (s > WORLD.finishS - 400) this.hud.setBanner(`${ROUTE.to} প্রায় এসে গেছে`, 'শেষ লাইনের দিকে চালান');
     else this.hud.setBanner(null);
   }
 
@@ -680,17 +691,17 @@ class Game {
 
   /** Daulatdia ghat at the end of the wrong branch: cross by ferry (slow, costs money, skips the road) or turn back. */
   private async offerFerry() {
-    const pick = await this.choice.ask('⛴️ দৌলতদিয়া ফেরি ঘাট', `ফেরিতে পদ্মা পার হলে ${bnTaka(GAMEPLAY.ferryCost)} আর প্রায় ${bn(Math.round(GAMEPLAY.ferryWaitSec / 60 * 10) / 10)} মিনিট লাইন — ওপারে সরাসরি ঢাকা হাইওয়ে, কিন্তু ফরিদপুর-ভাঙ্গার যাত্রী হাতছাড়া।`, `ফেরিতে পার হন (${bnTaka(GAMEPLAY.ferryCost)})`, 'ঘুরে ফিরে যান', 15, 1);
+    const pick = await this.choice.ask(`⛴️ ${ROUTE.names.ghat}`, `ফেরিতে ${ROUTE.names.river} পার হলে ${bnTaka(GAMEPLAY.ferryCost)} আর প্রায় ${bn(Math.round(GAMEPLAY.ferryWaitSec / 60 * 10) / 10)} মিনিট লাইন — ওপারে সরাসরি ${ROUTE.to} হাইওয়ে, কিন্তু ${ROUTE.names.lostStops} হাতছাড়া।`, `ফেরিতে পার হন (${bnTaka(GAMEPLAY.ferryCost)})`, 'ঘুরে ফিরে যান', 15, 1);
     if (pick !== 0 || this.screen !== 'driving') { this.ferryOffered = false; return; }
     const fade = $('fade'); fade.classList.add('on');
     await new Promise((r) => setTimeout(r, 800));
     this.ferryTaken = true; this.ledger.toll += GAMEPLAY.ferryCost; this.elapsed += GAMEPLAY.ferryWaitSec;
     this.passengers.mood = Math.max(0, this.passengers.mood - 8);
     for (const i of [1, 2]) if (!this.events.stops[i].done) this.events.stops[i].missed = true; // served by the ferry route, no mood penalty
-    this.teleport(GAMEPLAY.ferryLandS); this.autopilotRoad = null;
+    this.teleport(ROUTE.ferryLandS); this.autopilotRoad = null;
     this.events.updateBranch(0, false, 0);
     this.incidents.checkpoint = 'cleared'; this.incidents.accident = 'passed'; this.incidents.toll = 'paid'; this.incidents.cameraDone = true;
-    this.hud.message(`⛴️ ফেরিতে পদ্মা পার — ${bn(Math.round(GAMEPLAY.ferryWaitSec / 60))} মিনিট গেল, এখন ঢাকা হাইওয়ে`, true, 5000);
+    this.hud.message(`⛴️ ফেরিতে ${ROUTE.names.river} পার — ${bn(Math.round(GAMEPLAY.ferryWaitSec / 60))} মিনিট গেল, এখন ${ROUTE.to} হাইওয়ে`, true, 5000);
     setTimeout(() => fade.classList.remove('on'), 400);
   }
 
@@ -852,6 +863,7 @@ class Game {
   }
 }
 
+applyRoute(savedRouteId());
 const game = new Game();
 (window as unknown as { __game: Game }).__game = game;
 game.init().catch((e) => { console.error(e); $('start-status').textContent = 'লোড করতে সমস্যা: ' + (e as Error).message; });

@@ -5,6 +5,7 @@ import { makeTextTexture } from './textures.ts';
 import { COLLIDERS, type Circle } from './collision.ts';
 import { Person, PeopleManager, VARIANTS, POLICE_VARIANTS, makeVariant } from './people.ts';
 import { buildTruck } from './traffic.ts';
+import { ROUTE } from '../routes.ts';
 
 /**
  * Phase 3 roadside scenes: the Padma toll plaza (canopy, booth, boom), a railway level
@@ -46,7 +47,7 @@ export class EventProps {
       COLLIDERS.addBox(pos.x + Math.sin(yaw) * 0, pos.z, yaw, Math.max(0.6, bl * 2 - 0.3), 26);
       const booth = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.6, 2.6), new THREE.MeshStandardMaterial({ color: 0xfff1c9, roughness: 0.8 })); booth.position.set(0, 1.3, 0); g.add(booth);
       const win = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.9, 1.6), new THREE.MeshStandardMaterial({ color: 0x9ac0d8, roughness: 0.2 })); win.position.set(0, 1.7, 0); g.add(win);
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.1), new THREE.MeshStandardMaterial({ map: makeTextTexture(['পদ্মা সেতু টোল প্লাজা', `বাস ৳${'১,৫০০'} · থামুন`], { bg: '#1b3f8a', fg: '#fff', w: 1024, h: 190, border: '#ffcc33' }), roughness: 0.5, side: THREE.DoubleSide }));
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.1), new THREE.MeshStandardMaterial({ map: makeTextTexture(ROUTE.names.tollSign, { bg: '#1b3f8a', fg: '#fff', w: 1024, h: 190, border: '#ffcc33' }), roughness: 0.5, side: THREE.DoubleSide }));
       sign.position.set(0, 4.3, 3.6); g.add(sign);
       // boom across the left (travel) lane, pivot at the booth
       const bx = -(bl - 0.5), blen = hw + 0.5;   // boom pivots at the island edge and spans the widened left lane

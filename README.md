@@ -1,7 +1,7 @@
-# চাঁদা পরিবহন (Chada Poribohon) — Phase 3
+# চাঁদা পরিবহন (Chada Poribohon) — Phase 4
 
 A browser-based Bangladeshi bus-driving game. Vite + TypeScript + three.js, no framework.
-Route: কুষ্টিয়া → রাজবাড়ী (stop) → ফরিদপুর (stop, andolon) → ভাঙ্গা (stop) → পদ্মা সেতু → গাবতলী, ঢাকা, ~6 km, left-hand traffic.
+Routes: কুষ্টিয়া → রাজবাড়ী → ফরিদপুর → ভাঙ্গা → পদ্মা সেতু → ঢাকা (~6 km) and ঢাকা → নরসিংদী → মেঘনা সেতু → শায়েস্তাগঞ্জ → চা বাগান → শ্রীমঙ্গল → সিলেট (~6.5 km); left-hand traffic.
 
 ```
 npm install
@@ -325,6 +325,34 @@ Tuning: `GAMEPLAY` (`tollAmount`, `tollDodgeFine`, `accidentWaitSec`, `ferryCost
 `CONTRACTS` in `game/contracts.ts`. Probes: `scripts/probe-career.mjs`, `probe-garage.mjs`,
 `probe-contracts.mjs`, `probe-damage.mjs`, `probe-events.mjs`, `probe-ferry-roof.mjs`.
 Tests: `tests/phase3.spec.ts` (career, garage, contracts, damage, the three event groups).
+
+## Phase 4 — records, PWA, a second route, a clear windscreen
+
+* **HUD layout**: nothing is drawn over the road ahead any more. Messages, stop/checkpoint banners
+  and toasts stack in a right-hand column under the top strip, passenger speech bubbles sit under
+  the minimap on the left, the choice prompt is at the right (above the pedals on phones).
+* **Badges** (`game/achievements.ts`): 18 achievements checked at the finish (first trip, five stars,
+  no fines, honest, brave, full load, ferry, night owl, express, smooth, spotless, all stops, roof
+  master, ten trips, hundred passengers, ওস্তাদ, contractor, rich). New unlocks appear on the results
+  card; the **রেকর্ড** panel (main menu / pause) lists them with a **সেরা ট্রিপ** tab — the ten best runs
+  by net income, the latest highlighted, and the results card says where the run ranked.
+* **PWA**: `vite-plugin-pwa` precaches the build, so the game installs to a phone's home screen and
+  boots offline (verified with `scripts/probe-pwa.mjs` against `vite preview`). PNG + maskable icons
+  are rendered from `public/icon.svg` by `scripts/make-icons.mjs`; the main menu shows
+  **📲 ফোনে ইনস্টল করুন** when the browser offers an install prompt.
+* **Routes** (`src/routes.ts`): the world is data-driven. A `RouteDef` carries the road geometry, the
+  wrong-turn branch, every event distance (`WORLD` numbers), stops, junction directions, signposts,
+  town clusters, map waypoints, scenery ranges and the Bangla names used in messages (bridge, ghat,
+  gates, toll sign…). `applyRoute()` copies the chosen route into `WORLD`/`ROUTE` before the world is
+  built; the pre-trip card lists the routes and switching one reloads the page. **ঢাকা → সিলেট** adds
+  the Meghna bridge with its toll plaza and camera, a level crossing near Dhaka, the Narsingdi and
+  Sayestaganj junctions, an accident after Sayestaganj, the blockade before the hills, **haor**
+  wetlands (water on both sides, dykes, boats) after the bridge and **tea-garden hills** (rows of
+  bushes on mounds, shade trees) around Sreemangal (`world/scenery.ts`). The sky box now follows the
+  bus so long routes never leave it. ঢাকা → চট্টগ্রাম is listed as coming soon.
+
+Probes: `scripts/probe-records.mjs`, `probe-pwa.mjs`, `probe-route.mjs <route-id>`, `probe-hud.mjs`.
+Tests: `tests/phase4.spec.ts` (records, PWA manifest, Sylhet world + route switching).
 
 ## Extension points
 

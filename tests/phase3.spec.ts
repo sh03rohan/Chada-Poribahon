@@ -114,7 +114,7 @@ test('damage: crashes add damage, cap speed and weaken brakes; repair is charged
   await g(page, '__game.startRun()'); await page.waitForTimeout(300);
   const after = await g(page, '(() => { const s = __game.stats(); return { damage: s.damage, cap: s.mods.speedCapKmh, brake: s.mods.dmgBrake }; })()') as { damage: number; cap: number | null; brake: number };
   expect(after.damage).toBe(0); expect(after.cap ?? Infinity).toBe(Infinity); expect(after.brake).toBe(1);
-  expect(await page.locator('#hud-damage').isVisible()).toBe(false);
+  await expect(page.locator('#hud-damage')).toBeHidden({ timeout: 8000 });
   expect(errors).toEqual([]);
 });
 

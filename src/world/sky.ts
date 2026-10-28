@@ -81,6 +81,7 @@ export class SkySystem {
     this.sunGlow.position.copy(this.sunDisc.position);
     this.moon.position.copy(target).addScaledVector(this.moonDir, 1500);
     this.stars.position.copy(target); this.clouds.position.copy(target);
+    this.sky.position.copy(target); // the sky box is 10 km wide: keep it centred on the bus so long routes never leave it
     this.clouds.rotation.y += 0.00004;
   }
   private moonDir = new THREE.Vector3(0.4, 0.6, -0.5).normalize();

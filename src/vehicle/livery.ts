@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ROUTE } from '../routes.ts';
 import { BANGLA_FONT } from '../util/fonts.ts';
 import { bn } from '../util/bangla.ts';
 
@@ -176,7 +177,7 @@ export function makeSideLivery(l: SideLiveryLayout, anisotropy: number, main = P
   }
   // Small tagline near the rear: "শুভ যাত্রা"
   paintText(ctx, 'শুভ যাত্রা', W * 0.08, nameTop + nameH * 0.5, nameH * 0.3, PALETTE.green, PALETTE.darkGreen, W * 0.14);
-  paintText(ctx, 'কুষ্টিয়া–ঢাকা', W * 0.92, nameTop + nameH * 0.5, nameH * 0.28, PALETTE.blue, '#0b3a66', W * 0.14);
+  paintText(ctx, ROUTE.label.replace(' → ', '–'), W * 0.92, nameTop + nameH * 0.5, nameH * 0.28, PALETTE.blue, '#0b3a66', W * 0.14);
 
   brushNoise(ctx, W, H, 0.08);
 
@@ -212,7 +213,7 @@ export function makeDestinationBoard(anisotropy: number): THREE.CanvasTexture {
   ctx.strokeStyle = '#3a3f44'; ctx.lineWidth = 6; ctx.strokeRect(3, 3, W - 6, H - 6);
   ctx.font = BANGLA_BOLD(118); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.shadowColor = '#ffd23c'; ctx.shadowBlur = 24;
-  ctx.fillStyle = '#ffe066'; ctx.fillText('কুষ্টিয়া → ঢাকা', W / 2, H / 2 + 6, W - 60);
+  ctx.fillStyle = '#ffe066'; ctx.fillText(ROUTE.label, W / 2, H / 2 + 6, W - 60);
   ctx.shadowBlur = 0;
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = anisotropy;
   return t;

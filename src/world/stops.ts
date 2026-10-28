@@ -3,6 +3,7 @@ import { WORLD } from '../config.ts';
 import type { Road } from './road.ts';
 import { makeTextTexture } from './textures.ts';
 import { COLLIDERS } from './collision.ts';
+import { ROUTE } from '../routes.ts';
 import { Person, PeopleManager, VARIANTS } from './people.ts';
 
 /**
@@ -25,8 +26,8 @@ export class Stops {
       this.buildStopZone(st.s, mat);
       this.buildShed(st.s, st.name, st.waiting, i);
     });
-    this.buildGate(WORLD.finishS, ['ঢাকা', 'স্বাগতম']);
-    this.buildGate(40, ['কুষ্টিয়া বাস টার্মিনাল', 'শুভ যাত্রা']);
+    this.buildGate(WORLD.finishS, ROUTE.names.finishGate);
+    this.buildGate(40, ROUTE.names.startGate);
   }
 
   private frameAt(s: number, lateral: number) {

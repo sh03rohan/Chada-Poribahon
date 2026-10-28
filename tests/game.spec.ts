@@ -116,7 +116,7 @@ test('route: Rajbari stop, blockade wait + police clear, finish at Dhaka', async
   await page.waitForTimeout(1500); // let the 0.6 s camera transition finish
   await page.screenshot({ path: `${SHOTS}/blockade-cockpit.png` });
   await g(page, '__game.switchCamera("chase")');
-  st = await g(page, '__game.simulate(45, { throttle: 0, brake: 1, autopilot: true })') as Stats;
+  st = await g(page, '__game.simulate(45, { throttle: 0, brake: 0, handbrake: true, autopilot: true })') as Stats; // handbrake: holding the brake while stopped creeps backwards
   console.log('after wait', st);
   expect(['dispersing', 'cleared']).toContain(st.blockade);
   st = await g(page, '__game.simulate(30, { throttle: 1, autopilot: true })') as Stats;
