@@ -29,6 +29,8 @@ export interface BusRig {
   driver: Person | null;
   helper: Person | null;
   riders: Person[];
+  /** repaint the side livery + paint colour (garage); optional on GLB rigs */
+  setLivery?(main: string, dark: string): void;
   /** live rear-view mirror (render target texture); optional on GLB rigs */
   setMirrorTexture?(tex: THREE.Texture): void;
   setPassengerPose(a: Action): void;
@@ -514,6 +516,14 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
     setPassengerPose(a) { const map: Record<string, Person['seatedSub']> = { talk: 'talk', fan: 'fan', sleep: 'sleep', phonecall: 'phone', film: 'film' }; riders.forEach((r, i) => { r.seatedSub = a === 'idle' ? (['idle', 'talk', 'phone', 'film'] as const)[i] : (map[a] ?? 'idle'); }); },
     setDriverHandTarget(side, worldPoint) { if (!worldPoint) { driverHandOverride[side] = null; return; } driverHandOverride[side] = driver.root.worldToLocal(worldPoint.clone()); },
     updateSpeedo(kmh, rpm, gear) { speedo.update(kmh, rpm, gear); },
+    setLivery(main, dark) {
+      const nt = makeSideLivery(layout, opts.anisotropy, main, dark);
+      const r = nt; r.repeat.copy(texR.repeat); r.offset.copy(texR.offset);
+      const l = nt.clone(); l.repeat.copy(texL.repeat); l.offset.copy(texL.offset); l.needsUpdate = true;
+      sideMatR.map = r; sideMatL.map = l; (doorPanel.material as THREE.MeshPhysicalMaterial).map = l;
+      sideMatR.needsUpdate = sideMatL.needsUpdate = true;
+      paint.color.set(main);
+    },
     setDoor(open) { door.position.z = -(3.35 + 0.65) + open * 1.25; door.position.x = -W / 2 - 0.01 - open * 0.08; },
   };
   rig.setLights({ headlights: false, brake: 0, reverse: false });

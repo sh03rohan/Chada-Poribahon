@@ -1,10 +1,15 @@
 import { bn, bnTime, bnTaka } from '../util/bangla.ts';
 import { BANGLA_FONT } from '../util/fonts.ts';
+import type { RunOutcome } from './career.ts';
+import { LEVEL_TITLES } from './career.ts';
 
 export interface RunResult {
   timeSec: number; passengers: number; income: number; mood: number; stars: number; shouts: number;
   hardBrakes: number; swerves: number; stoppedAtRajbari: boolean;
   stopsDone?: number; stopsTotal?: number; fares?: number; fines?: number; chada?: number; fuel?: number; charity?: number;
+  /** career delta (Phase 3) */
+  career?: RunOutcome;
+  contractText?: string;
 }
 
 const NEWS = [
@@ -24,6 +29,14 @@ export function showResults(r: RunResult, onAgain: () => void) {
     ['হার্ড ব্রেক', bn(r.hardBrakes)], ['যাত্রীর চিৎকার', bn(r.shouts)], ['স্টপ', `${bn(r.stopsDone ?? (r.stoppedAtRajbari ? 1 : 0))} / ${bn(r.stopsTotal ?? 1)}`],
     ['ভাড়া আদায়', bnTaka(r.fares ?? r.income)], ['জরিমানা', bnTaka(r.fines ?? 0)], ['চাঁদা', bnTaka(r.chada ?? 0)], ['তেল', bnTaka(r.fuel ?? 0)],
   ].map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('');
+  const car = $('res-career');
+  if (r.career) {
+    const c = r.career;
+    car.innerHTML = `<span>${c.earned >= 0 ? '+' : '−'}${bnTaka(Math.abs(c.earned))} → ব্যালেন্স <b>${bnTaka(c.balance)}</b></span><span>+${bn(c.xpGained)} XP</span>` +
+      (c.levelUp ? `<span class="lvlup">🎉 লেভেল ${bn(c.levelAfter)} — ${LEVEL_TITLES[Math.min(c.levelAfter, LEVEL_TITLES.length) - 1]}!</span>` : `<span>লেভেল ${bn(c.levelAfter)}</span>`) +
+      (r.contractText ? `<span class="contract">${r.contractText}</span>` : '');
+    car.classList.remove('hidden');
+  } else car.classList.add('hidden');
   const news = NEWS[Math.floor(Math.random() * NEWS.length)](r);
   $('res-news').textContent = '📰 ' + news;
   root.classList.remove('hidden');

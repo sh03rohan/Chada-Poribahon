@@ -29,6 +29,10 @@ import { Hud } from './game/hud.ts';
 import { RouteEvents } from './game/events.ts';
 import { DebugOverlay } from './game/debug.ts';
 import { showResults } from './game/results.ts';
+import { Career, LIVERIES } from './game/career.ts';
+import { buildGaragePanel, applyUpgradeMods } from './game/garage.ts';
+import { dailyContracts, evaluateContract, renderContractPicker, CONTRACTS, type ContractDef } from './game/contracts.ts';
+import { MODS } from './vehicle/physics.ts';
 import { autopilotSteer } from './game/autopilot.ts';
 import { PeopleManager, Person, VARIANTS, POLICE_VARIANTS, DRIVER_VARIANT, HELPER_VARIANT, HAWKER_VARIANT, CHADA_VARIANT, type Action } from './world/people.ts';
 import { SettingsStore, buildSettingsPanel } from './game/settings.ts';
@@ -69,6 +73,7 @@ class Game {
   map!: RouteMap;
   cinematic!: Cinematic;
   ledger = new Ledger();
+  career = new Career();
   choice = new ChoicePanel();
   incidentProps!: IncidentProps; incidents!: Incidents; fuel!: Fuel;
   screen: Screen = 'landing';
@@ -94,6 +99,12 @@ class Game {
   private helperShoutTimer = 0;
   private boarding: Person[] = [];
   private landingT = 0;
+  lastOutcome: import('./game/career.ts').RunOutcome | null = null;
+  /** contract chosen on the pre-trip card for the next run */
+  contract: ContractDef | null = null;
+  lastContract: import('./game/contracts.ts').ContractResult | null = null;
+  private contractPick: (() => ContractDef | null) | null = null;
+  crashes = 0; fuelEmptied = false;
   private mirrorTarget: THREE.WebGLRenderTarget | null = null;
   private mirrorCam: THREE.PerspectiveCamera | null = null;
   private tutorialStep = 0; private tutorialTimer = 0;
@@ -225,6 +236,11 @@ class Game {
     $('menu-start').onclick = async () => { await this.lockLandscape(); await this.audio.init(); this.audio.setVolume(this.settings.value.volume); if (this.settings.value.introSeen) this.showPretrip(); else this.playIntro(); };
     $('menu-intro').onclick = async () => { await this.lockLandscape(); await this.audio.init(); this.playIntro(); };
     $('menu-settings').onclick = () => this.openSettings();
+    buildGaragePanel(this.career, () => this.applyUpgrades(), () => {});
+    $('menu-garage').onclick = () => this.openGarage();
+    $('pause-garage').onclick = () => this.openGarage();
+    this.applyUpgrades();
+    this.refreshCareerChip();
     $('menu-howto').onclick = () => $('howto').classList.remove('hidden');
     $('howto-close').onclick = () => $('howto').classList.add('hidden');
     $('pretrip-go').onclick = () => this.startRun();
@@ -236,6 +252,19 @@ class Game {
     $('pause-menu').onclick = () => this.goToLanding();
   }
   private openSettings() { $('settings').classList.remove('hidden'); }
+  openGarage() { const g = $('garage') as HTMLElement & { refresh?: () => void }; g.refresh?.(); g.classList.remove('hidden'); }
+  /** Career upgrades → physics multipliers, livery paint, horn sound. */
+  get mods() { return { ...MODS }; }
+  get contractDefs() { return CONTRACTS; }
+  /** test hook: force the contract for the next run */
+  forceContract(id: string | null) { this.contractPick = () => CONTRACTS.find((c) => c.id === id) ?? null; }
+  applyUpgrades() {
+    applyUpgradeMods(this.career);
+    const s = LIVERIES[this.career.profile.livery] ?? LIVERIES[0];
+    this.bus.setLivery?.(s.main, s.dark);
+    this.audio.setHorn(this.career.profile.upgrades.horn > 0 ? 'air' : 'stock');
+    this.refreshCareerChip();
+  }
   private onSettingsClosed() { /* scheme/side changes already applied live */ }
 
   showPretrip() {
@@ -243,6 +272,7 @@ class Game {
     $('landing').classList.add('hidden'); $('pretrip').classList.remove('hidden'); this.hud.show(false);
     this.resetRun();
     this.map.drawFull($('pretrip-map') as HTMLCanvasElement, this.mapState());
+    this.contractPick = renderContractPicker($('pretrip-contracts'), dailyContracts(this.career.level), this.contract?.id ?? null);
     const h = this.clockHour(); const night = h < 6 || h >= 18;
     const rush = h >= GAMEPLAY.morningRushStart && h < GAMEPLAY.morningRushEnd;
     const effect = night ? 'রাত — হেডলাইট জ্বলবে, কুয়াশা, স্ট্যান্ডে যাত্রী কম' : rush ? 'সকালের অফিস টাইম — স্ট্যান্ডে যাত্রী দেড় গুণ' : 'দিন — স্বাভাবিক যাত্রী';
@@ -269,6 +299,7 @@ class Game {
     this.togglePause(false); this.toggleMap(false);
     this.screen = 'landing'; this.running = false; this.hud.show(false); $('touch').classList.add('hidden'); $('minimap').classList.add('hidden');
     $('results').classList.add('hidden'); $('landing').classList.remove('hidden');
+    this.refreshCareerChip();
     this.resetRun(); this.sky.setTime(6.3); this.applyNight();
   }
 
@@ -287,7 +318,7 @@ class Game {
     const remaining = Math.max(0, WORLD.finishS - this.routeS);
     const eta = remaining / Math.max(12, Math.min(25, kmh / 3.6 || 14));
     this.map.drawFull($('fullmap-canvas') as HTMLCanvasElement, this.mapState(), { remaining, eta });
-    $('fullmap-info').innerHTML = `<span>বাকি: ${bnKm(remaining)}</span><span>আনুমানিক সময়: ${bnTime(eta)}</span><span>যাত্রী: ${bn(this.passengers.count)}</span>${this.events.wrongBranch ? '<span style="color:#1f6fb5">↩ রাস্তা ভুল — ঘুরে মূল রাস্তায় ফিরুন</span>' : ''}`;
+    $('fullmap-info').innerHTML = `<span>বাকি: ${bnKm(remaining)}</span><span>আনুমানিক সময়: ${bnTime(eta)}</span><span>যাত্রী: ${bn(this.passengers.count)}</span>${this.events.wrongBranch ? '<span style="color:#1f6fb5">↩ রাস্তা ভুল — ঘুরে মূল রাস্তায় ফিরুন</span>' : ''}${this.contract ? `<span style="color:#8a1216">📜 ${this.contract.name}: ${this.contract.desc}</span>` : ''}`;
   }
   mapState(): MapState {
     return { x: this.cur.x, z: this.cur.z, yaw: this.cur.yaw, s: this.routeS, onBranch: this.onBranch, wrongBranch: this.events.wrongBranch,
@@ -311,6 +342,7 @@ class Game {
     if (this.incidents) this.incidents.reset();
     this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people);
     this.fuel = new Fuel(this.hud, this.ledger, this.choice, this.passengers);
+    this.crashes = 0; this.fuelEmptied = false;
     this.fuel.litres = GAMEPLAY.fuelTankLitres * (GAMEPLAY.fuelStartFraction[0] + Math.random() * (GAMEPLAY.fuelStartFraction[1] - GAMEPLAY.fuelStartFraction[0])); // the owner never fills it
     const hr = this.clockHour(); this.events.waitingMultiplier = hr >= GAMEPLAY.morningRushStart && hr < GAMEPLAY.morningRushEnd ? 1.5 : (hr >= 21 || hr < 5) ? 0.5 : 1;
     this.blockade.reset();
@@ -324,10 +356,12 @@ class Game {
   startRun() {
     $('landing').classList.add('hidden'); $('pretrip').classList.add('hidden'); $('results').classList.add('hidden');
     this.screen = 'driving'; this.paused = false; this.freeCam = null;
+    if (this.contractPick) this.contract = this.contractPick();
     this.resetRun();
     this.sky.setTime(this.clockHour()); this.applyNight();
     if (!params.get('view')) this.cam.setMode(this.settings.value.camera);
     this.hud.show(true); $('minimap').classList.remove('hidden');
+    if (this.contract) this.toast(`📜 কন্ট্রাক্ট: ${this.contract.name} — ${this.contract.desc}`, 9000);
     if (isMobile() || params.get('touch') === '1') { $('touch').classList.remove('hidden'); if (params.get('touch') === '1') $('touch').classList.add('force'); }
     this.running = true;
     this.hud.message('শুভ যাত্রা! আস্তে চালান, যাত্রী নিয়ে ঢাকা চলুন', true, 3500);
@@ -426,7 +460,7 @@ class Game {
       this.blockade.vanCircles(this.dynCircles);
       const col = resolveBusCollisions(this.cur, this.dynCircles, this.colScratch, this.contacts);
       if (col.contacts.length) this.traffic.applyContacts(col.contacts);
-      if (col.hit && col.impact > 2.0 && this.elapsed - this.lastCrash > 2.5) { this.lastCrash = this.elapsed; this.crashPending = true; this.crashKind = col.contacts.some((c) => c.into > 1) ? 'traffic' : 'object'; this.crashImpact = col.impact; }
+      if (col.hit && col.impact > 2.0 && this.elapsed - this.lastCrash > 2.5) { this.lastCrash = this.elapsed; this.crashPending = true; this.crashes++; this.crashKind = col.contacts.some((c) => c.into > 1) ? 'traffic' : 'object'; this.crashImpact = col.impact; }
     }
     this.simTime += dt;
     this.debug.physicsSample(this.cur.v * 3.6, inp.throttle, this.simTime);
@@ -467,6 +501,7 @@ class Game {
       this.tutorial(dt);
       this.incidents.update(dt, this.routeS, kmh, this.bus.root.position, this.cur.yaw);
       void this.fuel.update(dt, this.routeS, kmh, this.lateral, kmh < 2);
+      if (this.fuel.state === 'empty') this.fuelEmptied = true;
       if (this.crashPending) {
         this.crashPending = false;
         const pen = Math.min(15, 3 + this.crashImpact * 0.8);
@@ -596,13 +631,27 @@ class Game {
     this.bus.updateDriver(p.steerAngle, this.lastDt, this.input.state.horn, Math.abs(this.cur.aLat) > 2.5);
   }
 
+  refreshCareerChip() {
+    const el = $('career-chip');
+    el.innerHTML = this.career.summaryHtml(); el.classList.remove('hidden');
+  }
+
   finish() {
     this.finished = true; this.screen = 'results';
     const sm = this.passengers.summary;
+    const cr = evaluateContract(this.contract, {
+      timeSec: this.elapsed, mood: this.passengers.mood, missedStops: this.events.stops.filter((s) => s.missed).length, stopsDone: this.events.stopsDone, passengers: this.passengers.count,
+      fines: this.ledger.fines, hardBrakes: sm.hardBrakes, crashes: this.crashes, chadaPaid: this.ledger.chada, refuels: this.fuel.refuels, fuelEmptied: this.fuelEmptied, wrongBranches: this.events.wrongBranchCount,
+    });
+    this.lastContract = cr;
+    const outcome = this.career.recordRun({ net: this.ledger.net, stars: this.passengers.stars(), passengers: this.passengers.count, stopsDone: this.events.stopsDone, fines: this.ledger.fines, timeSec: this.elapsed, hardBrakes: sm.hardBrakes,
+      contractBonus: cr?.done ? cr.def.bonus : 0, contractXp: cr?.done ? cr.def.xp : 0 });
+    this.lastOutcome = outcome;
     showResults({
       timeSec: this.elapsed, passengers: this.passengers.count, income: this.events.income, mood: this.passengers.mood,
       stars: this.passengers.stars(), shouts: sm.shouts, hardBrakes: sm.hardBrakes, swerves: sm.swerves, stoppedAtRajbari: this.events.stoppedAtRajbari,
       stopsDone: this.events.stopsDone, stopsTotal: WORLD.stops.filter((x) => x.waiting > 0).length, fares: this.ledger.fares, fines: this.ledger.fines, chada: this.ledger.chada, fuel: this.ledger.fuel, charity: this.ledger.charity,
+      career: outcome, contractText: cr?.text,
     }, () => { this.startRun(); });
   }
 
@@ -665,6 +714,7 @@ class Game {
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
       fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
       checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
+      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {

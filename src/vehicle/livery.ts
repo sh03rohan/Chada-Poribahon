@@ -128,7 +128,7 @@ export interface SideLiveryLayout {
  * The same texture works for both sides because the side panels are built from mirrored shapes
  * (see busModel.ts) — text reads correctly on both.
  */
-export function makeSideLivery(l: SideLiveryLayout, anisotropy: number): THREE.CanvasTexture {
+export function makeSideLivery(l: SideLiveryLayout, anisotropy: number, main = PALETTE.red, dark = PALETTE.darkRed): THREE.CanvasTexture {
   const W = 2048, H = Math.round(W * (l.yMax - l.yMin) / (l.uMax - l.uMin));
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d')!;
@@ -141,13 +141,13 @@ export function makeSideLivery(l: SideLiveryLayout, anisotropy: number): THREE.C
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
   // Roof edge band (above windows) — red with yellow scallops
-  band(ctx, 0, Y(l.yMax), W, Y(l.winY1) - Y(l.yMax), PALETTE.red, PALETTE.yellow, 'scallop');
+  band(ctx, 0, Y(l.yMax), W, Y(l.winY1) - Y(l.yMax), main, PALETTE.yellow, 'scallop');
   // Window sill band — green with diamonds
   const sillTop = Y(l.winY0), sillH = H * 0.055;
   band(ctx, 0, sillTop, W, sillH, PALETTE.green, PALETTE.yellow, 'diamond');
   // Skirt band — red/yellow zigzag at the bottom
   const skirtH = H * 0.1;
-  band(ctx, 0, H - skirtH, W, skirtH, PALETTE.red, PALETTE.yellow, 'zigzag');
+  band(ctx, 0, H - skirtH, W, skirtH, main, PALETTE.yellow, 'zigzag');
   ctx.fillStyle = PALETTE.blue; ctx.fillRect(0, H - skirtH - 8, W, 8);
   ctx.fillStyle = PALETTE.yellow; ctx.fillRect(0, sillTop + sillH, W, 6);
 
@@ -156,16 +156,16 @@ export function makeSideLivery(l: SideLiveryLayout, anisotropy: number): THREE.C
   const nameH = nameBot - nameTop;
   ctx.fillStyle = PALETTE.yellow;
   ctx.fillRect(W * 0.22, nameTop + nameH * 0.08, W * 0.56, nameH * 0.84);
-  ctx.strokeStyle = PALETTE.darkRed; ctx.lineWidth = 6; ctx.strokeRect(W * 0.22, nameTop + nameH * 0.08, W * 0.56, nameH * 0.84);
+  ctx.strokeStyle = dark; ctx.lineWidth = 6; ctx.strokeRect(W * 0.22, nameTop + nameH * 0.08, W * 0.56, nameH * 0.84);
   ctx.strokeStyle = PALETTE.green; ctx.lineWidth = 3; ctx.strokeRect(W * 0.225, nameTop + nameH * 0.08 + 8, W * 0.55, nameH * 0.84 - 16);
-  paintText(ctx, 'চাঁদা পরিবহন', W / 2, nameTop + nameH * 0.5, nameH * 0.62, PALETTE.red, PALETTE.darkRed, W * 0.52);
+  paintText(ctx, 'চাঁদা পরিবহন', W / 2, nameTop + nameH * 0.5, nameH * 0.62, main, dark, W * 0.52);
 
   // Flower clusters at both ends of the name band
   for (const side of [-1, 1]) {
     const cx = W / 2 + side * W * 0.37, cy = nameTop + nameH / 2;
     flower(ctx, cx, cy, nameH * 0.42, PALETTE.pink, PALETTE.yellow, 8);
-    flower(ctx, cx + side * nameH * 0.75, cy - nameH * 0.2, nameH * 0.28, PALETTE.orange, PALETTE.red, 6);
-    flower(ctx, cx - side * nameH * 0.7, cy + nameH * 0.2, nameH * 0.24, PALETTE.red, PALETTE.yellow, 6);
+    flower(ctx, cx + side * nameH * 0.75, cy - nameH * 0.2, nameH * 0.28, PALETTE.orange, main, 6);
+    flower(ctx, cx - side * nameH * 0.7, cy + nameH * 0.2, nameH * 0.24, main, PALETTE.yellow, 6);
     for (let i = 0; i < 5; i++) leaf(ctx, cx + jit(nameH * 1.2), cy + jit(nameH * 0.6), nameH * 0.35, jr() * 6.28);
     bird(ctx, cx + side * nameH * 1.6, cy - nameH * 0.05, nameH * 0.22, side < 0);
   }

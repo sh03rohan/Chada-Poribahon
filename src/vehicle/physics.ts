@@ -60,7 +60,13 @@ export function copyState(dst: VehicleState, src: VehicleState): void {
   Object.assign(dst, src);
 }
 
+/** Garage upgrade multipliers (set from the career profile before a run). */
+export const MODS = { brake: 1, torque: 1, grip: 1 };
+
 export function torqueAt(rpm: number): number {
+  return rawTorqueAt(rpm) * MODS.torque;
+}
+function rawTorqueAt(rpm: number): number {
   const c = P.torqueCurve;
   if (rpm <= c[0][0]) return c[0][1];
   for (let i = 1; i < c.length; i++) {
@@ -149,7 +155,7 @@ export function stepVehicle(s: VehicleState, input: VehicleInput, surf: SurfaceI
   const fDrag = 0.5 * P.airDensity * P.dragCoefficient * P.frontalArea * vAbs * vAbs;
   const crr = P.rollingResistance + (surf.onRoad ? 0 : P.offRoadResistance);
   const fRoll = vAbs > 0.05 ? crr * P.mass * G : 0;
-  const fBrake = P.brakeForce * (s.v > 0.3 ? s.brake : 0) + (input.handbrake ? P.handbrakeForce : 0);
+  const fBrake = P.brakeForce * MODS.brake * (s.v > 0.3 ? s.brake : 0) + (input.handbrake ? P.handbrakeForce : 0);
 
   let fNet = fEngine + fReverse;
   const sign = s.v >= 0 ? 1 : -1;
@@ -164,7 +170,7 @@ export function stepVehicle(s: VehicleState, input: VehicleInput, surf: SurfaceI
   if (input.handbrake && Math.abs(s.v) < 0.2 && s.throttle < 0.3) { aLong = 0; s.v = 0; }
 
   // ---- Lateral / yaw (bicycle model with grip limit) -----------------------
-  let mu = surf.wet ? P.gripWet : P.gripDry;
+  let mu = (surf.wet ? P.gripWet : P.gripDry) * MODS.grip;
   if (!surf.onRoad) mu = Math.min(mu, P.gripOffRoad);
   if (input.handbrake) mu = Math.min(mu, P.gripHandbrake);
   const aMax = mu * G;

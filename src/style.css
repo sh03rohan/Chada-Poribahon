@@ -103,7 +103,7 @@ html, body {
 #minimap-pct { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-weight: 700; font-size: 14px; text-shadow: 0 1px 2px #000; }
 
 /* ---- Panels ---- */
-#results, #pretrip, #fullmap, #pause, #settings, #howto {
+#results, #pretrip, #fullmap, #pause, #settings, #howto, #garage {
   position: fixed; inset: 0; display: flex; align-items: safe center; justify-content: center;
   background: radial-gradient(ellipse at center, rgba(40, 30, 20, 0.7), rgba(0, 0, 0, 0.88));
   padding: 16px; z-index: 10; overflow: auto;
@@ -117,13 +117,16 @@ html, body {
 .menu button, .btn-primary, #pretrip-go { font-family: var(--font); font-size: 20px; font-weight: 700; border: 0; border-radius: 12px; padding: 10px 22px; cursor: pointer; background: rgba(255,255,255,0.9); color: #2a1a0a; }
 .menu .btn-primary, .btn-primary { background: var(--red); color: #fff; font-size: 24px; box-shadow: 0 4px 0 #8a1216; }
 .btn-primary:active { transform: translateY(3px); box-shadow: none; }
-.route-select { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.route-select { margin-bottom: 8px; }
 .route { font-family: var(--font); font-size: 16px; font-weight: 700; border: 2px solid var(--red); border-radius: 10px; padding: 6px 12px; background: #fff; color: #2a1a0a; text-align: left; }
 .route.on { background: var(--red); color: #fff; }
 .route[disabled] { opacity: 0.55; cursor: not-allowed; }
 .soon { float: right; background: var(--accent); color: #2a1a0a; border-radius: 6px; padding: 0 8px; font-size: 13px; }
-.pretrip-panel, .map-panel { max-width: 940px; }
+.panel.pretrip-panel { max-width: 780px; } .panel.map-panel { max-width: 940px; }
+.route-select { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 6px; }
+#pretrip-map { max-height: 27vh; }
 #pretrip-map, #fullmap-canvas { width: 100%; height: auto; max-height: 42vh; object-fit: contain; border-radius: 10px; background: #e9dfc2; display: block; }
+#pretrip-map { max-height: 27vh; }
 #fullmap-info { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin: 10px 0; font-weight: 700; }
 .settings-panel { max-width: 560px; text-align: left; }
 .row-s { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
@@ -170,6 +173,41 @@ input[type=range] { width: 100%; accent-color: var(--red); }
 #res-grid b { color: var(--red); }
 #res-news { font-style: italic; background: #fff; border-left: 4px solid var(--red); padding: 8px 12px; text-align: left; font-size: 15px; }
 .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* ---- Career ---- */
+.career-chip { background: rgba(14, 30, 52, 0.82); border: 1px solid rgba(255,255,255,0.18); border-radius: 12px; padding: 8px 14px; color: #fff; max-width: 420px; margin: 4px 0 2px; font-size: 14px; backdrop-filter: blur(6px); }
+.career-row { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.career-lvl { background: var(--accent); color: #2a1a0a; font-weight: 700; border-radius: 6px; padding: 0 8px; }
+.career-row > b { color: #ffd966; font-size: 16px; }
+.career-bar { height: 7px; background: rgba(255,255,255,0.15); border-radius: 4px; overflow: hidden; margin: 5px 0 2px; }
+.career-bar > div { height: 100%; background: linear-gradient(90deg, var(--green), var(--accent)); transition: width 0.4s; }
+.career-chip small { opacity: 0.8; font-size: 12px; }
+#res-career { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; background: rgba(31, 157, 85, 0.12); border: 1px solid var(--green); border-radius: 10px; padding: 6px 10px; margin: 4px 0 8px; font-size: 15px; font-weight: 700; }
+#res-career .lvlup { color: var(--red); animation: bubble-in 0.5s ease-out; }
+#res-career .contract { width: 100%; color: #1f6fb5; }
+
+/* ---- Contracts ---- */
+.contract-box { text-align: left; margin: 8px 0 4px; } .contract-box > b { display: block; margin-bottom: 4px; }
+.contracts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 6px; }
+.contract { font-family: var(--font); text-align: left; background: #fff; border: 2px solid rgba(138, 18, 22, 0.3); border-radius: 10px; padding: 6px 10px; cursor: pointer; color: #2a1a0a; display: flex; flex-direction: column; gap: 1px; }
+.contract span { font-weight: 700; font-size: 15px; } .contract small { font-size: 12px; opacity: 0.85; line-height: 1.25; } .contract em { font-style: normal; font-size: 12px; color: var(--green); font-weight: 700; }
+.contract.on { border-color: var(--green); background: rgba(31,157,85,0.12); }
+
+/* ---- Garage ---- */
+.garage-panel { max-width: 720px; text-align: left; }
+.gbal { text-align: center; font-size: 16px; margin: 2px 0 8px; } .gbal b { color: var(--red); }
+.gcards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gcard { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.55); border: 1px solid rgba(138, 18, 22, 0.25); border-radius: 10px; padding: 8px 10px; }
+.gico { font-size: 28px; width: 36px; text-align: center; }
+.gbody { flex: 1; min-width: 0; } .gbody b { font-size: 16px; } .gbody small { display: block; font-size: 12px; opacity: 0.8; line-height: 1.25; } .gbody em { display: block; font-style: normal; font-size: 12px; color: var(--green); font-weight: 700; }
+.gdots i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: rgba(0,0,0,0.15); margin-left: 2px; vertical-align: middle; } .gdots i.on { background: var(--green); }
+.gbuy { font-family: var(--font); font-size: 14px; font-weight: 700; border: 0; border-radius: 8px; padding: 6px 12px; background: var(--red); color: #fff; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 0 #8a1216; }
+.gbuy[disabled] { background: #9a9a9a; box-shadow: none; cursor: not-allowed; opacity: 0.8; }
+.gpaint { margin: 10px 0 6px; } .gpaint > b { display: block; margin-bottom: 4px; }
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatch { background: none; border: 2px solid transparent; border-radius: 10px; padding: 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font-family: var(--font); color: #2a1a0a; }
+.swatch span { display: block; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--c), var(--d)); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+.swatch.on { border-color: var(--green); background: rgba(31,157,85,0.12); } .swatch small { font-size: 11px; font-weight: 700; } .swatch[disabled] { opacity: 0.45; cursor: not-allowed; }
 
 /* ---- Debug ---- */
 #debug {
@@ -251,18 +289,25 @@ input[type=range] { width: 100%; accent-color: var(--red); }
   .menu button, .btn-primary, #pretrip-go { font-size: 14px; padding: 6px 14px; border-radius: 9px; }
   .menu .btn-primary, .btn-primary { font-size: 15px; box-shadow: 0 2px 0 #8a1216; }
   #start-status { font-size: 11px; margin-top: 4px; }
+  .career-chip { padding: 4px 10px; font-size: 12px; max-width: 360px; margin: 2px 0; }
+  .career-row { gap: 8px; } .career-row > b { font-size: 13px; } .career-bar { height: 5px; margin: 3px 0 1px; } .career-chip small { font-size: 10px; }
+  #res-career { font-size: 12px; padding: 3px 8px; gap: 6px; margin: 2px 0 4px; }
   /* panels */
-  #results, #pretrip, #fullmap, #pause, #settings, #howto { padding: 6px; }
+  #results, #pretrip, #fullmap, #pause, #settings, #howto, #garage { padding: 6px; }
+  .garage-panel { max-width: 700px; } .gcards { grid-template-columns: 1fr 1fr; gap: 4px; } .gcard { padding: 4px 8px; gap: 6px; } .gico { font-size: 20px; } .gbody b { font-size: 13px; } .gbody small, .gbody em { font-size: 10px; } .gbuy { font-size: 12px; padding: 4px 8px; } .swatch span { width: 28px; height: 28px; } .swatch small { font-size: 9px; } .gbal { font-size: 12px; margin: 2px 0 4px; } .gpaint { margin: 4px 0; } .gpaint > b { font-size: 12px; }
   .panel { padding: 6px 12px; max-height: calc(100vh - 12px); border-width: 3px; outline-width: 2px; border-radius: 12px; }
   .panel h1 { font-size: 22px; } .panel h2 { font-size: 16px; margin: 0 0 2px; }
   .sub { margin: 2px 0 6px; font-size: 13px; }
   .hint { font-size: 11px; line-height: 1.3; margin: 3px 0; }
   .pretrip-panel .hint:not(.clock-note) { display: none; }
+  .contract-box { margin: 4px 0 2px; } .contract-box > b { font-size: 12px; margin-bottom: 2px; } .contracts { grid-template-columns: repeat(4, 1fr); gap: 4px; } .contract { padding: 3px 6px; border-width: 1px; } .contract span { font-size: 12px; } .contract small { font-size: 10px; } .contract em { font-size: 10px; }
+  .route-select { grid-template-columns: 1fr; } .route[disabled] { display: none; }
+  .clock-note { font-size: 10px; line-height: 1.2; padding: 2px 6px; margin: 2px 0; }
   .clock-note { padding: 3px 8px; }
   .route-select { gap: 3px; margin-bottom: 4px; }
   .route { font-size: 12px; padding: 3px 8px; border-width: 1px; border-radius: 7px; }
   .soon { font-size: 10px; }
-  #pretrip-map, #fullmap-canvas { max-height: 30vh; border-radius: 6px; }
+  #fullmap-canvas { max-height: 30vh; border-radius: 6px; } #pretrip-map { max-height: 21vh; border-radius: 6px; }
   .map-panel { max-width: 640px; }
   #fullmap-info { gap: 8px; margin: 4px 0; font-size: 12px; }
   #res-stars { font-size: 20px; letter-spacing: 2px; }

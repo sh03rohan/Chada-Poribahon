@@ -61,8 +61,10 @@
       <div class="landing-inner">
         <h1 class="title-big">চাঁদা পরিবহন</h1>
         <p class="sub">কুষ্টিয়া → রাজবাড়ী → ফরিদপুর → পদ্মা → ঢাকা</p>
+        <div id="career-chip" class="career-chip hidden"></div>
         <div class="menu">
           <button id="menu-start" class="btn-primary">শুরু করুন</button>
+          <button id="menu-garage">🔧 গ্যারেজ</button>
           <button id="menu-settings">সেটিংস</button>
           <button id="menu-howto">কীভাবে খেলবেন</button>
           <button id="menu-intro">ইন্ট্রো আবার দেখুন</button>
@@ -92,6 +94,7 @@
         </div>
         <canvas id="pretrip-map" width="900" height="420"></canvas>
         <p class="hint">রাজবাড়ীতে থামুন, ফরিদপুরের কাছে অবরোধ হতে পারে, আর দৌলতদিয়ার মোড়ে ভুল করবেন না — পদ্মা সেতুর রাস্তাই ঢাকা।</p>
+        <div id="pretrip-contracts" class="contract-box"></div>
         <p class="hint clock-note">🕒 <b>আসল সময়ের দিন-রাত:</b> খেলার আলো আপনার ফোনের ঘড়ি অনুযায়ী চলে — এখন <span id="pretrip-clock">—</span>। রাতে খেললে রাত, ভোরে খেললে ভোর।</p>
         <button id="pretrip-go" class="btn-primary">যাত্রা শুরু</button>
       </div>
@@ -114,6 +117,7 @@
         <div class="menu">
           <button id="pause-resume" class="btn-primary">চালিয়ে যান</button>
           <button id="pause-map">ম্যাপ</button>
+          <button id="pause-garage">গ্যারেজ</button>
           <button id="pause-settings">সেটিংস</button>
           <button id="pause-howto">কীভাবে খেলবেন</button>
           <button id="pause-menu">মূল মেনু</button>
@@ -123,6 +127,7 @@
 
     <!-- Settings (built by settings.ts) -->
     <div id="settings" class="hidden"></div>
+    <div id="garage" class="hidden"></div>
 
     <!-- How to play -->
     <div id="howto" class="hidden">
@@ -168,6 +173,7 @@
         <h2>ঢাকায় পৌঁছে গেছেন!</h2>
         <div id="res-stars"></div>
         <div id="res-grid"></div>
+        <div id="res-career" class="hidden"></div>
         <p id="res-news"></p>
         <div class="row">
           <button id="btn-share">ছবি শেয়ার করুন</button>

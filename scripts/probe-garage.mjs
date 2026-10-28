@@ -1,0 +1,34 @@
+import { chromium } from '@playwright/test';
+// Garage: seed a rich profile, buy brakes/engine/tyres/horn + blue paint, check mods, physics and repaint.
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+page.on('pageerror', (e) => console.log('PAGEERROR', e.message, e.stack));
+await page.addInitScript(() => { localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })); if (!localStorage.getItem('cp-career')) localStorage.setItem('cp-career', JSON.stringify({ balance: 40000, xp: 1500, trips: 4 })); });
+await page.goto('http://localhost:5173/?quality=low&hour=11');
+await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 90000 });
+await page.waitForTimeout(500);
+// baseline braking distance from 60 km/h on the bridge
+const brakeDist = async () => page.evaluate(() => { const g = __game; g.traffic.enabled = false; g.teleport(4700); let st = g.simulate(14, { throttle: 1, autopilot: true }); const s0 = st.s; for (let i = 0; i < 30 && st.kmh > 0.5; i++) st = g.simulate(0.25, { brake: 1, autopilot: true }); return { from: s0, dist: st.s - s0 }; });
+await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+const base = await brakeDist(); console.log('stock braking', base);
+const accel = async () => page.evaluate(() => { const g = __game; g.teleport(4660); g.debug.resetMeasure(); const st = g.simulate(20, { throttle: 1, autopilot: true }); return { zeroToSixty: st.zeroToSixty }; });
+console.log('stock 0-60', await accel());
+await page.evaluate(() => __game.openGarage());
+await page.waitForTimeout(300);
+await page.screenshot({ path: 'test-results/garage.png' });
+for (let i = 0; i < 3; i++) await page.click('.gbuy[data-up="brakes"]');
+await page.click('.gbuy[data-up="engine"]'); await page.click('.gbuy[data-up="engine"]');
+await page.click('.gbuy[data-up="tyres"]'); await page.click('.gbuy[data-up="horn"]');
+await page.click('.swatch[data-livery="2"]');
+await page.waitForTimeout(300);
+console.log('after buying:', JSON.stringify(await page.evaluate(() => ({ ...__game.stats().career, mods: __game.mods }))));
+await page.screenshot({ path: 'test-results/garage-after.png' });
+await page.click('#garage-close');
+console.log('upgraded braking', await brakeDist());
+console.log('upgraded 0-60', await accel());
+await page.evaluate(() => { __game.teleport(100); __game.setFreeCamera([11, 2.2, 0.5], [0, 1.8, 0.5]); });
+await page.waitForTimeout(400);
+await page.screenshot({ path: 'test-results/garage-livery.png' });
+await page.reload(); await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 90000 }); await page.waitForTimeout(400);
+console.log('persisted:', JSON.stringify(await page.evaluate(() => ({ u: __game.stats().career.upgrades, livery: __game.stats().career.livery, mods: __game.mods }))));
+await browser.close();

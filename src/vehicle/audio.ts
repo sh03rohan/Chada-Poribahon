@@ -88,6 +88,9 @@ export class BusAudio {
   private roadGain!: GainNode; private windGain!: GainNode; private rainGain!: GainNode;
   private windFilter!: BiquadFilterNode;
   private hornOn = false;
+  private hornKind: 'stock' | 'air' = 'stock';
+  /** garage horn upgrade: deeper, louder three-tone air horn */
+  setHorn(kind: 'stock' | 'air') { this.hornKind = kind; const f = kind === 'air' ? [262, 330, 131] : [311, 370, 155]; this.hornOsc.forEach((o, i) => { if (this.ctx) o.frequency.setTargetAtTime(f[i], this.ctx.currentTime, 0.01); }); }
   private muted = false;
 
   /** Must be called from a user gesture. */
@@ -112,6 +115,7 @@ export class BusAudio {
       const g = ctx.createGain(); g.gain.value = 0.3; o.connect(g).connect(this.hornGain); o.start();
       this.hornOsc.push(o);
     }
+    this.setHorn(this.hornKind);
 
     // Road / tyre noise
     const rs = ctx.createBufferSource(); rs.buffer = noise; rs.loop = true;
@@ -143,7 +147,7 @@ export class BusAudio {
     if (horn !== this.hornOn) {
       this.hornOn = horn;
       this.hornGain.gain.cancelScheduledValues(t);
-      this.hornGain.gain.setTargetAtTime(horn ? AUDIO.hornGain : 0, t, horn ? 0.03 : 0.08);
+      this.hornGain.gain.setTargetAtTime(horn ? AUDIO.hornGain * (this.hornKind === 'air' ? 1.5 : 1) : 0, t, horn ? 0.03 : 0.08);
     }
     const sp = Math.min(1, kmh / 120);
     this.roadGain.gain.setTargetAtTime(AUDIO.roadGain * sp * (onRoad ? 1 : 2.2) * (0.3 + rain * 0.7 + 0.5), t, 0.1);

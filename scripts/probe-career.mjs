@@ -1,0 +1,24 @@
+import { chromium } from '@playwright/test';
+// Career flow: fresh landing → finish a run → results with career delta → landing chip updated.
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+page.on('pageerror', (e) => console.log('PAGEERROR', e.message, e.stack));
+await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
+await page.goto('http://localhost:5173/?quality=low&hour=11');
+await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 90000 });
+await page.waitForTimeout(500);
+console.log('fresh chip:', await page.locator('#career-chip').innerText());
+await page.screenshot({ path: 'test-results/career-landing-fresh.png' });
+await page.click('#menu-start'); await page.waitForTimeout(500); await page.click('#pretrip-go'); await page.waitForTimeout(400);
+await page.evaluate(() => { __game.traffic.enabled = false; __game.teleport(5900); __game.simulate(25, { throttle: 1, autopilot: true }); });
+await page.waitForTimeout(600);
+console.log('results career:', await page.locator('#res-career').innerText());
+console.log('stats.lastOutcome:', JSON.stringify(await page.evaluate(() => __game.stats().lastOutcome)));
+await page.screenshot({ path: 'test-results/career-results.png' });
+await page.reload();
+await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 90000 });
+await page.waitForTimeout(500);
+console.log('chip after run:', await page.locator('#career-chip').innerText());
+console.log('profile:', JSON.stringify(await page.evaluate(() => __game.stats().career)));
+await page.screenshot({ path: 'test-results/career-landing-after.png' });
+await browser.close();
