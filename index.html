@@ -32,8 +32,11 @@
         <div id="hud-mood"><div id="hud-mood-fill"></div></div>
         <div class="hud-label" id="hud-dist">—</div>
       </div>
-      <div id="hud-banner" class="hidden"><span class="ico">🚌</span><div><b id="hud-banner-title"></b><small id="hud-banner-sub"></small></div></div>
-      <div id="hud-msg"></div>
+      <!-- right-hand message column: nothing is drawn over the road ahead -->
+      <div id="hud-stack">
+        <div id="hud-msg"></div>
+        <div id="hud-banner" class="hidden"><span class="ico">🚌</span><div><b id="hud-banner-title"></b><small id="hud-banner-sub"></small></div></div>
+          </div>
       <div id="bubbles"></div>
       <div id="hud-buttons">
         <button class="icon-btn" id="btn-cam" title="ক্যামেরা">📷</button>
