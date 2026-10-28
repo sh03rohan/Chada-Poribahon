@@ -200,3 +200,79 @@ input[type=range] { width: 100%; accent-color: var(--red); }
 .choice-box .row .btn-primary { background: var(--red); color: #fff; }
 .choice-keys { opacity: 0.55; font-size: 11px; margin-top: 6px; }
 #hud-fuel-val.low { color: #ff6b6b; }
+
+/* ---- Compact layout: landscape phones (any viewport under 560px tall) ----
+   One thin strip of chips on top, mood + minimap tucked top-left, icon buttons top-right,
+   steering bottom-left, pedals bottom-right; messages small and centred just under the strip
+   so the road stays visible. */
+@media (max-height: 560px) {
+  #hud { padding: calc(4px + var(--sat)) calc(6px + var(--sar)) calc(4px + var(--sab)) calc(6px + var(--sal)); }
+  #hud-top { gap: 4px; flex-wrap: nowrap; }
+  .pill { padding: 2px 8px; border-radius: 9px; gap: 5px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+  .pill .ico { font-size: 13px; width: 16px; }
+  .pill small { display: none; }
+  .pill b { font-size: 13px; line-height: 1.3; }
+  #hud-gear { font-size: 11px; }
+  #hud-route { display: flex; } #hud-route b { font-size: 12px; } #hud-time-pill { display: flex; }
+  #hud-hint { display: none; }
+  #hud-mood-wrap { top: calc(32px + var(--sat)); left: calc(6px + var(--sal)); width: 118px; padding: 3px 8px; gap: 0; }
+  #hud-mood-wrap > .hud-label:first-child { display: none; }
+  #hud-mood { height: 6px; margin: 2px 0; }
+  .hud-label { font-size: 10px; }
+  #minimap { width: 84px; height: 84px; top: calc(60px + var(--sat)); left: calc(6px + var(--sal)); border-width: 2px; }
+  #minimap-pct { font-size: 10px; bottom: 3px; }
+  #hud-msg { top: calc(34px + var(--sat)); font-size: 13px; padding: 4px 10px; border-radius: 8px; max-width: 58vw; line-height: 1.25; }
+  #hud-banner { top: calc(62px + var(--sat)); padding: 3px 10px; gap: 6px; border-radius: 8px; max-width: 50vw; }
+  #hud-banner .ico { font-size: 16px; } #hud-banner b { font-size: 12px; } #hud-banner small { font-size: 10px; }
+  #bubbles { bottom: 22%; gap: 4px; }
+  .bubble { font-size: 12px; padding: 3px 9px; border-radius: 10px; max-width: 46vw; }
+  .bubble::after { border-width: 5px; bottom: -5px; }
+  #hud-buttons { top: calc(32px + var(--sat)); bottom: auto; right: calc(6px + var(--sar)); gap: 4px; }
+  .icon-btn { width: 30px; height: 30px; font-size: 14px; border-radius: 8px; box-shadow: none; }
+  #touch-steer, #touch-pedals { bottom: calc(8px + var(--sab)); gap: 6px; }
+  #touch-steer { left: calc(8px + var(--sal)); } #touch-pedals { right: calc(8px + var(--sar)); }
+  #touch.side-right #touch-steer { right: calc(8px + var(--sar)); } #touch.side-right #touch-pedals { left: calc(8px + var(--sal)); }
+  .tbtn { width: 58px; height: 58px; font-size: 15px; border-width: 2px; }
+  .tbtn.small { width: 42px; height: 42px; font-size: 16px; }
+  #wheel-ui { width: 118px; height: 118px; }
+  #toasts { top: calc(60px + var(--sat)); gap: 4px; }
+  .toast { font-size: 12px; padding: 4px 10px; border-radius: 8px; max-width: 60vw; }
+  #choice { padding-bottom: calc(64px + var(--sab)); }
+  .choice-box { padding: 7px 12px; border-radius: 10px; max-width: 60vw; }
+  .choice-box b { font-size: 14px; } .choice-box > small { font-size: 11px; margin: 1px 0 6px; }
+  .choice-box .row { gap: 6px; } .choice-box .row button { font-size: 13px; padding: 5px 12px; border-radius: 8px; }
+  .choice-box > small.choice-keys { display: none; }
+  /* landing */
+  #landing { padding: 8px 16px; align-items: center; }
+  .landing-inner { max-width: none; }
+  .title-big { font-size: 30px; text-shadow: 2px 2px 0 var(--red), 3px 3px 0 rgba(0,0,0,0.5); }
+  #landing .sub { font-size: 13px; margin: 2px 0 6px; }
+  .menu { flex-direction: row; flex-wrap: wrap; gap: 6px; margin: 6px 0; max-width: none; }
+  .menu button, .btn-primary, #pretrip-go { font-size: 14px; padding: 6px 14px; border-radius: 9px; }
+  .menu .btn-primary, .btn-primary { font-size: 15px; box-shadow: 0 2px 0 #8a1216; }
+  #start-status { font-size: 11px; margin-top: 4px; }
+  /* panels */
+  #results, #pretrip, #fullmap, #pause, #settings, #howto { padding: 6px; }
+  .panel { padding: 6px 12px; max-height: calc(100vh - 12px); border-width: 3px; outline-width: 2px; border-radius: 12px; }
+  .panel h1 { font-size: 22px; } .panel h2 { font-size: 16px; margin: 0 0 2px; }
+  .sub { margin: 2px 0 6px; font-size: 13px; }
+  .hint { font-size: 11px; line-height: 1.3; margin: 3px 0; }
+  .pretrip-panel .hint:not(.clock-note) { display: none; }
+  .clock-note { padding: 3px 8px; }
+  .route-select { gap: 3px; margin-bottom: 4px; }
+  .route { font-size: 12px; padding: 3px 8px; border-width: 1px; border-radius: 7px; }
+  .soon { font-size: 10px; }
+  #pretrip-map, #fullmap-canvas { max-height: 30vh; border-radius: 6px; }
+  .map-panel { max-width: 640px; }
+  #fullmap-info { gap: 8px; margin: 4px 0; font-size: 12px; }
+  #res-stars { font-size: 20px; letter-spacing: 2px; }
+  #res-grid { font-size: 12px; gap: 1px 8px; margin: 4px 0; grid-template-columns: 1fr 1fr 1fr 1fr; }
+  #res-news { font-size: 11px; padding: 4px 8px; margin: 4px 0; }
+  #btn-share, #btn-again { font-size: 14px; padding: 6px 14px; margin-top: 4px; border-radius: 9px; box-shadow: 0 2px 0 #8a1216; }
+  .controls-help { font-size: 11px; gap: 4px; margin: 6px 0; }
+  .howto-list { font-size: 12px; line-height: 1.35; }
+  .row-s { margin: 4px 0; } .row-s label { font-size: 12px; } .seg button { font-size: 12px; padding: 3px 9px; }
+  #cine-skip { font-size: 13px; padding: 4px 10px; }
+  #cine-caption { font-size: clamp(13px, 2.6vw, 22px); padding: 4px 12px; bottom: calc(7vh + 8px); }
+  #cine-bars-top, #cine-bars-bottom { height: 7vh; }
+}

@@ -87,7 +87,8 @@ test('steering schemes + settings persist across reload, only selected scheme in
   const box = (await page.locator('#wheel-ui').boundingBox())!;
   const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
   await g(page, 'document.getElementById("settings").classList.add("hidden")');
-  await page.mouse.move(cx, cy - 70); await page.mouse.down(); await page.mouse.move(cx + 70, cy, { steps: 12 });
+  const rr = box.height * 0.37; // inside the rim at any wheel size (compact layout shrinks it)
+  await page.mouse.move(cx, cy - rr); await page.mouse.down(); await page.mouse.move(cx + rr, cy, { steps: 12 });
   await page.waitForTimeout(150);
   const s1 = await g(page, '__game.input.poll().steer') as number;
   console.log('wheel steer while dragging', s1);

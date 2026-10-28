@@ -51,6 +51,14 @@ greyed wrong branch, position, distance remaining, ETA. About 40 % in there is a
 ("ঢাকা ➜ পদ্মা সেতু" straight, "দৌলতদিয়া ঘাট ➜" right). The right branch is a ferry-queue dead end with a
 turnaround pad: "রাস্তা ভুল!" warning, mood drain, reroute arrow on both maps until you are back on the main road.
 
+### Compact phone layout
+
+Any viewport under 560 px tall (every phone in landscape) switches to a compact HUD (`@media (max-height: 560px)`
+in `src/style.css`): one thin strip of value chips on top, mood bar + minimap tucked top-left, icon buttons
+top-right, steering bottom-left, pedals bottom-right, messages/banners small and centred just under the strip,
+passenger bubbles low and narrow, panels (landing, pre-trip, map, pause, results) scaled to fit without
+scrolling. `scripts/probe-mobile.mjs` screenshots every screen at Pixel 7 and iPhone sizes.
+
 ### Cities, roundabouts, weather, mobile
 
 * **চত্বর / 4-way junctions** at Rajbari (2.13 km), Faridpur (3.56 km) and Dhaka (5.72 km): the main road widens
