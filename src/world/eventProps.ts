@@ -156,6 +156,8 @@ export class EventProps {
   /** Launch the train from the right-hand side; it needs ~14 s to clear the road. */
   startTrain() { this.trainU = 150; this.trainActive = true; this.train.visible = true; }
   get trainPassed() { return this.trainU < -150; }
+  /** metres of the train along its track, 0 at the crossing (for the sound mix) */
+  get trainOffset() { return this.trainU; }
 
   // ---- accident
   /** dynamic colliders for the overturned truck (moves aside when towed) */

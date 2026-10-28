@@ -87,6 +87,11 @@ export class BusAudio {
   private hornGain!: GainNode;
   private roadGain!: GainNode; private windGain!: GainNode; private rainGain!: GainNode;
   private windFilter!: BiquadFilterNode;
+  // ambience layers (all synthesised): crowd murmur, rail-crossing bell, passing train, police siren, river water
+  private crowdGain!: GainNode; private crowdLfo!: GainNode; private trainGain!: GainNode; private trainHornGain!: GainNode; private sirenGain!: GainNode; private sirenOsc!: OscillatorNode; private waterGain!: GainNode;
+  private bellGain!: GainNode; private bellNext = 0;
+  readonly levels = { crowd: 0, bell: 0, train: 0, siren: 0, water: 0 };
+  private sirenT = 0;
   private hornOn = false;
   private hornKind: 'stock' | 'air' = 'stock';
   /** garage horn upgrade: deeper, louder three-tone air horn */
@@ -136,9 +141,56 @@ export class BusAudio {
     const rnf = ctx.createBiquadFilter(); rnf.type = 'highpass'; rnf.frequency.value = 3000;
     this.rainGain = ctx.createGain(); this.rainGain.gain.value = 0;
     rn.connect(rnf).connect(this.rainGain).connect(this.master); rn.start();
+
+    // Crowd murmur: band-passed noise, amplitude wobbled by a slow LFO so it breathes like a bus stand
+    const cs = ctx.createBufferSource(); cs.buffer = wbuf; cs.loop = true;
+    const cf = ctx.createBiquadFilter(); cf.type = 'bandpass'; cf.frequency.value = 700; cf.Q.value = 0.7;
+    const cf2 = ctx.createBiquadFilter(); cf2.type = 'lowpass'; cf2.frequency.value = 1600;
+    this.crowdLfo = ctx.createGain(); this.crowdLfo.gain.value = 0.7;
+    const clfo = ctx.createOscillator(); clfo.type = 'sine'; clfo.frequency.value = 0.37; const clg = ctx.createGain(); clg.gain.value = 0.3; clfo.connect(clg).connect(this.crowdLfo.gain); clfo.start();
+    this.crowdGain = ctx.createGain(); this.crowdGain.gain.value = 0;
+    cs.connect(cf).connect(cf2).connect(this.crowdLfo).connect(this.crowdGain).connect(this.master); cs.start();
+
+    // Rail bell: a bright sine struck on a timer while the gates are down (see update)
+    this.bellGain = ctx.createGain(); this.bellGain.gain.value = 0; this.bellGain.connect(this.master);
+
+    // Train: deep rumble + two-tone horn, both faded by distance
+    const ts = ctx.createBufferSource(); ts.buffer = noise; ts.loop = true;
+    const tf = ctx.createBiquadFilter(); tf.type = 'lowpass'; tf.frequency.value = 140;
+    this.trainGain = ctx.createGain(); this.trainGain.gain.value = 0;
+    ts.connect(tf).connect(this.trainGain).connect(this.master); ts.start();
+    this.trainHornGain = ctx.createGain(); this.trainHornGain.gain.value = 0;
+    const thf = ctx.createBiquadFilter(); thf.type = 'lowpass'; thf.frequency.value = 1200;
+    this.trainHornGain.connect(thf).connect(this.master);
+    for (const f of [311, 415]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; const g = ctx.createGain(); g.gain.value = 0.25; o.connect(g).connect(this.trainHornGain); o.start(); }
+
+    // Police siren: a square-ish tone whose pitch sweeps up and down (see update)
+    this.sirenOsc = ctx.createOscillator(); this.sirenOsc.type = 'triangle'; this.sirenOsc.frequency.value = 700;
+    const sf = ctx.createBiquadFilter(); sf.type = 'lowpass'; sf.frequency.value = 2200;
+    this.sirenGain = ctx.createGain(); this.sirenGain.gain.value = 0;
+    this.sirenOsc.connect(sf).connect(this.sirenGain).connect(this.master); this.sirenOsc.start();
+
+    // River water: soft low-passed noise for the ferry crossing and the big bridges
+    const wsrc = ctx.createBufferSource(); wsrc.buffer = wbuf; wsrc.loop = true;
+    const wf = ctx.createBiquadFilter(); wf.type = 'lowpass'; wf.frequency.value = 900;
+    this.waterGain = ctx.createGain(); this.waterGain.gain.value = 0;
+    wsrc.connect(wf).connect(this.waterGain).connect(this.master); wsrc.start();
+  }
+
+  /** Set the ambience mix (0..1 each); gains glide so layers fade in and out. */
+  setAmbience(a: Partial<typeof this.levels>) {
+    Object.assign(this.levels, a);
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.crowdGain.gain.setTargetAtTime(AUDIO.crowdGain * this.levels.crowd, t, 0.5);
+    this.trainGain.gain.setTargetAtTime(AUDIO.trainGain * this.levels.train, t, 0.3);
+    this.trainHornGain.gain.setTargetAtTime(AUDIO.trainGain * 0.5 * this.levels.train * this.levels.train, t, 0.3);
+    this.sirenGain.gain.setTargetAtTime(AUDIO.sirenGain * this.levels.siren, t, 0.3);
+    this.waterGain.gain.setTargetAtTime(AUDIO.waterGain * this.levels.water, t, 0.8);
   }
 
   get ready(): boolean { return !!this.ctx; }
+  get ctxState() { return this.ctx?.state ?? 'none'; }
 
   update(dt: number, rpm: number, throttle: number, kmh: number, horn: boolean, onRoad: boolean, rain: number) {
     if (!this.ctx) return;
@@ -154,14 +206,26 @@ export class BusAudio {
     this.windGain.gain.setTargetAtTime(AUDIO.windGain * sp * sp, t, 0.1);
     this.windFilter.frequency.setTargetAtTime(400 + sp * 1400, t, 0.1);
     this.rainGain.gain.setTargetAtTime(AUDIO.rainGain * rain, t, 0.3);
+    // rail bell: strike every 0.6 s while the gate layer is up
+    if (this.levels.bell > 0.01 && t >= this.bellNext) {
+      this.bellNext = t + 0.6;
+      const o = this.ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 1180;
+      const o2 = this.ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = 1180 * 2.76;
+      const g = this.ctx.createGain(); g.gain.setValueAtTime(AUDIO.bellGain * this.levels.bell, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      const g2 = this.ctx.createGain(); g2.gain.value = 0.3;
+      o.connect(g); o2.connect(g2).connect(g); g.connect(this.master); o.start(t); o2.start(t); o.stop(t + 0.55); o2.stop(t + 0.55);
+    }
+    // siren: pitch sweeps 600 → 1000 Hz and back about once a second
+    if (this.levels.siren > 0.01) { this.sirenT += dt; const k = 0.5 - 0.5 * Math.cos(this.sirenT * Math.PI * 1.6); this.sirenOsc.frequency.setTargetAtTime(620 + 380 * k, t, 0.02); }
   }
 
   setVolume(v: number) { this.volume = Math.max(0, Math.min(1, v)); if (this.master && !this.muted) this.master.gain.value = AUDIO.masterGain * this.volume; }
   private volume = 1;
   /** Short synthesised stings for the intro. */
-  sting(kind: 'start' | 'horn' | 'crash' | 'thunder') {
+  sting(kind: 'start' | 'horn' | 'crash' | 'thunder' | 'cash' | 'fail' | 'badge' | 'levelup' | 'ding') {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
+    if (kind === 'cash' || kind === 'fail' || kind === 'badge' || kind === 'levelup' || kind === 'ding') { this.playNotes(kind, t); return; }
     if (kind === 'thunder') {
       // low rumble: filtered noise swelling in, plus a sub-bass sine that decays over ~2.5 s
       const src = this.ctx.createBufferSource(); src.buffer = noiseBuffer(this.ctx, 3); src.loop = true;
@@ -186,6 +250,22 @@ export class BusAudio {
     const g = this.ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
     const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500;
     o.connect(f).connect(g).connect(this.master); o.start(t); o.stop(t + 2.7);
+  }
+  /** Little melodic stings: cash (two quick high notes), fail (two falling notes), badge (rising triad), levelup (fanfare), ding (one soft chime). */
+  private playNotes(kind: 'cash' | 'fail' | 'badge' | 'levelup' | 'ding', t: number) {
+    if (!this.ctx) return;
+    const seq: [number, number, number][] = kind === 'cash' ? [[1318, 0, 0.12], [1760, 0.1, 0.25]]
+      : kind === 'fail' ? [[440, 0, 0.22], [311, 0.2, 0.4]]
+      : kind === 'badge' ? [[523, 0, 0.18], [659, 0.14, 0.18], [784, 0.28, 0.4]]
+      : kind === 'levelup' ? [[523, 0, 0.15], [659, 0.12, 0.15], [784, 0.24, 0.15], [1047, 0.36, 0.6]]
+      : [[988, 0, 0.5]];
+    const type: OscillatorType = kind === 'fail' ? 'sawtooth' : 'triangle';
+    const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = kind === 'fail' ? 900 : 3200; f.connect(this.master);
+    for (const [hz, at, len] of seq) {
+      const o = this.ctx.createOscillator(); o.type = type; o.frequency.value = hz;
+      const g = this.ctx.createGain(); g.gain.setValueAtTime(0.0001, t + at); g.gain.exponentialRampToValueAtTime(AUDIO.stingGain, t + at + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + at + len);
+      o.connect(g).connect(f); o.start(t + at); o.stop(t + at + len + 0.05);
+    }
   }
   setMuted(m: boolean) {
     this.muted = m;

@@ -362,6 +362,29 @@ class Game {
   }
   lightningCount = 0;
 
+  // ---- Ambience + money stings ------------------------------------------------
+  private ledgerSeen = { fines: 0, toll: 0, tips: 0 };
+  /** Mix the ambient layers from where the bus is and what is going on; play a sting when the ledger moves. */
+  private updateAmbience() {
+    if (!this.audio.ready) return;
+    const s = this.routeS, driving = this.screen === 'driving' && !this.paused;
+    let crowd = 0, bell = 0, train = 0, siren = 0, water = 0;
+    if (driving) {
+      if (this.events.phase === 'stop') crowd = 1;
+      else { const i = this.events.nextStop(s); if (i >= 0 && WORLD.stops[i].waiting > 0) { const d = Math.abs(WORLD.stops[i].s - s); crowd = Math.max(0, 0.6 * (1 - d / 90)); } }
+      if (this.blockade.active && this.blockade.phase !== 'idle') { const d = Math.abs(WORLD.andolonS - s); crowd = Math.max(crowd, 1 - d / 140); if (this.blockade.phase === 'police') siren = Math.max(0, 1 - d / 160); }
+      if (this.incidents.rail === 'closed') { const d = Math.abs(WORLD.railS - s); bell = Math.max(0, 1 - d / 160); }
+      if (this.eventProps.trainActive) { const d = Math.abs(WORLD.railS - s), u = Math.abs(this.eventProps.trainOffset); train = Math.max(0, 1 - d / 260) * Math.max(0, 1 - u / 320); }
+      if (s > WORLD.bridgeStartS && s < WORLD.bridgeEndS) water = 0.7; else if (this.onBranch) water = 0.35;
+    }
+    this.audio.setAmbience({ crowd, bell, train, siren, water });
+    const L = this.ledger;
+    if (L.fines > this.ledgerSeen.fines) this.audio.sting('fail');
+    if (L.tips > this.ledgerSeen.tips) this.audio.sting('cash');
+    if (L.toll > this.ledgerSeen.toll) this.audio.sting('ding');
+    this.ledgerSeen = { fines: L.fines, toll: L.toll, tips: L.tips };
+  }
+
   async playIntro() {
     this.screen = 'intro';
     $('landing').classList.add('hidden'); this.hud.show(false); $('touch').classList.add('hidden'); $('minimap').classList.add('hidden');
@@ -425,7 +448,7 @@ class Game {
     if (this.incidents) this.incidents.reset();
     this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people); this.incidents.props3 = this.eventProps; this.incidents.onRoofCleared = () => this.clearRoof();
     this.fuel = new Fuel(this.hud, this.ledger, this.choice, this.passengers);
-    this.crashes = 0; this.fuelEmptied = false; this.special = null; this.specialsDone = []; this.horns = 0; this.hornHeld = false; this.setGoalPill(null);
+    this.crashes = 0; this.fuelEmptied = false; this.ledgerSeen = { fines: 0, toll: 0, tips: 0 }; this.special = null; this.specialsDone = []; this.horns = 0; this.hornHeld = false; this.setGoalPill(null);
     this.ferryTaken = false; this.ferryOffered = false; this.roofOffered = false; this.clearRoof();
     this.damage = new Damage(this.bus, this.hud, this.passengers); this.damage.reset();
     this.fuel.litres = GAMEPLAY.fuelTankLitres * (GAMEPLAY.fuelStartFraction[0] + Math.random() * (GAMEPLAY.fuelStartFraction[1] - GAMEPLAY.fuelStartFraction[0])); // the owner never fills it
@@ -554,8 +577,9 @@ class Game {
     this.debug.physicsSample(this.cur.v * 3.6, inp.throttle, this.simTime);
   }
 
+  frames = 0;
   frame(now: number) {
-    requestAnimationFrame((t) => this.frame(t));
+    requestAnimationFrame((t) => this.frame(t)); this.frames++;
     let dt = (now - this.lastFrame) / 1000; this.lastFrame = now;
     if (dt > 0.25) dt = 0.25;
     this.lastDt = dt;
@@ -654,6 +678,7 @@ class Game {
     }
     this.audio.update(dt, this.cur.rpm, this.cur.throttle, kmh, raw.horn && this.running, this.cur.onRoad, this.weather.wet);
     if (this.running && raw.horn && !this.hornHeld) this.horns++; this.hornHeld = raw.horn;
+    this.updateAmbience();
     if (this.special) this.special.maxKmh = Math.max(this.special.maxKmh, kmh);
 
     // rear-view mirror (cockpit only, every other frame)
@@ -771,7 +796,7 @@ class Game {
     const ok = sp.def.check(m);
     this.specialsDone.push({ id: sp.def.id, ok });
     if (ok) { this.ledger.tips += sp.def.tip; this.passengers.mood = Math.min(100, this.passengers.mood + 4); }
-    else this.passengers.mood = Math.max(0, this.passengers.mood - 8);
+    else { this.passengers.mood = Math.max(0, this.passengers.mood - 8); this.audio.sting('fail'); }
     this.hud.bubble({ kind: ok ? 'good' : 'wait', text: `${sp.def.icon} ${sp.def.name}: ${ok ? sp.def.thanks : sp.def.sorry}` });
     this.toast(describeOutcome(sp.def, ok), 7000);
     this.setGoalPill(null);
@@ -861,6 +886,8 @@ class Game {
       damage: this.damage.value, ferry: this.ferryTaken, roof: this.roof, night: hr >= 20 || hr < 5, contractDone: !!cr?.done, refuels: this.fuel.refuels, hardBrakes: sm.hardBrakes, tips: this.ledger.tips,
     }, this.career.profile, this.career.level);
     this.career.save(); this.lastBadges = fresh.map((a) => a.id);
+    this.audio.setAmbience({ crowd: 0, bell: 0, train: 0, siren: 0, water: 0 });
+    if (outcome.levelUp) setTimeout(() => this.audio.sting('levelup'), 600); else if (fresh.length || cr?.done) setTimeout(() => this.audio.sting('badge'), 600);
     showResults({
       timeSec: this.elapsed, passengers: this.passengers.count, income: this.events.income, mood: this.passengers.mood,
       stars: this.passengers.stars(), shouts: sm.shouts, hardBrakes: sm.hardBrakes, swerves: sm.swerves, stoppedAtRajbari: this.events.stoppedAtRajbari,
@@ -931,7 +958,7 @@ class Game {
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
       fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
       checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
-      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, special: this.special ? this.special.def.id : null, specialsDone: this.specialsDone, tips: this.ledger.tips, horns: this.horns, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
+      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, special: this.special ? this.special.def.id : null, audio: { ...this.audio.levels }, world: { railS: WORLD.railS, andolonS: WORLD.andolonS, bridgeStartS: WORLD.bridgeStartS, bridgeEndS: WORLD.bridgeEndS, tollS: WORLD.tollS, accidentS: WORLD.accidentS }, specialsDone: this.specialsDone, tips: this.ledger.tips, horns: this.horns, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {

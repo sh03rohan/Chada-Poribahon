@@ -79,3 +79,20 @@ test('special passengers: dadi boards at Rajbari with a goal, tips at Faridpur a
   expect(await g(page, '__game.stats().lastBadges') as string[]).toContain('tipped');
   expect(errors).toEqual([]);
 });
+
+test('audio layers: crowd near a stand, bell + train at the crossing, siren at the blockade, water on the bridge; fine plays a sting', async ({ page }) => {
+  const errors = await boot(page, 'quality=low&hour=11&weather=clear');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  expect(await g(page, '__game.audio.ready')).toBe(true);
+  const lv = (k: string, min: number) => page.waitForFunction(([k, min]) => (window as unknown as { __game: { audio: { levels: Record<string, number> } } }).__game.audio.levels[k] >= min, [k, min] as [string, number], { timeout: 8000 });
+  await g(page, '__game.traffic.enabled = false; __game.teleport(1950); __game.simulate(0.3, { throttle: 0, handbrake: true })');
+  await lv('crowd', 0.2);
+  await g(page, '__game.teleport(__game.stats().world.railS - 150); __game.simulate(0.5, { throttle: 0.3, autopilot: true }); for (let i = 0; i < 20 && __game.stats().kmh > 2; i++) __game.simulate(0.5, { throttle: 0, brake: 0.8, autopilot: true }); __game.simulate(4, { throttle: 0, handbrake: true })');
+  expect(await g(page, '__game.stats().rail')).toBe('closed');
+  await lv('bell', 0.05); await lv('train', 0.2);
+  await g(page, '__game.teleport(__game.stats().world.andolonS - 60); __game.simulate(0.3, { throttle: 0, handbrake: true }); __game.blockade.startWaiting(); __game.blockade.forcePolice(); __game.simulate(0.5, { throttle: 0, handbrake: true })');
+  await lv('siren', 0.5); await lv('crowd', 0.5);
+  await g(page, '__game.teleport(__game.stats().world.bridgeStartS + 200); __game.simulate(0.3, { throttle: 0, handbrake: true })');
+  await lv('water', 0.6);
+  expect(errors).toEqual([]);
+});
