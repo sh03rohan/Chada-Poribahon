@@ -111,8 +111,8 @@ export class SkySystem {
     const warm = new THREE.Color().setHSL(0.09, 0.8, 0.62);        // low sun orange
     const white = new THREE.Color(0xfff4e0);
     this.sun.color.copy(warm).lerp(white, dayAmount);
-    this.sun.intensity = night ? 0.24 : (0.6 + 1.9 * dayAmount) * (1 - rain * 0.72);
-    if (night) { this.sun.color.set(0x8aa0cc); this.sunDir.copy(this.moonDir); }
+    this.sun.intensity = night ? 1.0 : (0.6 + 1.9 * dayAmount) * (1 - rain * 0.72);
+    if (night) { this.sun.color.set(0x9fb4dc); this.sunDir.copy(this.moonDir); }
     this.sun.visible = true;
     // visible sun / moon / stars / clouds
     this.sunDisc.visible = this.sunGlow.visible = !night && elevation > -3;
@@ -124,17 +124,18 @@ export class SkySystem {
     (this.clouds.material as THREE.MeshBasicMaterial).opacity = (night ? 0.06 : 0.22) + rain * 0.6;
     (this.clouds.material as THREE.MeshBasicMaterial).color.set(night ? 0x202430 : 0xffffff).lerp(new THREE.Color(0x6a6e75), rain);
 
-    const skyCol = night ? new THREE.Color(0x1a2238) : new THREE.Color(0x9fc3ff).lerp(new THREE.Color(0x8b8f98), rain);
-    const groundCol = night ? new THREE.Color(0x0a0a08) : new THREE.Color(0x6b6040);
+    const skyCol = night ? new THREE.Color(0x4a5c84) : new THREE.Color(0x9fc3ff).lerp(new THREE.Color(0x8b8f98), rain);
+    const groundCol = night ? new THREE.Color(0x2a2820) : new THREE.Color(0x6b6040);
     this.hemi.color.copy(skyCol); this.hemi.groundColor.copy(groundCol);
-    this.hemi.intensity = night ? 0.2 : 0.25 + 0.3 * dayAmount - rain * 0.22;
+    // night keeps ~30–40 % of daytime ambient so the surroundings stay readable (moonlit look)
+    this.hemi.intensity = night ? 1.1 : 0.25 + 0.3 * dayAmount - rain * 0.22;
 
     const fog = this.scene.fog as THREE.FogExp2;
     const fogDay = new THREE.Color(0xcad9e6).lerp(new THREE.Color(0xe8b98a), 1 - dayAmount);
-    fog.color.copy(night ? new THREE.Color(0x05070d) : fogDay.lerp(new THREE.Color(0x5f666e), rain));
-    fog.density = WORLD.fogDensity * (1 + rain * 1.1 + (night ? 0.6 : 0));
+    fog.color.copy(night ? new THREE.Color(0x141c30) : fogDay.lerp(new THREE.Color(0x5f666e), rain));
+    fog.density = WORLD.fogDensity * (1 + rain * 1.1 + (night ? 0.25 : 0));
 
-    this.exposure = night ? 0.32 : 0.5 - rain * 0.2;
+    this.exposure = night ? 0.5 : 0.5 - rain * 0.2;
     this.renderer.toneMappingExposure = this.exposure;
 
     // Bake environment map: the sky dome lives in a tiny side scene while PMREM runs,
@@ -143,7 +144,7 @@ export class SkySystem {
     this.envTarget?.dispose();
     this.envTarget = this.pmrem.fromScene(this.skyScene, 0.02);
     this.scene.environment = this.envTarget.texture;
-    this.scene.environmentIntensity = night ? 0.05 : 0.45 - rain * 0.2;
+    this.scene.environmentIntensity = night ? 0.25 : 0.45 - rain * 0.2;
     this.scene.add(this.sky);
   }
 }

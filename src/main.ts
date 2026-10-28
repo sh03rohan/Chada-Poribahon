@@ -22,7 +22,7 @@ import { Blockade } from './world/blockade.ts';
 import { Traffic } from './world/traffic.ts';
 import { Fork } from './world/fork.ts';
 import { Roundabouts } from './world/roundabouts.ts';
-import { resolveBusCollisions, COLLIDERS, type Circle } from './world/collision.ts';
+import { resolveBusCollisions, COLLIDERS, type Circle, type Contact } from './world/collision.ts';
 import { CameraRig, type CameraMode } from './game/camera.ts';
 import { Passengers } from './game/passengers.ts';
 import { Hud } from './game/hud.ts';
@@ -90,7 +90,7 @@ class Game {
   private tmpV = new THREE.Vector3();
   private lastDt = 1 / 60;
   private lastCrash = -10; private crashPending = false; private crashKind: 'traffic' | 'object' = 'traffic'; private crashImpact = 0;
-  private dynCircles: Circle[] = []; private colScratch: Circle[] = [];
+  private dynCircles: Circle[] = []; private colScratch: Circle[] = []; private contacts: Contact[] = [];
   private helperShoutTimer = 0;
   private boarding: Person[] = [];
   private landingT = 0;
@@ -409,11 +409,10 @@ class Game {
     if (this.onBranch) { this.routeS = WORLD.forkS; this.lateral = br.lateral; } else { this.routeS = loc.s; this.lateral = loc.lateral; }
     this.surf.onRoad = mainOn || branchOn || (br.onBranch && br.s > this.fork.branch.length - 30 && Math.abs(br.lateral) < 16) || (bl > 0.2 || Math.abs(loc.lateral) > WORLD.roadWidth / 2 ? this.roundabouts.onSideRoad(this.cur.x, this.cur.z) : false);
     this.surf.wet = this.weather.wet > 0.5;
-    const trafficWall = this.onBranch || this.cinematicMode ? Infinity : this.traffic.collisionS;
     const islandWall = this.cinematicMode ? Infinity : this.roundabouts.wallDistance(this.cur.x - Math.sin(this.cur.yaw) * 5.6, this.cur.z - Math.cos(this.cur.yaw) * 5.6, this.cur.yaw, loc.s);
     const incWall = this.cinematicMode ? Infinity : this.incidents.wallDistance(loc.s + 5.6);
-    this.surf.wallDistance = Math.min(this.events.wallDistance(loc.s + 5.6), trafficWall > 0 ? trafficWall : 0, islandWall, incWall);
-    if (trafficWall <= 0.3 && this.cur.v > 2.5 && this.elapsed - this.lastCrash > 4 && !this.cinematicMode) { this.lastCrash = this.elapsed; this.crashPending = true; this.crashKind = 'traffic'; this.crashImpact = this.cur.v; }
+    // traffic is not a wall any more: hitting a vehicle is a momentum exchange in resolveBusCollisions
+    this.surf.wallDistance = Math.min(this.events.wallDistance(loc.s + 5.6), islandWall, incWall);
     const inp = this.running && !this.finished && !this.paused ? { ...raw } : { throttle: 0, brake: 1, steer: 0, handbrake: true };
     if (this.fuel.engineFactor === 0 && !this.cinematicMode) inp.throttle = 0;
     if (this.events.phase === 'stop' || this.choice.open) { inp.throttle = 0; inp.brake = 0; inp.handbrake = true; } // handbrake, not brake: holding the brake while stopped would creep into reverse
@@ -425,8 +424,9 @@ class Game {
       this.dynCircles.length = 0;
       if (!this.onBranch) this.traffic.nearbyCircles(this.routeS, 40, this.dynCircles);
       this.blockade.vanCircles(this.dynCircles);
-      const col = resolveBusCollisions(this.cur, this.dynCircles, this.colScratch);
-      if (col.hit && col.impact > 2.0 && this.elapsed - this.lastCrash > 2.5) { this.lastCrash = this.elapsed; this.crashPending = true; this.crashKind = 'object'; this.crashImpact = col.impact; }
+      const col = resolveBusCollisions(this.cur, this.dynCircles, this.colScratch, this.contacts);
+      if (col.contacts.length) this.traffic.applyContacts(col.contacts);
+      if (col.hit && col.impact > 2.0 && this.elapsed - this.lastCrash > 2.5) { this.lastCrash = this.elapsed; this.crashPending = true; this.crashKind = col.contacts.some((c) => c.into > 1) ? 'traffic' : 'object'; this.crashImpact = col.impact; }
     }
     this.simTime += dt;
     this.debug.physicsSample(this.cur.v * 3.6, inp.throttle, this.simTime);

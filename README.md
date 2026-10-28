@@ -61,11 +61,15 @@ turnaround pad: "রাস্তা ভুল!" warning, mood drain, reroute arr
 * **Solid world** (`src/world/collision.ts`): every placed prop registers a collider circle (trees, poles, lamp
   posts, signs, shops, buildings as rows of circles, shed, gate and gantry posts, bridge railings, ferry-queue
   trucks, islands); traffic vehicles and the police van are added per step. The bus is 5 circles; penetrations
-  are pushed out and the velocity into the obstacle removed, so it stops against things or slides along them.
+  against static props are pushed out and the velocity into the obstacle removed, so it stops against things
+  or slides along them. **Vehicles are not walls**: a hit is an inelastic momentum exchange using the closing
+  speed and the masses (`SPEC[type].mass` vs `PHYSICS.mass`), so the bus keeps M/(M+m) of its speed, an
+  off-centre hit twists it, and the other vehicle is shoved along the contact normal, then brakes, pulls fully
+  onto the shoulder and rejoins a few seconds later (`Traffic.applyContacts`, `Vehicle.hitT`).
   Impacts > 2 m/s cost mood (3–15), show a message and play a thump.
 * **Ride**: no camera shake on tarmac and only a 2 mm road bounce (`CAMERA.shake*`, `PHYSICS.roughness*`) — the
   bus is meant to feel heavy and smooth; off-road keeps a mild shake.
-* **Sky**: driven by the device clock (re-read every minute while driving, so dusk falls mid-trip); visible sun disc + glow, moon and stars at night (the dome goes properly dark, exposure 0.32), a cloud
+* **Sky**: driven by the device clock (re-read every minute while driving, so dusk falls mid-trip); visible sun disc + glow, moon and stars at night (moonlit look: ambient stays at ~35 % of daytime so the surroundings remain readable, exposure 0.5, lighter fog), a cloud
   dome that thickens and darkens with rain, fog/light/exposure all re-derived on every time or weather change.
 * **Mobile**: the first menu tap requests fullscreen + `screen.orientation.lock('landscape')` (Android); where
   locking is unsupported (iOS) a portrait overlay asks the player to rotate. `manifest.webmanifest` declares
@@ -75,9 +79,13 @@ turnaround pad: "রাস্তা ভুল!" warning, mood drain, reroute arr
 
 Ambient traffic (cars, bikes with riders, buses, trucks, CNG autos) runs in both lanes. Following uses a
 stopping-distance rule (fastest speed from which the vehicle can still slow to its leader within the gap at
-4.5 m/s²), so vehicles queue behind the bus and the blockade instead of driving through it; oncoming vehicles
-swerve to their shoulder and brake to a stop if the bus sits in their lane.
-Rear-ending a vehicle stops the bus and costs mood. Pedestrians walk the footpaths, hawkers stand at shop
+4.5 m/s²), so vehicles queue behind the bus and the blockade instead of driving through it. If the bus sits
+in the oncoming lane, oncoming vehicles do not scatter: when there is room between the bus and their kerb
+(`width + 0.5 m`) they squeeze past along the edge at walking pace, otherwise they brake and wait in line,
+each behind the one ahead, until the lane clears; nobody pulls out to overtake toward the bus.
+Rear-ending a vehicle shoves it (momentum exchange, see *Solid world*) and costs mood.
+Vehicle meshes are side-profile silhouettes extruded across the width (`profile()` in `src/world/traffic.ts`:
+bonnet, raked windscreen, roof, boot, glass band, pillars) with wheels, arches, lights and mirrors. Pedestrians walk the footpaths, hawkers stand at shop
 clusters, a helper hangs from the door shouting "ঢাকা ঢাকা!", passengers board at Rajbari.
 
 Holding brake while stopped creeps backwards (arcade reverse). Cameras: chase → bonnet → cockpit
