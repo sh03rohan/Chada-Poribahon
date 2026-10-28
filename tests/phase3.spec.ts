@@ -87,3 +87,33 @@ test('contracts: three daily offers on the pre-trip card; a met contract pays bo
   expect(await page.locator('#res-career .contract').innerText()).toContain('❌');
   expect(errors).toEqual([]);
 });
+
+test('damage: crashes add damage, cap speed and weaken brakes; repair is charged at Dhaka and the bus is fixed for the next run', async ({ page }) => {
+  const errors = await boot(page, 'autostart=1&quality=low&view=chase&hour=21');
+  const ram = () => g(page, `(() => { const g = __game; const vs = g.traffic.vehicles; const car = vs.find((v) => v.type === 'car');
+    for (const v of vs) v.s = 5000 + Math.random() * 500; g.teleport(1480); car.s = 1560; car.dir = 1; car.lateral = -1.75; car.swerve = 0; car.speed = 0; car.maxSpeed = 0.01; car.hitT = 0;
+    g.simulate(9, { throttle: 1, autopilot: true }); return g.stats().damage; })()`) as Promise<number>;
+  for (let i = 0; i < 3; i++) { await ram(); await page.waitForTimeout(700); }
+  const st = await g(page, '(() => { const s = __game.stats(); return { damage: s.damage, mods: s.mods, crashes: s.crashes }; })()') as { damage: number; mods: { dmgBrake: number; speedCapKmh: number | null }; crashes: number };
+  console.log('after 3 rams', st);
+  expect(st.damage).toBeGreaterThanOrEqual(50); expect(st.mods.dmgBrake).toBeLessThan(1); expect(st.mods.speedCapKmh).not.toBeNull();
+  expect(await page.locator('#hud-damage').isVisible()).toBe(true);
+  await g(page, '__game.switchCamera("cockpit")'); await page.waitForTimeout(800);
+  expect(await page.locator('#crack').isVisible(), 'cracked windscreen in cockpit').toBe(true);
+  await page.screenshot({ path: `${SHOTS}/damage-cockpit.png` });
+  await g(page, '__game.switchCamera("chase")');
+  const top = await g(page, '(() => { __game.teleport(4660); return __game.simulate(40, { throttle: 1, autopilot: true }).topSpeed; })()') as number;
+  console.log('top speed with damage', top, 'cap', st.mods.speedCapKmh);
+  expect(top).toBeLessThan((st.mods.speedCapKmh ?? 120) + 3);
+  await g(page, '__game.teleport(5900); __game.simulate(45, { throttle: 1, autopilot: true })');
+  await finished(page); await page.waitForTimeout(200);
+  const r = await g(page, '({ repair: __game.ledger.repair, net: __game.ledger.net })') as { repair: number; net: number };
+  console.log('repair', r);
+  expect(r.repair).toBeGreaterThan(1000); expect(r.net).toBe(10800 - r.repair);
+  expect(await page.locator('#res-grid').innerText()).toContain('মেরামত');
+  await g(page, '__game.startRun()'); await page.waitForTimeout(300);
+  const after = await g(page, '(() => { const s = __game.stats(); return { damage: s.damage, cap: s.mods.speedCapKmh, brake: s.mods.dmgBrake }; })()') as { damage: number; cap: number | null; brake: number };
+  expect(after.damage).toBe(0); expect(after.cap ?? Infinity).toBe(Infinity); expect(after.brake).toBe(1);
+  expect(await page.locator('#hud-damage').isVisible()).toBe(false);
+  expect(errors).toEqual([]);
+});

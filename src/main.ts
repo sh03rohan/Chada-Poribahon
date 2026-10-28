@@ -30,6 +30,7 @@ import { RouteEvents } from './game/events.ts';
 import { DebugOverlay } from './game/debug.ts';
 import { showResults } from './game/results.ts';
 import { Career, LIVERIES } from './game/career.ts';
+import { Damage } from './game/damage.ts';
 import { buildGaragePanel, applyUpgradeMods } from './game/garage.ts';
 import { dailyContracts, evaluateContract, renderContractPicker, CONTRACTS, type ContractDef } from './game/contracts.ts';
 import { MODS } from './vehicle/physics.ts';
@@ -75,7 +76,7 @@ class Game {
   ledger = new Ledger();
   career = new Career();
   choice = new ChoicePanel();
-  incidentProps!: IncidentProps; incidents!: Incidents; fuel!: Fuel;
+  incidentProps!: IncidentProps; incidents!: Incidents; fuel!: Fuel; damage!: Damage;
   screen: Screen = 'landing';
   paused = false;
 
@@ -182,6 +183,7 @@ class Game {
     this.bus.setPassengers(this.passengers.count);
     this.events = new RouteEvents(this.blockade, this.passengers, this.hud, this.bus, this.ledger);
     this.fuel = new Fuel(this.hud, this.ledger, this.choice, this.passengers);
+    this.damage = new Damage(this.bus, this.hud, this.passengers);
     this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people);
     this.map = new RouteMap(this.road, this.fork.branch, this.roundabouts.sideRoads);
     this.cinematic = new Cinematic(this.cineHost());
@@ -343,6 +345,7 @@ class Game {
     this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people);
     this.fuel = new Fuel(this.hud, this.ledger, this.choice, this.passengers);
     this.crashes = 0; this.fuelEmptied = false;
+    this.damage = new Damage(this.bus, this.hud, this.passengers); this.damage.reset();
     this.fuel.litres = GAMEPLAY.fuelTankLitres * (GAMEPLAY.fuelStartFraction[0] + Math.random() * (GAMEPLAY.fuelStartFraction[1] - GAMEPLAY.fuelStartFraction[0])); // the owner never fills it
     const hr = this.clockHour(); this.events.waitingMultiplier = hr >= GAMEPLAY.morningRushStart && hr < GAMEPLAY.morningRushEnd ? 1.5 : (hr >= 21 || hr < 5) ? 0.5 : 1;
     this.blockade.reset();
@@ -506,6 +509,7 @@ class Game {
         this.crashPending = false;
         const pen = Math.min(15, 3 + this.crashImpact * 0.8);
         this.passengers.mood = Math.max(0, this.passengers.mood - pen);
+        this.damage.hit(this.crashImpact, this.crashKind);
         this.hud.message(this.crashKind === 'traffic' ? 'সামনের গাড়িতে ধাক্কা! সাবধানে!' : 'ধাক্কা লেগেছে! রাস্তায় থাকুন');
         this.passengers.shout(this.crashKind === 'traffic' ? 'brake' : 'swerve', true);
         this.audio.sting('crash');
@@ -547,6 +551,9 @@ class Game {
       this.hud.update(kmh, this.cur.gear, this.passengers.mood, this.passengers.count, this.elapsed, WORLD.finishS - this.routeS, kmh < 0.5, this.ledger.net);
       this.updateBanner();
       const fv = $('hud-fuel-val'); fv.textContent = bn(Math.round(this.fuel.fraction * 100)) + '%'; fv.classList.toggle('low', this.fuel.fraction < 0.25);
+      this.damage.update(dt, kmh);
+      const dp = $('hud-damage'); dp.classList.toggle('hidden', this.damage.value <= 0); $('hud-damage-val').textContent = this.damage.label(); $('hud-damage-val').classList.toggle('low', this.damage.value >= 50);
+      $('crack').classList.toggle('hidden', !(this.cam.mode === 'cockpit' && this.damage.value >= 30)); $('crack').style.opacity = String(Math.min(1, (this.damage.value - 20) / 60));
       this.minimapTimer += dt;
       if (this.minimapTimer > 0.1) { this.minimapTimer = 0; const c = $('minimap').querySelector('canvas')!; this.map.drawMini(c, this.mapState()); $('minimap-pct').textContent = this.map.progressPercent(this.routeS); }
       if (kmh < 1 && (this.routeS < 120 || this.events.phase === 'stop')) { this.helperShoutTimer += dt; if (this.helperShoutTimer > 6) { this.helperShoutTimer = 0; this.helperShout(); } }
@@ -639,6 +646,7 @@ class Game {
   finish() {
     this.finished = true; this.screen = 'results';
     const sm = this.passengers.summary;
+    this.ledger.repair = this.damage.repairCost;
     const cr = evaluateContract(this.contract, {
       timeSec: this.elapsed, mood: this.passengers.mood, missedStops: this.events.stops.filter((s) => s.missed).length, stopsDone: this.events.stopsDone, passengers: this.passengers.count,
       fines: this.ledger.fines, hardBrakes: sm.hardBrakes, crashes: this.crashes, chadaPaid: this.ledger.chada, refuels: this.fuel.refuels, fuelEmptied: this.fuelEmptied, wrongBranches: this.events.wrongBranchCount,
@@ -651,7 +659,7 @@ class Game {
       timeSec: this.elapsed, passengers: this.passengers.count, income: this.events.income, mood: this.passengers.mood,
       stars: this.passengers.stars(), shouts: sm.shouts, hardBrakes: sm.hardBrakes, swerves: sm.swerves, stoppedAtRajbari: this.events.stoppedAtRajbari,
       stopsDone: this.events.stopsDone, stopsTotal: WORLD.stops.filter((x) => x.waiting > 0).length, fares: this.ledger.fares, fines: this.ledger.fines, chada: this.ledger.chada, fuel: this.ledger.fuel, charity: this.ledger.charity,
-      career: outcome, contractText: cr?.text,
+      career: outcome, contractText: cr?.text, repair: this.ledger.repair, damage: this.damage.value,
     }, () => { this.startRun(); });
   }
 
@@ -714,7 +722,7 @@ class Game {
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
       fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
       checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
-      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes,
+      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, damage: this.damage.value, mods: { ...MODS },
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {

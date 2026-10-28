@@ -29,6 +29,10 @@ export interface BusRig {
   driver: Person | null;
   helper: Person | null;
   riders: Person[];
+  /** damage visuals 0..1: bent bumper, dead left lamp (garage repairs it); optional on GLB rigs */
+  setDamage?(level: number): void;
+  /** engine smoke sprites (animated by the damage model) */
+  smoke?: THREE.Sprite[];
   /** repaint the side livery + paint colour (garage); optional on GLB rigs */
   setLivery?(main: string, dark: string): void;
   /** live rear-view mirror (render target texture); optional on GLB rigs */
@@ -273,10 +277,11 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   destBoard.position.set(0, 2.72, zF - 0.2 + 0.0); destBoard.rotation.y = Math.PI; destBoard.rotation.x = 0.1; body.add(destBoard);
   // Headlights
   const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2cc, emissiveIntensity: 0.15, roughness: 0.2, metalness: 0.3 });
+  const headMatL = headMat.clone(); // left lamp gets its own material so damage can kill it
   const indMat = new THREE.MeshStandardMaterial({ color: 0xff9a1a, emissive: 0xff7a00, emissiveIntensity: 0.3, roughness: 0.3 });
   const headlights: THREE.SpotLight[] = [];
   for (const x of [-0.82, 0.82]) {
-    const h = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.08, 20).rotateX(Math.PI / 2), headMat); h.position.set(x, 1.08, zF - 0.02); body.add(h);
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.08, 20).rotateX(Math.PI / 2), x < 0 ? headMatL : headMat); h.position.set(x, 1.08, zF - 0.02); body.add(h);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.025, 8, 20), chrome); ring.position.set(x, 1.08, zF - 0.04); body.add(ring);
     const ind = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.05), indMat); ind.position.set(x * 1.28, 0.9, zF - 0.02); body.add(ind);
     const spot = new THREE.SpotLight(0xfff1d6, 0, 70, 0.5, 0.55, 1.2);
@@ -457,7 +462,7 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   const driverHandOverride: { L: THREE.Vector3 | null; R: THREE.Vector3 | null } = { L: null, R: null };
 
   // ---- Draw-call merge: static parts → a few vertex-coloured meshes -------------
-  const skip = new Set<THREE.Object3D>([door, steeringWheel, ...wipers, driver.root, helper.root, ...riders.map((r) => r.root), seats, skinMesh, clothMesh, hairMesh, speedoMesh, rearView]);
+  const skip = new Set<THREE.Object3D>([door, steeringWheel, ...wipers, driver.root, helper.root, ...riders.map((r) => r.root), seats, skinMesh, clothMesh, hairMesh, speedoMesh, rearView, bumper]);
   mergeStaticMeshes(body, skip, opts.shadows);
   for (const g of [door, steeringWheel, ...wipers, ...wheelSpin]) mergeStaticMeshes(g, new Set(), opts.shadows);
 
@@ -466,12 +471,19 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   blob.rotation.x = -Math.PI / 2; blob.position.y = 0.015; blob.renderOrder = 1; blob.visible = !opts.shadows; root.add(blob);
 
   const exteriorOnly = [destBoard, frontStrip];
+  // engine smoke (rear, shown by the damage model)
+  const smokeTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d')!; const g = x.createRadialGradient(32, 32, 2, 32, 32, 30); g.addColorStop(0, 'rgba(90,90,90,0.9)'); g.addColorStop(1, 'rgba(90,90,90,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+  const smoke: THREE.Sprite[] = [];
+  for (let i = 0; i < 5; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, transparent: true, opacity: 0, depthWrite: false })); sp.position.set(-0.8, 0.6, zR + 0.4); sp.scale.setScalar(0.6); body.add(sp); smoke.push(sp); }
+  const bumperY = bumper.position.y;
+  let headlightsDead = false;
 
   const rig: BusRig = {
     root, body, wheelSpin, wheelSteer, steeringWheel, door, headlights, isProcedural: true,
     setLights({ headlights: on, brake, reverse }) {
       headMat.emissiveIntensity = on ? 3.5 : 0.15;
-      for (const s of headlights) s.intensity = on ? 900 : 0;
+      if (!headlightsDead) headMatL.emissiveIntensity = headMat.emissiveIntensity;
+      headlights.forEach((s, i) => { s.intensity = on && !(i === 0 && headlightsDead) ? 900 : 0; });
       tailMat.emissiveIntensity = (on ? 1.2 : 0.25) + brake * 5;
       revMat.emissiveIntensity = reverse ? 2.5 : 0;
     },
@@ -516,6 +528,16 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
     setPassengerPose(a) { const map: Record<string, Person['seatedSub']> = { talk: 'talk', fan: 'fan', sleep: 'sleep', phonecall: 'phone', film: 'film' }; riders.forEach((r, i) => { r.seatedSub = a === 'idle' ? (['idle', 'talk', 'phone', 'film'] as const)[i] : (map[a] ?? 'idle'); }); },
     setDriverHandTarget(side, worldPoint) { if (!worldPoint) { driverHandOverride[side] = null; return; } driverHandOverride[side] = driver.root.worldToLocal(worldPoint.clone()); },
     updateSpeedo(kmh, rpm, gear) { speedo.update(kmh, rpm, gear); },
+    smoke,
+    setDamage(level) {
+      // bent bumper from ~50 %, dead left headlight from ~30 %
+      const bend = Math.max(0, (level - 0.45) / 0.55);
+      bumper.rotation.z = -0.14 * bend; bumper.position.y = bumperY - 0.1 * bend; bumper.rotation.y = 0.05 * bend;
+      const dead = level > 0.3;
+      headMatL.color.set(dead ? 0x3a3a3a : 0xffffff); headMatL.emissiveIntensity = dead ? 0 : headMat.emissiveIntensity;
+      if (headlights[0]) headlights[0].intensity = dead ? 0 : headlights[0].intensity;
+      headlightsDead = dead;
+    },
     setLivery(main, dark) {
       const nt = makeSideLivery(layout, opts.anisotropy, main, dark);
       const r = nt; r.repeat.copy(texR.repeat); r.offset.copy(texR.offset);

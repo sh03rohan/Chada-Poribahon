@@ -61,10 +61,10 @@ export function copyState(dst: VehicleState, src: VehicleState): void {
 }
 
 /** Garage upgrade multipliers (set from the career profile before a run). */
-export const MODS = { brake: 1, torque: 1, grip: 1 };
+export const MODS = { brake: 1, torque: 1, grip: 1, /** damage: */ dmgTorque: 1, dmgBrake: 1, speedCapKmh: Infinity };
 
 export function torqueAt(rpm: number): number {
-  return rawTorqueAt(rpm) * MODS.torque;
+  return rawTorqueAt(rpm) * MODS.torque * MODS.dmgTorque;
 }
 function rawTorqueAt(rpm: number): number {
   const c = P.torqueCurve;
@@ -133,8 +133,8 @@ export function stepVehicle(s: VehicleState, input: VehicleInput, surf: SurfaceI
   // ---- Longitudinal forces ----------------------------------------------
   let throttleEff = s.throttle;
   // Soft governor
-  const govStart = P.targetTopSpeedKmh;
-  if (kmh > govStart) throttleEff *= Math.max(0, 1 - (kmh - govStart) / (P.governorKmh - govStart));
+  const govStart = Math.min(P.targetTopSpeedKmh, MODS.speedCapKmh - 6), govEnd = Math.min(P.governorKmh, MODS.speedCapKmh);
+  if (kmh > govStart) throttleEff *= Math.max(0, 1 - (kmh - govStart) / Math.max(1, govEnd - govStart));
   if (s.shiftTimer > 0) throttleEff *= 0.08;
 
   let fEngine = 0;
@@ -155,7 +155,7 @@ export function stepVehicle(s: VehicleState, input: VehicleInput, surf: SurfaceI
   const fDrag = 0.5 * P.airDensity * P.dragCoefficient * P.frontalArea * vAbs * vAbs;
   const crr = P.rollingResistance + (surf.onRoad ? 0 : P.offRoadResistance);
   const fRoll = vAbs > 0.05 ? crr * P.mass * G : 0;
-  const fBrake = P.brakeForce * MODS.brake * (s.v > 0.3 ? s.brake : 0) + (input.handbrake ? P.handbrakeForce : 0);
+  const fBrake = P.brakeForce * MODS.brake * MODS.dmgBrake * (s.v > 0.3 ? s.brake : 0) + (input.handbrake ? P.handbrakeForce : 0);
 
   let fNet = fEngine + fReverse;
   const sign = s.v >= 0 ? 1 : -1;

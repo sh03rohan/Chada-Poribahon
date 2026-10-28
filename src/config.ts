@@ -181,6 +181,10 @@ export const GAMEPLAY = {
   emptyTankRescueLitres: 20,
   emptyTankRescueSec: 20,
   morningRushStart: 7, morningRushEnd: 10,
+  /** Phase 3 damage: % per m/s of impact above 1.2 m/s; repair ৳ per % at Dhaka */
+  damagePerImpactMs: 2.4,
+  repairCostPerPercent: 45,
+  damageFearPerSec: 0.25,
   stopDwellTime: 5,       // s doors open
   /** Mood */
   moodStart: 75,

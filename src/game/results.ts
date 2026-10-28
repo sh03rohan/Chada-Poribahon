@@ -10,6 +10,7 @@ export interface RunResult {
   /** career delta (Phase 3) */
   career?: RunOutcome;
   contractText?: string;
+  repair?: number; damage?: number;
 }
 
 const NEWS = [
@@ -28,6 +29,7 @@ export function showResults(r: RunResult, onAgain: () => void) {
     ['সময়', bnTime(r.timeSec)], ['যাত্রী', bn(r.passengers)], ['নিট আয়', bnTaka(r.income)], ['মেজাজ', bn(Math.round(r.mood)) + '%'],
     ['হার্ড ব্রেক', bn(r.hardBrakes)], ['যাত্রীর চিৎকার', bn(r.shouts)], ['স্টপ', `${bn(r.stopsDone ?? (r.stoppedAtRajbari ? 1 : 0))} / ${bn(r.stopsTotal ?? 1)}`],
     ['ভাড়া আদায়', bnTaka(r.fares ?? r.income)], ['জরিমানা', bnTaka(r.fines ?? 0)], ['চাঁদা', bnTaka(r.chada ?? 0)], ['তেল', bnTaka(r.fuel ?? 0)],
+    ['মেরামত', `${bnTaka(r.repair ?? 0)}${r.damage ? ` (ক্ষতি ${bn(Math.round(r.damage))}%)` : ''}`],
   ].map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('');
   const car = $('res-career');
   if (r.career) {
