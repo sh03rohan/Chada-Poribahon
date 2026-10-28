@@ -304,7 +304,7 @@ test('phase 2: fuel — tank starts part-full, burns under load, pump refuels fo
   st = await stats(page);
   expect(st.choiceOpen, 'pump prompt').toBe(true);
   await page.screenshot({ path: `${SHOTS}/pump-prompt.png` });
-  await page.click('#choice-a');
+  await page.click('#choice-b'); // 40 litres
   await page.waitForTimeout(300);
   st = await stats(page);
   expect(st.refuels).toBe(1); expect(st.ledger.fuel).toBe(40 * 65);

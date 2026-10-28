@@ -19,6 +19,7 @@ export class IncidentProps {
   private cameraFlash: THREE.MeshStandardMaterial;
   private flashT = 0;
   readonly pumpPos: THREE.Vector3;
+  private pumpZoneMat!: THREE.MeshStandardMaterial; private zoneT = 0;
 
   constructor(private road: Road, people: PeopleManager) {
     const place = (s: number, lateral: number) => { const f = road.sample(s); const bl = road.bulge(s); const l = lateral + Math.sign(lateral) * bl; return { pos: new THREE.Vector3(f.x + f.rx * l, road.footpathHeight(s), f.z + f.rz * l), yaw: Math.atan2(-f.tx, -f.tz), f }; };
@@ -89,6 +90,22 @@ export class IncidentProps {
     const attendant = new Person(makeVariant({ id: 'pump', outfit: 'shirt-pants', top: '#1f9d55', bottom: '#2f3a4a', hair: 'cap', accent: '#1f9d55' })); attendant.position.copy(ppos).add(new THREE.Vector3(pf.rx * 1.5, 0, pf.rz * 1.5)); attendant.lookAt(pf.x, pf.z); attendant.setAction('idle');
     this.group.add(pg, attendant.root); people.add(attendant);
     for (const [x, z] of [[-4, -2.5], [4, -2.5], [-4, 2.5], [4, 2.5], [0, -1.2], [0, 1.2]]) { const wx = ppos.x + Math.cos(pyaw) * x + Math.sin(pyaw) * z, wz = ppos.z - Math.sin(pyaw) * x + Math.cos(pyaw) * z; COLLIDERS.add(wx, wz, 0.3); }
+    // green refuel zone on the left lane + shoulder in front of the station (stop here to fill up)
+    {
+      const s0 = WORLD.pumpS - WORLD.pumpZoneHalf, s1 = WORLD.pumpS + WORLD.pumpZoneHalf;
+      const pts: number[] = [], idx: number[] = []; let k = 0;
+      for (let s = s0; s <= s1; s += 2) {
+        const f = road.sample(s); const a = -(edge - 0.2), b = -0.4;
+        pts.push(f.x + f.rx * a, 0.016, f.z + f.rz * a, f.x + f.rx * b, 0.016, f.z + f.rz * b);
+        if (s > s0) idx.push(k - 2, k - 1, k, k - 1, k + 1, k);
+        k += 2;
+      }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3)); g.setIndex(idx); g.computeVertexNormals();
+      this.pumpZoneMat = new THREE.MeshStandardMaterial({ color: 0x1f9d55, emissive: 0x0f5c30, emissiveIntensity: 0.4, transparent: true, opacity: 0.65, roughness: 0.9, depthWrite: false, side: THREE.DoubleSide });
+      const zone = new THREE.Mesh(g, this.pumpZoneMat); zone.renderOrder = 1; this.group.add(zone);
+      const lbl = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 1.6), new THREE.MeshBasicMaterial({ map: makeTextTexture(['⛽ তেল'], { bg: 'rgba(0,0,0,0)', fg: '#fff', w: 256, h: 128 }), transparent: true, depthWrite: false }));
+      const lf = road.sample(WORLD.pumpS); lbl.position.set(lf.x + lf.rx * -(edge / 2 + 0.3), 0.02, lf.z + lf.rz * -(edge / 2 + 0.3)); lbl.rotation.set(-Math.PI / 2, 0, 0); lbl.rotateZ(Math.atan2(-lf.tx, -lf.tz)); lbl.renderOrder = 2; this.group.add(lbl);
+    }
     // apron stub road from the shoulder to the pump pad
     const apron = new Road(4, { route: [[12, 0]], start: { x: pf.x + pf.rx * -(edge - 0.5), z: pf.z + pf.rz * -(edge - 0.5), yaw: pyaw - Math.PI / 2 }, ground: false }); apron.group.position.y = -0.004; this.group.add(apron.group);
   }
@@ -100,6 +117,7 @@ export class IncidentProps {
   wave(i: number, action: 'signal' | 'megaphone' | 'idle' | 'point') { this.officers[i]?.setAction(action); }
 
   update(dt: number) {
+    this.zoneT += dt; this.pumpZoneMat.opacity = 0.6 + 0.14 * Math.sin(this.zoneT * 4);
     const boom = this.barrier.getObjectByName('boom')!;
     const target = this.barrierOpen > 0.5 ? -1.3 : 0;
     boom.rotation.z += (target - boom.rotation.z) * Math.min(1, dt * 2.5);

@@ -544,6 +544,9 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
       const l = nt.clone(); l.repeat.copy(texL.repeat); l.offset.copy(texL.offset); l.needsUpdate = true;
       sideMatR.map = r; sideMatL.map = l; (doorPanel.material as THREE.MeshPhysicalMaterial).map = l;
       sideMatR.needsUpdate = sideMatL.needsUpdate = true;
+      // rear board + front strip carry the same colours (what the chase camera sees)
+      const rm = rearBoard.material as THREE.MeshStandardMaterial; rm.map?.dispose(); rm.map = makeRearBoard(opts.anisotropy, main, dark); rm.needsUpdate = true;
+      const fm = frontStrip.material as THREE.MeshStandardMaterial; fm.map?.dispose(); fm.map = makeFrontStrip(opts.anisotropy, main, dark); fm.needsUpdate = true;
       paint.color.set(main);
     },
     setDoor(open) { door.position.z = -(3.35 + 0.65) + open * 1.25; door.position.x = -W / 2 - 0.01 - open * 0.08; },

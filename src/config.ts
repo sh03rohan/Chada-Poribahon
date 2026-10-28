@@ -79,15 +79,15 @@ export const PHYSICS = {
   lateralDamping: 6.0,
 
   // --- Body motion (second-order spring-damper) -----------------------------
-  rollPerLateralG: 0.018,  // rad per m/s² lateral (~7° at the grip limit)
-  pitchPerLongG: 0.014,    // rad per m/s² longitudinal
-  bodyOmega: 7.5,          // natural frequency rad/s
-  bodyZeta: 0.42,          // damping ratio (<1 → slight overshoot, feels alive)
-  maxRoll: 0.16,
-  maxPitch: 0.09,
+  rollPerLateralG: 0.010,  // rad per m/s² lateral (~7° at the grip limit)
+  pitchPerLongG: 0.0045,    // rad per m/s² longitudinal
+  bodyOmega: 4.5,          // natural frequency rad/s
+  bodyZeta: 0.95,          // damping ratio (<1 → slight overshoot, feels alive)
+  maxRoll: 0.10,
+  maxPitch: 0.03,
   heaveOmega: 9,
-  heaveZeta: 0.6,
-  roughnessAmplitude: 0.002,   // m, base road roughness bounce (barely perceptible)
+  heaveZeta: 0.9,
+  roughnessAmplitude: 0.0004,   // m, base road roughness bounce (barely perceptible)
   roughnessOffRoad: 0.045,
 };
 
@@ -148,6 +148,7 @@ export const WORLD = {
   /** Kerbed footpaths + striped kerbs along these s ranges (towns); the Dhaka approach is a divided highway. */
   kerbRanges: [[1750, 2550], [3250, 3950], [5450, 6150]] as [number, number][],
   /** Phase 3 events */
+  pumpZoneHalf: 14,      // green refuel zone ±m around pumpS on the left lane
   tollS: 4600,           // toll plaza just before the bridge
   tollBulge: 2.4, tollHalfLength: 55,   // lanes widen around the plaza for the booth island
   railS: 1650,           // level crossing between the first chada spot and Rajbari

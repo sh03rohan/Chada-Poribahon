@@ -47,20 +47,21 @@ export class Fuel {
       this.rescueT += dt; this.passengers.mood = Math.max(0, this.passengers.mood - 0.2 * dt);
       if (this.rescueT > G.emptyTankRescueSec) { this.state = 'ok'; this.litres = G.emptyTankRescueLitres; this.warned.empty = false; this.hud.message(`${bn(G.emptyTankRescueLitres)} লিটার এলো — চলুন`, true, 2500); }
     }
-    // pump: stopped in the lay-by beside the pump (left of the shoulder)
-    const nearPump = Math.abs(s - WORLD.pumpS) < 18 && lateral < -(WORLD.roadWidth / 2 - 0.5);
+    // pump: stopped on the green refuel zone in front of the station (left lane + shoulder)
+    const nearPump = Math.abs(s - WORLD.pumpS) < WORLD.pumpZoneHalf + 4 && lateral < -0.8; // +4: the bus centre may sit just outside the painted zone
     if (nearPump && stopped && !this.pumpOffered && !this.choice.open && this.state === 'ok') {
       this.pumpTimer += dt;
       if (this.pumpTimer > 0.8) {
         this.pumpOffered = true;
-        const need = Math.min(G.fuelPumpLitres, G.fuelTankLitres - this.litres);
-        const cost = Math.round(need * G.fuelPricePerLitre);
-        const pick = await this.choice.ask('⛽ ফিলিং স্টেশন', `ট্যাঙ্কে ${bn(Math.round(this.fraction * 100))}% আছে। ${bn(Math.round(need))} লিটার ডিজেল ${bnTaka(cost)} — ঢাকা পর্যন্ত নিশ্চিন্তে যাওয়া যাবে।`, `${bn(Math.round(need))} লিটার (${bnTaka(cost)})`, 'লাগবে না', 15, 1);
-        if (pick === 0) { this.litres += need; this.ledger.fuel += cost; this.refuels++; this.hud.message(`${bn(Math.round(need))} লিটার ভরা হলো — ${bnTaka(cost)}`, true, 3000); }
+        const room = G.fuelTankLitres - this.litres;
+        const opts = [20, 40].filter((l) => l < room - 1).map((l) => ({ l, label: `${bn(l)} লিটার (${bnTaka(l * G.fuelPricePerLitre)})` }));
+        opts.push({ l: room, label: `ফুল ট্যাঙ্ক (${bn(Math.round(room))} লি, ${bnTaka(Math.round(room * G.fuelPricePerLitre))})` });
+        const pick = await this.choice.askMany('⛽ ফিলিং স্টেশন', `ট্যাঙ্কে ${bn(Math.round(this.fraction * 100))}% আছে। কত লিটার ডিজেল ভরবেন? (${bnTaka(G.fuelPricePerLitre)}/লিটার)`, [...opts.map((o) => o.label), 'লাগবে না'], 20, opts.length);
+        if (pick < opts.length) { const l = opts[pick].l, cost = Math.round(l * G.fuelPricePerLitre); this.litres += l; this.ledger.fuel += cost; this.refuels++; this.hud.message(`${bn(Math.round(l))} লিটার ভরা হলো — ${bnTaka(cost)}`, true, 3000); }
         setTimeout(() => { this.pumpOffered = false; }, 30000);
       }
     } else if (!nearPump) this.pumpTimer = 0;
-    if (Math.abs(s - WORLD.pumpS) < 200 && s < WORLD.pumpS && !this.pumpOffered && this.fraction < 0.6) this.hud.setHint('⛽ সামনে বামে পাম্প — তেল ভরতে পাম্পের পাশে থামুন');
+    if (Math.abs(s - WORLD.pumpS) < 200 && s < WORLD.pumpS && !this.pumpOffered && this.fraction < 0.6) this.hud.setHint('⛽ সামনে বামে পাম্প — তেল ভরতে পাম্পের সামনের সবুজ জোনে থামুন');
   }
 
   reset() { this.litres = G.fuelTankLitres; this.state = 'ok'; this.warned = { quarter: false, empty: false }; this.pumpOffered = false; this.refuels = 0; }

@@ -186,19 +186,19 @@ export function makeSideLivery(l: SideLiveryLayout, anisotropy: number, main = P
   return t;
 }
 
-export function makeRearBoard(anisotropy: number): THREE.CanvasTexture {
+export function makeRearBoard(anisotropy: number, main = PALETTE.red, dark = PALETTE.darkRed): THREE.CanvasTexture {
   const W = 1024, H = 512;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d')!;
   ctx.fillStyle = PALETTE.cream; ctx.fillRect(0, 0, W, H);
-  band(ctx, 0, 0, W, 54, PALETTE.red, PALETTE.yellow, 'scallop');
+  band(ctx, 0, 0, W, 54, main, PALETTE.yellow, 'scallop');
   band(ctx, 0, H - 54, W, 54, PALETTE.green, PALETTE.yellow, 'zigzag');
   ctx.fillStyle = PALETTE.yellow; ctx.fillRect(60, 90, W - 120, H - 180);
-  ctx.strokeStyle = PALETTE.darkRed; ctx.lineWidth = 8; ctx.strokeRect(60, 90, W - 120, H - 180);
-  paintText(ctx, 'চাঁদা পরিবহন', W / 2, H * 0.42, 150, PALETTE.red, PALETTE.darkRed, W - 180);
+  ctx.strokeStyle = dark; ctx.lineWidth = 8; ctx.strokeRect(60, 90, W - 120, H - 180);
+  paintText(ctx, 'চাঁদা পরিবহন', W / 2, H * 0.42, 150, main, dark, W - 180);
   paintText(ctx, 'সাবধানে চালান — আল্লাহ ভরসা', W / 2, H * 0.72, 54, PALETTE.darkGreen, PALETTE.cream, W - 200);
   flower(ctx, 110, H / 2, 60, PALETTE.pink, PALETTE.yellow, 7);
-  flower(ctx, W - 110, H / 2, 60, PALETTE.orange, PALETTE.red, 7);
+  flower(ctx, W - 110, H / 2, 60, PALETTE.orange, main, 7);
   brushNoise(ctx, W, H, 0.06);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = anisotropy;
   return t;
@@ -219,13 +219,13 @@ export function makeDestinationBoard(anisotropy: number): THREE.CanvasTexture {
 }
 
 /** Front bumper strip "চাঁদা পরিবহন" small. */
-export function makeFrontStrip(anisotropy: number): THREE.CanvasTexture {
+export function makeFrontStrip(anisotropy: number, main = PALETTE.red, dark = PALETTE.darkRed): THREE.CanvasTexture {
   const W = 1024, H = 128;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d')!;
-  band(ctx, 0, 0, W, H, PALETTE.red, PALETTE.yellow, 'diamond');
+  band(ctx, 0, 0, W, H, main, PALETTE.yellow, 'diamond');
   ctx.fillStyle = PALETTE.yellow; ctx.fillRect(W * 0.25, 10, W * 0.5, H - 20);
-  paintText(ctx, 'চাঁদা পরিবহন', W / 2, H / 2, 76, PALETTE.red, PALETTE.darkRed, W * 0.46);
+  paintText(ctx, 'চাঁদা পরিবহন', W / 2, H / 2, 76, main, dark, W * 0.46);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = anisotropy;
   return t;
 }

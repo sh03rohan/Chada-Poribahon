@@ -469,7 +469,7 @@ class Game {
       if (!this.eventProps.wreckClear && Math.abs(this.routeS - WORLD.accidentS) < 60) this.eventProps.wreckCircles(this.dynCircles);
       const col = resolveBusCollisions(this.cur, this.dynCircles, this.colScratch, this.contacts);
       if (col.contacts.length) this.traffic.applyContacts(col.contacts);
-      if (col.hit && col.impact > 2.0 && this.elapsed - this.lastCrash > 2.5) { this.lastCrash = this.elapsed; this.crashPending = true; this.crashes++; this.crashKind = col.contacts.some((c) => c.into > 1) ? 'traffic' : 'object'; this.crashImpact = col.impact; }
+      if (col.hit && col.impact > 2.0 && this.simTime - this.lastCrash > 2.5) { this.lastCrash = this.simTime; /* sim time: counts in scripted runs too */ this.crashPending = true; this.crashes++; this.crashKind = col.contacts.some((c) => c.into > 1) ? 'traffic' : 'object'; this.crashImpact = col.impact; }
     }
     this.simTime += dt;
     this.debug.physicsSample(this.cur.v * 3.6, inp.throttle, this.simTime);
@@ -600,7 +600,7 @@ class Game {
     else if (s > WORLD.forkS - 200 && s < WORLD.forkS + 40) this.hud.setBanner('মোড় সামনে', 'ঢাকা ➜ পদ্মা সেতু: সোজা যান');
     else if (this.incidents.checkpoint === 'approach' || this.incidents.checkpoint === 'stopped') this.hud.setBanner(this.incidents.checkpoint === 'stopped' ? 'চেকপোস্ট — কাগজপত্র চেক' : 'পুলিশ চেকপোস্ট সামনে', this.incidents.checkpoint === 'stopped' ? 'একটু অপেক্ষা করুন' : `${GAMEPLAY.checkpointSpeedLimitKmh} কিমি/ঘ-এর নিচে নামুন`, this.incidents.checkpoint === 'stopped');
     else if (s > WORLD.speedCameraS - 180 && s < WORLD.speedCameraS) this.hud.setBanner('স্পিড ক্যামেরা সামনে', `সর্বোচ্চ ${WORLD.speedCameraLimitKmh} কিমি/ঘ`);
-    else if (this.fuel.fraction < 0.6 && s > WORLD.pumpS - 220 && s < WORLD.pumpS + 10) this.hud.setBanner('⛽ পাম্প সামনে বামে', 'পাম্পের পাশে থামলে তেল ভরা যাবে');
+    else if (this.fuel.fraction < 0.6 && s > WORLD.pumpS - 220 && s < WORLD.pumpS + 10) this.hud.setBanner('⛽ পাম্প সামনে বামে', 'সবুজ জোনে থামলে তেল ভরা যাবে');
     else if (s > WORLD.finishS - 400) this.hud.setBanner('ঢাকা প্রায় এসে গেছে', 'শেষ লাইনের দিকে চালান');
     else this.hud.setBanner(null);
   }

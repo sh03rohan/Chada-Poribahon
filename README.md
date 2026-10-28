@@ -270,7 +270,8 @@ fares + tips − fines − chada − fuel − charity) and the results card brea
 * **Fuel** (`game/fuel.ts`): the tank starts 30–38 % full (the owner never fills it); burn scales
   with throttle × rpm (`GAMEPLAY.fuelBurnPerSec`, arcade-scaled so a hard-driven 6 km run uses
   ~20 % of the tank). A filling station sits in a lay-by on the left before the Faridpur junction
-  (`WORLD.pumpS`): stop beside the pumps and the attendant offers 40 L for ৳2,600. An empty tank
+  (`WORLD.pumpS`): stop on the green refuel zone painted on the left lane in front of it and pick 20 L, 40 L
+  or a full tank (৳65/L). An empty tank
   cuts the engine; a jerrycan rescue costs ৳800 and 20 s.
 * **Traffic**: cycle-rickshaws and goods vans crawl in the kerb lane; cars, autos and bikes overtake
   slow leaders when the oncoming lane is clear (`overtake`), and CNG autos cut in ahead of a moving
