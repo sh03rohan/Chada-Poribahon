@@ -20,7 +20,7 @@ export interface RoadSample { x: number; z: number; tx: number; tz: number; rx: 
 /** Wrong-turn branch at the fork: bends right, runs to a ferry-ghat queue, ends in a turnaround pad. */
 export const BRANCH_ROUTE: [number, number][] = [[60, 0], [140, 38], [230, 0], [60, -12], [40, 0]];
 
-export interface RoadOptions { route?: [number, number][]; start?: { x: number; z: number; yaw: number }; ground?: boolean; roundabouts?: number[]; }
+export interface RoadOptions { route?: [number, number][]; start?: { x: number; z: number; yaw: number }; ground?: boolean; roundabouts?: number[]; /** toll plaza centre: lanes widen around it for the booth island */ tollS?: number; }
 
 export class Road {
   readonly spacing = WORLD.frameSpacing;
@@ -33,12 +33,14 @@ export class Road {
     let b = 0;
     // divided highway: both carriageways shift outward to make room for the median (60 m ramp)
     if (s > WORLD.highwayStartS - 60) b = (WORLD.medianWidth / 2 + 0.4) * Math.min(1, (s - (WORLD.highwayStartS - 60)) / 60);
+    if (this.tollS >= 0) { const d = Math.abs(s - this.tollS) / WORLD.tollHalfLength; if (d < 1) b = Math.max(b, WORLD.tollBulge * (0.5 - 0.5 * Math.cos(Math.PI * (1 - d)))); }
     for (const sc of this.roundabouts) {
       const d = Math.abs(s - sc) / WORLD.roundaboutHalfLength;
       if (d < 1) b = Math.max(b, WORLD.roundaboutBulge * (0.5 - 0.5 * Math.cos(Math.PI * (1 - d))));
     }
     return b;
   }
+  private tollS = -1;
   px!: Float32Array; pz!: Float32Array; tx!: Float32Array; tz!: Float32Array;
   count = 0;
   length = 0;
@@ -50,7 +52,7 @@ export class Road {
   constructor(anisotropy: number, opts: RoadOptions = {}) {
     this.route = opts.route ?? MAIN_ROUTE;
     this.start = opts.start ?? { x: 0, z: 0, yaw: 0 };
-    this.roundabouts = opts.roundabouts ?? [];
+    this.roundabouts = opts.roundabouts ?? []; this.tollS = opts.tollS ?? -1;
     this.buildFrames();
     this.buildMeshes(anisotropy, opts.ground ?? true);
   }

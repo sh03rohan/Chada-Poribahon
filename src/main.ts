@@ -4,11 +4,11 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
-import { PHYSICS, WORLD, QUALITY, CAMERA, GAMEPLAY, type QualityTier } from './config.ts';
+import { PHYSICS, WORLD, QUALITY, CAMERA, GAMEPLAY, BUS_DIMENSIONS, type QualityTier } from './config.ts';
 import { detectQuality, TIER_LABEL, isMobile } from './quality.ts';
 import { InputManager } from './input.ts';
 import { loadBanglaFont, verifyBanglaShaping } from './util/fonts.ts';
-import { bn, bnKm, bnTime, bnClock } from './util/bangla.ts';
+import { bn, bnKm, bnTime, bnClock, bnTaka } from './util/bangla.ts';
 import { createState, copyState, stepVehicle, lerpPose, type VehicleInput } from './vehicle/physics.ts';
 import { loadBus } from './vehicle/loadBus.ts';
 import type { BusRig } from './vehicle/busModel.ts';
@@ -31,6 +31,7 @@ import { DebugOverlay } from './game/debug.ts';
 import { showResults } from './game/results.ts';
 import { Career, LIVERIES } from './game/career.ts';
 import { Damage } from './game/damage.ts';
+import { EventProps } from './world/eventProps.ts';
 import { buildGaragePanel, applyUpgradeMods } from './game/garage.ts';
 import { dailyContracts, evaluateContract, renderContractPicker, CONTRACTS, type ContractDef } from './game/contracts.ts';
 import { MODS } from './vehicle/physics.ts';
@@ -76,7 +77,7 @@ class Game {
   ledger = new Ledger();
   career = new Career();
   choice = new ChoicePanel();
-  incidentProps!: IncidentProps; incidents!: Incidents; fuel!: Fuel; damage!: Damage;
+  incidentProps!: IncidentProps; incidents!: Incidents; fuel!: Fuel; damage!: Damage; eventProps!: EventProps;
   screen: Screen = 'landing';
   paused = false;
 
@@ -106,6 +107,8 @@ class Game {
   lastContract: import('./game/contracts.ts').ContractResult | null = null;
   private contractPick: (() => ContractDef | null) | null = null;
   crashes = 0; fuelEmptied = false;
+  /** Phase 3: ferry taken on the wrong branch; passengers riding on the roof */
+  ferryTaken = false; private ferryOffered = false; roof = 0; private roofRiders: Person[] = []; private roofOffered = false;
   private mirrorTarget: THREE.WebGLRenderTarget | null = null;
   private mirrorCam: THREE.PerspectiveCamera | null = null;
   private tutorialStep = 0; private tutorialTimer = 0;
@@ -150,7 +153,7 @@ class Game {
     const q = QUALITY[this.tier];
     const maxAniso = Math.min(q.anisotropy, this.renderer.capabilities.getMaxAnisotropy());
 
-    this.road = new Road(maxAniso, { roundabouts: WORLD.roundabouts.map((r) => r.s) });
+    this.road = new Road(maxAniso, { roundabouts: WORLD.roundabouts.map((r) => r.s), tollS: WORLD.tollS });
     this.scene.add(this.road.group);
     this.roundabouts = new Roundabouts(this.road, maxAniso);
     this.scene.add(this.roundabouts.group);
@@ -173,6 +176,7 @@ class Game {
     this.traffic = new Traffic(this.road, this.tier, this.people);
     this.scene.add(this.traffic.group);
     this.incidentProps = new IncidentProps(this.road, this.people);
+    this.eventProps = new EventProps(this.road, this.people); this.scene.add(this.eventProps.group);
     this.scene.add(this.incidentProps.group);
     this.sky = new SkySystem(this.renderer, this.scene, q.shadows, q.shadowMapSize);
     this.weather = new Weather(this.scene, q.rainCount);
@@ -184,7 +188,7 @@ class Game {
     this.events = new RouteEvents(this.blockade, this.passengers, this.hud, this.bus, this.ledger);
     this.fuel = new Fuel(this.hud, this.ledger, this.choice, this.passengers);
     this.damage = new Damage(this.bus, this.hud, this.passengers);
-    this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people);
+    this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people); this.incidents.props3 = this.eventProps; this.incidents.onRoofCleared = () => this.clearRoof();
     this.map = new RouteMap(this.road, this.fork.branch, this.roundabouts.sideRoads);
     this.cinematic = new Cinematic(this.cineHost());
 
@@ -342,9 +346,10 @@ class Game {
     this.events.onStopBegin = (i) => this.beginBoarding(i);
     this.events.onStopEnd = (i) => this.endBoarding(i);
     if (this.incidents) this.incidents.reset();
-    this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people);
+    this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people); this.incidents.props3 = this.eventProps; this.incidents.onRoofCleared = () => this.clearRoof();
     this.fuel = new Fuel(this.hud, this.ledger, this.choice, this.passengers);
     this.crashes = 0; this.fuelEmptied = false;
+    this.ferryTaken = false; this.ferryOffered = false; this.roofOffered = false; this.clearRoof();
     this.damage = new Damage(this.bus, this.hud, this.passengers); this.damage.reset();
     this.fuel.litres = GAMEPLAY.fuelTankLitres * (GAMEPLAY.fuelStartFraction[0] + Math.random() * (GAMEPLAY.fuelStartFraction[1] - GAMEPLAY.fuelStartFraction[0])); // the owner never fills it
     const hr = this.clockHour(); this.events.waitingMultiplier = hr >= GAMEPLAY.morningRushStart && hr < GAMEPLAY.morningRushEnd ? 1.5 : (hr >= 21 || hr < 5) ? 0.5 : 1;
@@ -461,6 +466,7 @@ class Game {
       this.dynCircles.length = 0;
       if (!this.onBranch) this.traffic.nearbyCircles(this.routeS, 40, this.dynCircles);
       this.blockade.vanCircles(this.dynCircles);
+      if (!this.eventProps.wreckClear && Math.abs(this.routeS - WORLD.accidentS) < 60) this.eventProps.wreckCircles(this.dynCircles);
       const col = resolveBusCollisions(this.cur, this.dynCircles, this.colScratch, this.contacts);
       if (col.contacts.length) this.traffic.applyContacts(col.contacts);
       if (col.hit && col.impact > 2.0 && this.elapsed - this.lastCrash > 2.5) { this.lastCrash = this.elapsed; this.crashPending = true; this.crashes++; this.crashKind = col.contacts.some((c) => c.into > 1) ? 'traffic' : 'object'; this.crashImpact = col.impact; }
@@ -505,6 +511,12 @@ class Game {
       this.incidents.update(dt, this.routeS, kmh, this.bus.root.position, this.cur.yaw);
       void this.fuel.update(dt, this.routeS, kmh, this.lateral, kmh < 2);
       if (this.fuel.state === 'empty') this.fuelEmptied = true;
+      if (!this.ferryOffered && kmh < 2 && !this.choice.open && this.branchS > this.fork.branch.length - 70) {
+        // stopped in the ghat (last 70 m of the branch or on the turnaround pad just past its end)
+        const br = this.fork.locate(this.cur.x, this.cur.z, this.branchS);
+        if (br.s < this.fork.branch.length + 14 && Math.abs(br.lateral) < 16) { this.ferryOffered = true; void this.offerFerry(); }
+      }
+      if (this.roof > 0 && kmh > 60 && Math.random() < dt * 0.25) this.passengers.shout('roof');
       if (this.crashPending) {
         this.crashPending = false;
         const pen = Math.min(15, 3 + this.crashImpact * 0.8);
@@ -523,9 +535,10 @@ class Game {
     if (!this.paused) {
       this.blockade.update(dt);
       this.traffic.barrierS = this.blockade.active ? WORLD.andolonS - 1.2 : Infinity;
+      this.traffic.laneBarrierS = this.eventProps.wreckClear ? Infinity : WORLD.accidentS - 8;
       this.traffic.update(dt, this.routeS, this.lateral, this.cur.v, this.cam.camera.position, this.running && !this.finished && !this.onBranch && !this.cinematicMode);
       this.people.update(dt, this.cam.camera.position);
-      this.incidentProps.update(dt);
+      this.incidentProps.update(dt); this.eventProps.update(dt);
       this.stops.update(this.elapsed, this.routeS);
     }
 
@@ -549,6 +562,7 @@ class Game {
 
     if (this.screen === 'driving') {
       this.hud.update(kmh, this.cur.gear, this.passengers.mood, this.passengers.count, this.elapsed, WORLD.finishS - this.routeS, kmh < 0.5, this.ledger.net);
+      if (this.roof > 0) $('hud-pass').textContent += ` +${bn(this.roof)} ছাদে`;
       this.updateBanner();
       const fv = $('hud-fuel-val'); fv.textContent = bn(Math.round(this.fuel.fraction * 100)) + '%'; fv.classList.toggle('low', this.fuel.fraction < 0.25);
       this.damage.update(dt, kmh);
@@ -624,6 +638,44 @@ class Game {
     // anyone still queueing boards instantly; the alighters keep walking
     for (const p of this.stops.waiting[i].slice()) if (p.target || p.action === 'queue') this.stops.board(i, p);
     this.boarding = this.boarding.filter((p) => p.root.parent);
+    if (i === 0 && !this.roofOffered) { this.roofOffered = true; void this.offerRoof(); }
+  }
+
+  /** Rajbari: the helper wants to put extra passengers on the roof — more fare, less grip, trouble at the checkpoint. */
+  private async offerRoof() {
+    const n = GAMEPLAY.roofSeats, fare = n * GAMEPLAY.roofFare;
+    const pick = await this.choice.ask('“ওস্তাদ, ছাদে আরও ৮ জন নিই?”', `হেল্পার বলছে ছাদে ${bn(n)} জন নিলে ${bnTaka(fare)} বেশি আসবে। কিন্তু বাস দুলবে, গতি ${bn(GAMEPLAY.roofSpeedCapKmh)}-এর বেশি তোলা যাবে না, আর চেকপোস্টে ধরলে জরিমানা।`, `ছাদে নিন (+${bnTaka(fare)})`, 'না, ছাদে না', 10, 1);
+    if (pick !== 0 || this.screen !== 'driving') return;
+    this.roof = n; this.ledger.fares += fare; this.incidents.roofLoad = true;
+    MODS.roofGrip = 0.9; MODS.roofCapKmh = GAMEPLAY.roofSpeedCapKmh;
+    const seats: [number, number][] = [[-0.6, -3.6], [0.6, -3.6], [-0.6, -2.7], [0.6, -2.7], [-0.6, 2.7], [0.6, 2.7], [-0.6, 3.5], [0.6, 3.5]];
+    seats.slice(0, n).forEach(([x, z], k) => {
+      const p = new Person(VARIANTS[(k * 7 + 3) % VARIANTS.length]); p.root.position.set(x, BUS_DIMENSIONS.height + 0.1, z); p.root.rotation.y = Math.PI;
+      p.setAction('sit'); p.mesh.castShadow = false; p.mesh.frustumCulled = false; this.bus.body.add(p.root); this.people.add(p); this.roofRiders.push(p);
+    });
+    this.hud.message(`${bn(n)} জন ছাদে উঠল — ভাড়া +${bnTaka(fare)}। আস্তে চালান!`, true, 4000);
+    this.passengers.shout('roof', true);
+  }
+  clearRoof() {
+    for (const p of this.roofRiders) { this.bus.body.remove(p.root); this.people.remove(p); }
+    this.roofRiders = []; this.roof = 0; MODS.roofGrip = 1; MODS.roofCapKmh = Infinity;
+    if (this.incidents) this.incidents.roofLoad = false;
+  }
+
+  /** Daulatdia ghat at the end of the wrong branch: cross by ferry (slow, costs money, skips the road) or turn back. */
+  private async offerFerry() {
+    const pick = await this.choice.ask('⛴️ দৌলতদিয়া ফেরি ঘাট', `ফেরিতে পদ্মা পার হলে ${bnTaka(GAMEPLAY.ferryCost)} আর প্রায় ${bn(Math.round(GAMEPLAY.ferryWaitSec / 60 * 10) / 10)} মিনিট লাইন — ওপারে সরাসরি ঢাকা হাইওয়ে, কিন্তু ফরিদপুর-ভাঙ্গার যাত্রী হাতছাড়া।`, `ফেরিতে পার হন (${bnTaka(GAMEPLAY.ferryCost)})`, 'ঘুরে ফিরে যান', 15, 1);
+    if (pick !== 0 || this.screen !== 'driving') { this.ferryOffered = false; return; }
+    const fade = $('fade'); fade.classList.add('on');
+    await new Promise((r) => setTimeout(r, 800));
+    this.ferryTaken = true; this.ledger.toll += GAMEPLAY.ferryCost; this.elapsed += GAMEPLAY.ferryWaitSec;
+    this.passengers.mood = Math.max(0, this.passengers.mood - 8);
+    for (const i of [1, 2]) if (!this.events.stops[i].done) this.events.stops[i].missed = true; // served by the ferry route, no mood penalty
+    this.teleport(GAMEPLAY.ferryLandS); this.autopilotRoad = null;
+    this.events.updateBranch(0, false, 0);
+    this.incidents.checkpoint = 'cleared'; this.incidents.accident = 'passed'; this.incidents.toll = 'paid'; this.incidents.cameraDone = true;
+    this.hud.message(`⛴️ ফেরিতে পদ্মা পার — ${bn(Math.round(GAMEPLAY.ferryWaitSec / 60))} মিনিট গেল, এখন ঢাকা হাইওয়ে`, true, 5000);
+    setTimeout(() => fade.classList.remove('on'), 400);
   }
 
   /** Apply interpolated physics pose to the bus rig. */
@@ -648,7 +700,7 @@ class Game {
     const sm = this.passengers.summary;
     this.ledger.repair = this.damage.repairCost;
     const cr = evaluateContract(this.contract, {
-      timeSec: this.elapsed, mood: this.passengers.mood, missedStops: this.events.stops.filter((s) => s.missed).length, stopsDone: this.events.stopsDone, passengers: this.passengers.count,
+      timeSec: this.elapsed, mood: this.passengers.mood, missedStops: this.events.stops.filter((s) => s.missed).length, stopsDone: this.events.stopsDone, passengers: this.passengers.count + this.roof,
       fines: this.ledger.fines, hardBrakes: sm.hardBrakes, crashes: this.crashes, chadaPaid: this.ledger.chada, refuels: this.fuel.refuels, fuelEmptied: this.fuelEmptied, wrongBranches: this.events.wrongBranchCount,
     });
     this.lastContract = cr;
@@ -659,7 +711,7 @@ class Game {
       timeSec: this.elapsed, passengers: this.passengers.count, income: this.events.income, mood: this.passengers.mood,
       stars: this.passengers.stars(), shouts: sm.shouts, hardBrakes: sm.hardBrakes, swerves: sm.swerves, stoppedAtRajbari: this.events.stoppedAtRajbari,
       stopsDone: this.events.stopsDone, stopsTotal: WORLD.stops.filter((x) => x.waiting > 0).length, fares: this.ledger.fares, fines: this.ledger.fines, chada: this.ledger.chada, fuel: this.ledger.fuel, charity: this.ledger.charity,
-      career: outcome, contractText: cr?.text, repair: this.ledger.repair, damage: this.damage.value,
+      career: outcome, contractText: cr?.text, repair: this.ledger.repair, damage: this.damage.value, toll: this.ledger.toll,
     }, () => { this.startRun(); });
   }
 
@@ -692,8 +744,9 @@ class Game {
       this.blockade.update(h);
       this.incidents.update(h, this.routeS, Math.abs(this.cur.v) * 3.6, this.bus.root.position, this.cur.yaw);
       void this.fuel.update(h, this.routeS, Math.abs(this.cur.v) * 3.6, this.lateral, Math.abs(this.cur.v) * 3.6 < 2);
-      this.incidentProps.update(h);
+      this.incidentProps.update(h); this.eventProps.update(h);
       this.traffic.barrierS = this.blockade.active ? WORLD.andolonS - 1.2 : Infinity;
+      this.traffic.laneBarrierS = this.eventProps.wreckClear ? Infinity : WORLD.accidentS - 8;
       if (i % 4 === 0) this.traffic.update(h * 4, this.routeS, this.lateral, this.cur.v, this.cam.camera.position, !this.onBranch);
       this.elapsed += h;
     }
@@ -708,6 +761,7 @@ class Game {
     copyState(this.cur, st); copyState(this.prev, st); this.branchS = s; this.syncVisual(1); this.cam.snap();
   }
   teleport(s: number) {
+    if (this.choice.open) this.choice.cancel(); // a pending prompt would hold the handbrake at the new spot
     const f = this.road.sample(s);
     const lane = -WORLD.laneWidth / 2;
     const st = createState(f.x + f.rx * lane, f.z + f.rz * lane, this.road.yawAt(s));
@@ -722,7 +776,7 @@ class Game {
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
       fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
       checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
-      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, damage: this.damage.value, mods: { ...MODS },
+      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {

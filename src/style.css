@@ -218,6 +218,9 @@ input[type=range] { width: 100%; accent-color: var(--red); }
   -webkit-mask-image: radial-gradient(circle at 62% 38%, #000 0, #000 90px, transparent 230px); mask-image: radial-gradient(circle at 62% 38%, #000 0, #000 90px, transparent 230px); }
 #hud-damage-val.low { color: #ff6b6b; }
 
+#fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.7s; z-index: 8; }
+#fade.on { opacity: 1; pointer-events: auto; }
+
 /* ---- Debug ---- */
 #debug {
   position: fixed; left: 8px; bottom: 8px; background: rgba(0, 0, 0, 0.7); color: #9f9; font: 12px/1.4 monospace;

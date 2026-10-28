@@ -280,7 +280,7 @@ test('phase 2: police checkpoint — speeding earns a ৳500 fine + hold, slow p
   for (let i = 0; i < 40; i++) { st = await sim(page, 0.5, { throttle: 0.3, autopilot: true }); if (st.kmh > 20) st = await sim(page, 0.5, { throttle: 0, autopilot: true }); if (st.s > 3010) break; }
   expect(st.checkpoint).toBe('cleared'); expect(st.ledger.fines).toBe(0);
   // speed camera on the bridge
-  await g(page, '__game.teleport(4560)'); // 340 m run-up: the bus is past 80 km/h at the gantry
+  await g(page, '__game.incidents.toll = "paid"; __game.eventProps.setTollOpen(true); __game.teleport(4560)'); // toll already paid; 340 m run-up: the bus is past 80 km/h at the gantry
   st = await sim(page, 28, { throttle: 1, autopilot: true });
   expect(st.cameraDone).toBe(true); expect(st.ledger.fines).toBe(300);
   expect(errors).toEqual([]);

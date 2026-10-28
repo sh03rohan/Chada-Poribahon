@@ -29,6 +29,8 @@ export class ChoicePanel {
     if (timeoutSec > 0) this.timer = window.setTimeout(() => this.pick(timeoutChoice), timeoutSec * 1000);
     return new Promise((res) => { this.resolve = res; });
   }
+  /** Dismiss an open prompt as if the player picked `i` (teleports / resets). */
+  cancel(i: 0 | 1 = 1) { this.pick(i); }
   private pick(i: 0 | 1) {
     const r = this.resolve; if (!r) return;
     this.resolve = null; this.root.classList.add('hidden'); removeEventListener('keydown', this.onKey);

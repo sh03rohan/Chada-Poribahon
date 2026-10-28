@@ -98,8 +98,8 @@ test('damage: crashes add damage, cap speed and weaken brakes; repair is charged
   console.log('after 3 rams', st);
   expect(st.damage).toBeGreaterThanOrEqual(50); expect(st.mods.dmgBrake).toBeLessThan(1); expect(st.mods.speedCapKmh).not.toBeNull();
   expect(await page.locator('#hud-damage').isVisible()).toBe(true);
-  await g(page, '__game.switchCamera("cockpit")'); await page.waitForTimeout(800);
-  expect(await page.locator('#crack').isVisible(), 'cracked windscreen in cockpit').toBe(true);
+  await g(page, '__game.switchCamera("cockpit")');
+  await expect(page.locator('#crack'), 'cracked windscreen in cockpit').toBeVisible({ timeout: 8000 });
   await page.screenshot({ path: `${SHOTS}/damage-cockpit.png` });
   await g(page, '__game.switchCamera("chase")');
   const top = await g(page, '(() => { __game.teleport(4660); return __game.simulate(40, { throttle: 1, autopilot: true }).topSpeed; })()') as number;
@@ -115,5 +115,80 @@ test('damage: crashes add damage, cap speed and weaken brakes; repair is charged
   const after = await g(page, '(() => { const s = __game.stats(); return { damage: s.damage, cap: s.mods.speedCapKmh, brake: s.mods.dmgBrake }; })()') as { damage: number; cap: number | null; brake: number };
   expect(after.damage).toBe(0); expect(after.cap ?? Infinity).toBe(Infinity); expect(after.brake).toBe(1);
   expect(await page.locator('#hud-damage').isVisible()).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+const ev = (page: Page, sec: number, inp: Record<string, unknown>) => page.evaluate(([sec, inp]) => { const st = (window as unknown as { __game: { simulate(s: number, i: unknown): Record<string, unknown> } }).__game.simulate(sec as number, inp); return { s: st.s, kmh: st.kmh, toll: st.toll, rail: st.rail, accident: st.accident, train: st.trainActive, fines: (st.ledger as { fines: number; toll: number }).fines, tollPaid: (st.ledger as { toll: number }).toll, crashes: st.crashes }; }, [sec, inp]) as Promise<{ s: number; kmh: number; toll: string; rail: string; accident: string; train: boolean; fines: number; tollPaid: number; crashes: number }>;
+
+test('events: level crossing holds the bus while the train passes; accident lane clears after waiting; toll plaza takes ৳1,500', async ({ page }) => {
+  const errors = await boot(page, 'autostart=1&quality=low&view=chase&hour=12');
+  await g(page, '__game.traffic.enabled = false; __game.teleport(1400)');
+  let st = await ev(page, 9, { throttle: 1, autopilot: true });
+  expect(st.rail, 'gates down, train launched').toBe('closed'); expect(st.train).toBe(true);
+  st = await ev(page, 9, { throttle: 1, autopilot: true });
+  expect(st.kmh, 'held at the gate').toBeLessThan(1); expect(st.s).toBeLessThan(1645);
+  await page.screenshot({ path: `${SHOTS}/event-rail.png` });
+  for (let i = 0; i < 6 && st.rail !== 'cleared'; i++) st = await ev(page, 3, { throttle: 1, autopilot: true });
+  expect(st.rail).toBe('cleared');
+  st = await ev(page, 6, { throttle: 1, autopilot: true });
+  expect(st.s, 'drove across after the train').toBeGreaterThan(1700);
+  // accident: stop before the wreck, wait, lane clears
+  await g(page, '__game.incidents.reset(); __game.teleport(3060)');
+  st = await ev(page, 8, { throttle: 1, autopilot: true });
+  expect(st.accident).toBe('approach');
+  for (let i = 0; i < 60 && st.s < 3195; i++) st = await ev(page, 0.5, { throttle: 0.4, autopilot: true });
+  for (let i = 0; i < 20 && st.kmh > 2; i++) st = await ev(page, 0.5, { throttle: 0, brake: 1, autopilot: true });
+  st = await ev(page, 1.5, { throttle: 0, handbrake: true, autopilot: true });
+  expect(st.accident).toBe('waiting');
+  await page.screenshot({ path: `${SHOTS}/event-accident.png` });
+  st = await ev(page, 27, { throttle: 0, handbrake: true, autopilot: true });
+  expect(st.accident).toBe('cleared');
+  const c0 = st.crashes;
+  st = await ev(page, 8, { throttle: 1, autopilot: true });
+  expect(st.s).toBeGreaterThan(3270); expect(st.crashes, 'no collision with the towed wreck').toBe(c0);
+  // toll
+  await g(page, '__game.incidents.reset(); __game.teleport(4380)');
+  st = await ev(page, 20, { throttle: 1, autopilot: true });
+  expect(st.toll).toBe('asking'); expect(st.kmh).toBeLessThan(1); expect(st.s).toBeLessThan(4600);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/event-toll.png` });
+  await page.click('#choice-a'); await page.waitForTimeout(1200);
+  st = await ev(page, 6, { throttle: 1, autopilot: true });
+  expect(st.toll).toBe('paid'); expect(st.tollPaid).toBe(1500); expect(st.s).toBeGreaterThan(4605);
+  expect(errors).toEqual([]);
+});
+
+test('events: ferry at Daulatdia ghat crosses to the Dhaka side for ৳1,200 and the wait', async ({ page }) => {
+  const errors = await boot(page, 'autostart=1&quality=low&view=chase&hour=12');
+  await g(page, '__game.traffic.enabled = false; __game.teleport(2380); __game.autopilotRoad = __game.fork.branch');
+  await g(page, '(() => { const len = __game.fork.branch.length; let b = 0; for (let i = 0; i < 120 && b < len - 120; i++) { __game.simulate(1, { throttle: b > len - 220 ? 0.25 : 0.8, autopilot: true }); b = __game.stats().branchS; } for (let i = 0; i < 30 && __game.stats().kmh > 2; i++) __game.simulate(0.5, { throttle: 0, brake: 1, autopilot: true }); __game.simulate(1.5, { throttle: 0, handbrake: true, autopilot: true }); })()');
+  await page.waitForFunction(() => (window as unknown as { __game: { choice: { open: boolean } } }).__game.choice.open, null, { timeout: 15_000 });
+  expect(await page.locator('#choice-title').innerText()).toContain('ফেরি');
+  await page.screenshot({ path: `${SHOTS}/event-ferry.png` });
+  const t0 = await g(page, '__game.elapsed') as number;
+  await page.click('#choice-a'); await page.waitForTimeout(1800);
+  const st = await g(page, '(() => { const s = __game.stats(); return { s: s.s, onBranch: s.onBranch, ferry: s.ferryTaken, toll: s.ledger.toll, elapsed: __game.elapsed, wrong: s.wrongBranch }; })()') as { s: number; onBranch: boolean; ferry: boolean; toll: number; elapsed: number; wrong: boolean };
+  console.log('ferry', st);
+  expect(st.ferry).toBe(true); expect(st.onBranch).toBe(false); expect(st.s).toBeGreaterThan(5400); expect(st.toll).toBe(1200); expect(st.elapsed - t0).toBeGreaterThan(85); expect(st.wrong).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('events: roof passengers at Rajbari pay extra, cap speed, and are fined off at the checkpoint', async ({ page }) => {
+  const errors = await boot(page, 'autostart=1&quality=low&view=chase&hour=12');
+  await g(page, '(() => { __game.traffic.enabled = false; __game.teleport(1880); let st = __game.stats(); for (let i = 0; i < 60 && st.s < 1972; i++) st = __game.simulate(0.5, { throttle: 1, autopilot: true }); for (let i = 0; i < 40 && st.kmh > 2; i++) st = __game.simulate(0.5, { throttle: 0, brake: 1, autopilot: true }); __game.simulate(1.5, { throttle: 0, handbrake: true, autopilot: true }); __game.simulate(6, { throttle: 0, handbrake: true, autopilot: true }); })()');
+  await page.waitForFunction(() => (window as unknown as { __game: { choice: { open: boolean } } }).__game.choice.open, null, { timeout: 15_000 });
+  expect(await page.locator('#choice-title').innerText()).toContain('ছাদে');
+  await page.click('#choice-a'); await page.waitForTimeout(400);
+  let st = await g(page, '(() => { const s = __game.stats(); return { roof: s.roof, fares: s.ledger.fares, cap: s.mods.roofCapKmh, grip: s.mods.roofGrip, fines: s.ledger.fines, cp: s.checkpoint }; })()') as { roof: number; fares: number; cap: number; grip: number; fines: number; cp: string };
+  expect(st.roof).toBe(8); expect(st.fares).toBe(10800 + 12 * 300 + 8 * 300); expect(st.cap).toBe(90); expect(st.grip).toBeCloseTo(0.9, 2);
+  await expect(page.locator('#hud-pass')).toContainText('ছাদে', { timeout: 8000 });
+  await page.screenshot({ path: `${SHOTS}/event-roof.png` });
+  const top = await g(page, '(() => { __game.teleport(2200); return __game.simulate(30, { throttle: 1, autopilot: true }).topSpeed; })()') as number;
+  expect(top).toBeLessThan(93);
+  await g(page, '__game.teleport(2820); __game.simulate(16, { throttle: 1, autopilot: true })');
+  await page.waitForTimeout(300);
+  st = await g(page, '(() => { const s = __game.stats(); return { roof: s.roof, fares: s.ledger.fares, cap: s.mods.roofCapKmh, grip: s.mods.roofGrip, fines: s.ledger.fines, cp: s.checkpoint }; })()') as typeof st;
+  console.log('checkpoint with roof load', st);
+  expect(st.cp).toBe('stopped'); expect(st.fines).toBe(1000); expect(st.roof).toBe(0); expect(st.cap ?? Infinity).toBe(Infinity);
   expect(errors).toEqual([]);
 });

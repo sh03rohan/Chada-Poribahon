@@ -107,7 +107,7 @@ function buildBus(body: number, stripe: number): THREE.BufferGeometry {
   for (let i = 0; i < 7; i++) parts.push(box(2.52, 0.95, 0.1, 0, 2.31, -4.0 + i * 1.5, body)); // window pillars
   return mergeGeometries(parts)!;
 }
-function buildTruck(cab: number, cargo: number): THREE.BufferGeometry {
+export function buildTruck(cab: number, cargo: number): THREE.BufferGeometry {
   const parts = [
     // cab silhouette with a raked windscreen
     profile([[-4.55, 0.55], [-4.55, 1.5], [-4.45, 1.95], [-4.0, 2.75], [-2.3, 2.75], [-2.3, 0.55]], 2.3, cab, 0.06),
@@ -193,6 +193,8 @@ export class Traffic {
   private m = new THREE.Matrix4(); private q = new THREE.Quaternion(); private v = new THREE.Vector3(); private sc = new THREE.Vector3(1, 1, 1);
   /** set by the game: barrier s (Infinity when clear) */
   barrierS = Infinity;
+  /** set by the game: a blocked travel lane (accident) — same-direction vehicles queue behind it */
+  laneBarrierS = Infinity;
   /** last collision info for the game loop */
   collisionS = Infinity;
   /** test hook: freeze traffic and ignore it for walls */
@@ -364,6 +366,7 @@ export class Traffic {
       // barrier (blockade) ahead
       const toBarrier = (this.barrierS - vh.s) * vh.dir - vh.len / 2 - 3;
       if (this.barrierS !== Infinity && toBarrier > -5 && toBarrier < gap) { gap = toBarrier; leadSpeed = 0; }
+      if (vh.dir === 1 && this.laneBarrierS !== Infinity && vh.overtake === 0) { const tb = this.laneBarrierS - vh.s - vh.len / 2 - 4; if (tb > -5 && tb < gap) { gap = tb; leadSpeed = 0; } }
       // target speed: the fastest speed from which we can still slow to the leader's speed
       // within (gap − margin) at a comfortable 4.5 m/s², plus a time headway
       target = Math.min(target, vh.maxSpeed);

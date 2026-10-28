@@ -1,4 +1,4 @@
-# চাঁদা পরিবহন (Chada Poribohon) — Phase 2
+# চাঁদা পরিবহন (Chada Poribohon) — Phase 3
 
 A browser-based Bangladeshi bus-driving game. Vite + TypeScript + three.js, no framework.
 Route: কুষ্টিয়া → রাজবাড়ী (stop) → ফরিদপুর (stop, andolon) → ভাঙ্গা (stop) → পদ্মা সেতু → গাবতলী, ঢাকা, ~6 km, left-hand traffic.
@@ -235,6 +235,9 @@ rig has no interior passenger instances or canvas speedometer.
   driver IK (hand-to-rim error < 6 cm) + glass still transparent, steering schemes + settings persistence across reload,
   minimap/full map/fork signboards + wrong-branch warning and recovery, landing + intro frames at 3/10/16/21/26 s with
   skip at every second, medium-tier draw-call budget and unchanged speed targets.
+* **phase 3** (`tests/phase3.spec.ts`) — career save/XP/level across reload, garage purchases changing braking
+  and acceleration + livery persistence, contracts met/missed, damage thresholds + repair + reset, level
+  crossing/accident/toll, ferry crossing, roof load + checkpoint.
 * **phase 2 gameplay** (same file) — Faridpur dwell with fares (+8 × ৳220) and the alms prompt,
   chada refuse (bus held, then released) and pay (−৳200), checkpoint speeding fine + hold vs. slow
   wave-through, speed camera fine, fuel burn + pump refuel + ledger on the results card, traffic mix
@@ -279,6 +282,48 @@ Tuning: `GAMEPLAY` in `src/config.ts` (`chadaAmount`, `checkpointFine`, `cameraF
 `fuelPricePerLitre`, `fuelPumpLitres`, `emptyTankRescue*`, rush hours) and `WORLD.stops`.
 `__game.stats()` reports `ledger`, `chada[]`, `checkpoint`, `fuel`, `stops[]` and `choiceOpen`
 for scripted checks; `scripts/probe-phase2.mjs` walks every incident with screenshots.
+
+## Phase 3 — career, garage, contracts, damage and more road
+
+* **Career profile** (`game/career.ts`, localStorage `cp-career`): every trip's net income goes into the
+  driver's **balance**; XP (stars, passengers, stops served, minus fines and hard braking) drives seven
+  levels with titles (হেল্পার → লিজেন্ড). The results card shows the delta and level-ups; the landing page
+  shows a career chip with the XP bar.
+* **Garage** (`game/garage.ts`, from the main menu or the pause menu): brakes (3 levels, +12 % each),
+  engine (3 levels, +8 % torque), tyres (3 levels, +6 % grip), an air horn, and five paint schemes that
+  repaint the livery bands and name board (`BusRig.setLivery`). Upgrades are physics multipliers in
+  `vehicle/physics.ts` `MODS`, applied before every run.
+* **Daily contracts** (`game/contracts.ts`): three offers per calendar day on the pre-trip card, filtered
+  by level (on time, passenger service, safe driver, full load, honest driver, fuel saver, express,
+  perfect trip). A met contract pays a bonus + XP at Dhaka; the results card says which.
+* **Damage** (`game/damage.ts`): crashes add damage by impact speed (`GAMEPLAY.damagePerImpactMs`).
+  ≥30 % the left headlight dies, ≥50 % the bumper bends and brakes/engine weaken with an 85 km/h cap,
+  ≥75 % engine smoke, 55 km/h cap and frightened passengers, 100 % limp mode at 20 km/h. Cockpit view
+  gets a cracked-windscreen overlay. Repair (`repairCostPerPercent` × damage) is charged at Dhaka.
+* **New road events** (`world/eventProps.ts` + `game/incidents.ts`):
+  * **Railway crossing** (`WORLD.railS`): gates drop with blinking signals when the bus is 110–170 m out,
+    a loco + five coaches cross on real rails, the gates lift once it has passed (hard wall meanwhile).
+  * **Accident scene** (`WORLD.accidentS`): an overturned truck, tape, a police officer, onlookers and an
+    ambulance block the left lane. Wait 25 s stopped within 70 m and a wrecker pulls it onto the shoulder;
+    or pass carefully in the oncoming lane (oncoming traffic queues/squeezes as usual). Same-direction
+    traffic queues behind the lane barrier (`Traffic.laneBarrierS`).
+  * **Toll plaza** (`WORLD.tollS`, lanes widen around a booth island): stop at the boom and choose — pay
+    ৳1,500 (the helper hands it over) or dodge; dodging has a 60 % chance of a ৳3,000 camera fine and a
+    complaint at later checks.
+  * **Ferry** at the end of the wrong branch (Daulatdia ghat): cross for ৳1,200 and a 90 s wait, landing on
+    the Dhaka highway (skips the checkpoint, blockade and toll; Faridpur/Bhanga passengers are lost), or
+    turn back.
+  * **Roof passengers** at Rajbari: the helper offers eight roof seats (+৳2,400). The bus loses 10 % grip
+    and is capped at 90 km/h, roof riders shout above 60 km/h, and the checkpoint fines ৳1,000 and makes
+    them get down.
+* Ledger adds `repair` and `toll` (ferry money counts as toll); the results card lists both.
+
+Tuning: `GAMEPLAY` (`tollAmount`, `tollDodgeFine`, `accidentWaitSec`, `ferryCost`, `ferryWaitSec`,
+`roofSeats`, `roofFare`, `roofFine`, `roofSpeedCapKmh`, `damagePerImpactMs`, `repairCostPerPercent`),
+`WORLD` (`tollS`, `railS`, `accidentS`), `LEVEL_XP` / `UPGRADES` / `LIVERIES` in `game/career.ts`,
+`CONTRACTS` in `game/contracts.ts`. Probes: `scripts/probe-career.mjs`, `probe-garage.mjs`,
+`probe-contracts.mjs`, `probe-damage.mjs`, `probe-events.mjs`, `probe-ferry-roof.mjs`.
+Tests: `tests/phase3.spec.ts` (career, garage, contracts, damage, the three event groups).
 
 ## Extension points
 

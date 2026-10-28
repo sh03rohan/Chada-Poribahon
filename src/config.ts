@@ -147,6 +147,11 @@ export const WORLD = {
   fogDensity: 0.00085,
   /** Kerbed footpaths + striped kerbs along these s ranges (towns); the Dhaka approach is a divided highway. */
   kerbRanges: [[1750, 2550], [3250, 3950], [5450, 6150]] as [number, number][],
+  /** Phase 3 events */
+  tollS: 4600,           // toll plaza just before the bridge
+  tollBulge: 2.4, tollHalfLength: 55,   // lanes widen around the plaza for the booth island
+  railS: 1650,           // level crossing between the first chada spot and Rajbari
+  accidentS: 3250,       // overturned truck blocking the left lane after the checkpoint
   highwayStartS: 5400,   // divided highway with a planted median from here to the finish
   medianWidth: 2.4,
 };
@@ -181,6 +186,18 @@ export const GAMEPLAY = {
   emptyTankRescueLitres: 20,
   emptyTankRescueSec: 20,
   morningRushStart: 7, morningRushEnd: 10,
+  /** Phase 3 events */
+  tollAmount: 1500,
+  tollDodgeFine: 3000,
+  tollDodgeCaughtChance: 0.6,
+  accidentWaitSec: 25,
+  ferryCost: 1200,
+  ferryWaitSec: 90,
+  ferryLandS: 5420,
+  roofSeats: 8,
+  roofFare: 300,
+  roofFine: 1000,
+  roofSpeedCapKmh: 90,
   /** Phase 3 damage: % per m/s of impact above 1.2 m/s; repair ৳ per % at Dhaka */
   damagePerImpactMs: 2.4,
   repairCostPerPercent: 45,

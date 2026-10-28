@@ -1,6 +1,7 @@
 import { WORLD, GAMEPLAY as G } from '../config.ts';
 import { bnTaka } from '../util/bangla.ts';
 import type { IncidentProps } from '../world/incidentProps.ts';
+import type { EventProps } from '../world/eventProps.ts';
 import type { Passengers } from './passengers.ts';
 import type { Hud } from './hud.ts';
 import type { Ledger } from './ledger.ts';
@@ -32,13 +33,22 @@ export class Incidents {
   private blockS = Infinity;
   private almsPerson: Person | null = null;
   fines = 0;
+  // ---- Phase 3 events
+  toll: 'idle' | 'approach' | 'asking' | 'paid' | 'dodged' = 'idle';
+  rail: 'idle' | 'closed' | 'cleared' = 'idle';
+  accident: 'idle' | 'approach' | 'waiting' | 'cleared' | 'passed' = 'idle';
+  accidentWait = 0;
+  /** set by the game while passengers ride on the roof; the checkpoint makes them get down */
+  roofLoad = false;
+  onRoofCleared: (() => void) | null = null;
+  props3!: EventProps;
 
   constructor(private props: IncidentProps, private passengers: Passengers, private hud: Hud, private ledger: Ledger, private choice: ChoicePanel, private events: RouteEvents,
     private scene: THREE.Scene, private people: { add(p: Person): void; remove(p: Person): void }) {}
 
   /** Hard stop ahead from incidents (chada man standing in the lane, checkpoint boom). */
   wallDistance(sFront: number): number {
-    let d = this.props.checkpointWall(sFront);
+    let d = Math.min(this.props.checkpointWall(sFront), this.props3 ? Math.min(this.props3.tollWall(sFront), this.props3.railWall(sFront)) : Infinity);
     if (this.blockS !== Infinity) { const b = this.blockS - sFront; if (b > -3) d = Math.min(d, Math.max(0, b)); }
     return d;
   }
@@ -47,6 +57,57 @@ export class Incidents {
     this.updateChada(dt, s, kmh, busWorld, yaw);
     this.updateCheckpoint(dt, s, kmh);
     this.updateCamera(s, kmh);
+    if (this.props3) { this.updateToll(dt, s, kmh); this.updateRail(s); this.updateAccident(dt, s, kmh); }
+  }
+
+  // ---------------------------------------------------------------- toll plaza
+  private updateToll(dt: number, s: number, kmh: number) {
+    void dt;
+    const d = WORLD.tollS - s;
+    if (this.toll === 'idle' && d < 200 && d > 0) { this.toll = 'approach'; this.hud.message(`সামনে পদ্মা সেতু টোল প্লাজা — থামুন, টোল ${bnTaka(G.tollAmount)}`, true, 4000); }
+    else if (this.toll === 'approach' && d < 9 && d > -2 && kmh < 1 && !this.choice.open) { this.toll = 'asking'; void this.askToll(); }
+  }
+  private async askToll() {
+    this.props3.tollAttendant.setAction('talk');
+    const pick = await this.choice.ask('টোল প্লাজা', `হেল্পার টোলের ${bnTaka(G.tollAmount)} দেবে — নাকি বুথের লোক অন্যদিকে তাকালেই টান দেবেন?`, `টোল দিন (${bnTaka(G.tollAmount)})`, 'ফাঁকি দিন', 8, 0);
+    if (pick === 0) {
+      this.ledger.toll += G.tollAmount; this.toll = 'paid';
+      this.hud.message(`টোল ${bnTaka(G.tollAmount)} দেওয়া হলো — সেতুতে উঠুন`, true, 3000);
+      this.props3.tollAttendant.setAction('wave');
+      setTimeout(() => this.props3.setTollOpen(true), 900);
+    } else {
+      this.toll = 'dodged'; this.props3.setTollOpen(true);
+      if (Math.random() < G.tollDodgeCaughtChance) {
+        this.ledger.fines += G.tollDodgeFine; this.fines++; this.chadaRefused = true;
+        this.hud.message(`📸 টোল ফাঁকি — ক্যামেরায় ধরা, জরিমানা ${bnTaka(G.tollDodgeFine)}!`, false, 5000);
+        this.passengers.mood = Math.max(0, this.passengers.mood - 6); this.passengers.shout('wait', true);
+      } else { this.hud.message('টান দিয়ে বেরিয়ে গেলেন — কেউ দেখেনি… এবারের মতো', true, 4000); this.passengers.mood = Math.max(0, this.passengers.mood - 2); }
+      this.props3.tollAttendant.setAction('point');
+    }
+  }
+
+  // ---------------------------------------------------------------- level crossing
+  private updateRail(s: number) {
+    const d = WORLD.railS - s;
+    if (this.rail === 'idle' && d < 170 && d > 110) {
+      this.rail = 'closed'; this.props3.closeGates(); this.props3.startTrain();
+      this.hud.message('🚂 রেল ক্রসিং — গেট নামছে, ট্রেন আসছে! থামুন', false, 4500);
+      this.passengers.shout('wait', true);
+    } else if (this.rail === 'closed' && this.props3.trainPassed) {
+      this.rail = 'cleared'; this.props3.openGates();
+      this.hud.message('ট্রেন গেছে — গেট উঠছে, চলুন', true, 3000);
+    }
+  }
+
+  // ---------------------------------------------------------------- accident ahead
+  private updateAccident(dt: number, s: number, kmh: number) {
+    const d = WORLD.accidentS - s;
+    if (this.accident === 'idle' && d < 230 && d > 0) { this.accident = 'approach'; this.hud.message('সামনে দুর্ঘটনা — ট্রাক উল্টে বাম লেন বন্ধ। অপেক্ষা করুন বা সাবধানে ডান দিক দিয়ে পাশ কাটান', false, 5500); this.passengers.shout('wait', true); }
+    if ((this.accident === 'approach' || this.accident === 'waiting') && d > -2 && d < 70 && kmh < 2) {
+      this.accident = 'waiting'; this.accidentWait += dt;
+      if (this.accidentWait > G.accidentWaitSec) { this.accident = 'cleared'; this.props3.towWreck(); this.hud.message('রেকার এসে ট্রাক সরাল — রাস্তা খুলেছে, চলুন', true, 3500); this.passengers.shout('good', true); }
+    }
+    if ((this.accident === 'approach' || this.accident === 'waiting') && d < -12) { this.accident = 'passed'; this.hud.message('পাশ কাটিয়ে বেরিয়ে এলেন — সাবধানে!', true, 3000); }
   }
 
   // ---------------------------------------------------------------- chada
@@ -97,10 +158,10 @@ export class Incidents {
       this.props.wave(0, 'signal');
     } else if (this.checkpoint === 'approach') {
       if (d < 25 && kmh > G.checkpointSpeedLimitKmh && !this.speeding) { this.speeding = true; this.hud.message('চেকপোস্টে গতি বেশি — ব্যারিয়ার নামানো থাকল!', false, 3000); }
-      const mustStop = this.chadaRefused || this.speeding;
+      const mustStop = this.chadaRefused || this.speeding || this.roofLoad;
       if (d < 40 && mustStop) {
         // boom stays down → the physics wall holds the bus; fine once it has stopped
-        if (d < 8 && kmh < 1) { this.checkpoint = 'stopped'; this.cpTimer = 0; this.fine(this.speeding ? 'গতি বেশি ছিল' : 'অভিযোগ এসেছে — কাগজপত্র চেক'); }
+        if (d < 8 && kmh < 1) { this.checkpoint = 'stopped'; this.cpTimer = 0; if (this.roofLoad) { this.fine('ছাদে যাত্রী! সবাইকে নামিয়ে দিল', G.roofFine); this.roofLoad = false; this.onRoofCleared?.(); } else this.fine(this.speeding ? 'গতি বেশি ছিল' : 'অভিযোগ এসেছে — কাগজপত্র চেক'); }
       } else if (d < 12 && kmh <= G.checkpointSpeedLimitKmh) {
         this.props.setBoom(true); this.props.wave(0, 'megaphone'); this.checkpoint = 'cleared';
         this.hud.message('ধীরে এসেছেন — হাত নেড়ে ছেড়ে দিল ✓', true, 3000);
@@ -111,10 +172,10 @@ export class Incidents {
       if (this.cpTimer > G.checkpointDelaySec) { this.checkpoint = 'cleared'; this.props.setBoom(true); this.props.wave(0, 'signal'); this.hud.message('ছাড়া পেলেন — চলুন', true, 2500); }
     }
   }
-  private fine(reason: string) {
-    this.ledger.fines += G.checkpointFine; this.fines++;
+  private fine(reason: string, amount = G.checkpointFine) {
+    this.ledger.fines += amount; this.fines++;
     this.props.wave(0, 'point'); this.props.wave(1, 'handover' as never);
-    this.hud.message(`${reason} — জরিমানা ${bnTaka(G.checkpointFine)} 🧾`, false, 5000);
+    this.hud.message(`${reason} — জরিমানা ${bnTaka(amount)} 🧾`, false, 5000);
     this.passengers.shout('wait', true);
   }
 
@@ -151,6 +212,7 @@ export class Incidents {
   }
 
   reset() {
+    this.toll = 'idle'; this.rail = 'idle'; this.accident = 'idle'; this.accidentWait = 0; this.roofLoad = false; if (this.props3) { this.props3.setTollOpen(false); this.props3.openGates(); }
     this.chada = WORLD.chadaSpots.map(() => 'idle'); this.chadaRefused = false; this.checkpoint = 'idle'; this.speeding = false; this.cameraDone = false; this.almsDone = false; this.blockS = Infinity; this.fines = 0;
     this.props.setBoom(false); this.props.chadaMen.forEach((m) => m.setAction('idle'));
     if (this.almsPerson?.root.parent) { this.scene.remove(this.almsPerson.root); this.people.remove(this.almsPerson); }

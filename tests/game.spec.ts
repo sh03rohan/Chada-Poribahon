@@ -103,6 +103,7 @@ test('route: Rajbari stop, blockade wait + police clear, finish at Dhaka', async
   st = await g(page, '__game.simulate(6, { throttle: 0, brake: 1, autopilot: true })') as Stats;
   expect(st.passengers).toBe(24 - 7 + 12);
   await page.screenshot({ path: `${SHOTS}/rajbari.png` });
+  if (await page.locator('#choice').isVisible()) await page.click('#choice-b'); // decline the roof-load offer
 
   // Blockade
   await g(page, '__game.teleport(3650)');

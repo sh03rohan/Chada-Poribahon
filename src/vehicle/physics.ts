@@ -61,7 +61,7 @@ export function copyState(dst: VehicleState, src: VehicleState): void {
 }
 
 /** Garage upgrade multipliers (set from the career profile before a run). */
-export const MODS = { brake: 1, torque: 1, grip: 1, /** damage: */ dmgTorque: 1, dmgBrake: 1, speedCapKmh: Infinity };
+export const MODS = { brake: 1, torque: 1, grip: 1, /** damage: */ dmgTorque: 1, dmgBrake: 1, speedCapKmh: Infinity, /** roof load: */ roofGrip: 1, roofCapKmh: Infinity };
 
 export function torqueAt(rpm: number): number {
   return rawTorqueAt(rpm) * MODS.torque * MODS.dmgTorque;
@@ -133,7 +133,8 @@ export function stepVehicle(s: VehicleState, input: VehicleInput, surf: SurfaceI
   // ---- Longitudinal forces ----------------------------------------------
   let throttleEff = s.throttle;
   // Soft governor
-  const govStart = Math.min(P.targetTopSpeedKmh, MODS.speedCapKmh - 6), govEnd = Math.min(P.governorKmh, MODS.speedCapKmh);
+  const cap = Math.min(MODS.speedCapKmh, MODS.roofCapKmh);
+  const govStart = Math.min(P.targetTopSpeedKmh, cap - 6), govEnd = Math.min(P.governorKmh, cap);
   if (kmh > govStart) throttleEff *= Math.max(0, 1 - (kmh - govStart) / Math.max(1, govEnd - govStart));
   if (s.shiftTimer > 0) throttleEff *= 0.08;
 
@@ -170,7 +171,7 @@ export function stepVehicle(s: VehicleState, input: VehicleInput, surf: SurfaceI
   if (input.handbrake && Math.abs(s.v) < 0.2 && s.throttle < 0.3) { aLong = 0; s.v = 0; }
 
   // ---- Lateral / yaw (bicycle model with grip limit) -----------------------
-  let mu = (surf.wet ? P.gripWet : P.gripDry) * MODS.grip;
+  let mu = (surf.wet ? P.gripWet : P.gripDry) * MODS.grip * MODS.roofGrip;
   if (!surf.onRoad) mu = Math.min(mu, P.gripOffRoad);
   if (input.handbrake) mu = Math.min(mu, P.gripHandbrake);
   const aMax = mu * G;

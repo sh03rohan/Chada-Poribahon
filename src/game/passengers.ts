@@ -1,6 +1,6 @@
 import { GAMEPLAY as G } from '../config.ts';
 
-export type ShoutKind = 'brake' | 'swerve' | 'speed' | 'offroad' | 'wait' | 'good' | 'horn' | 'blockade';
+export type ShoutKind = 'brake' | 'swerve' | 'speed' | 'offroad' | 'wait' | 'good' | 'horn' | 'blockade' | 'roof';
 
 /** Mild, generic passenger lines. No profanity, no slurs. */
 const LINES: Record<ShoutKind, string[]> = {
@@ -12,6 +12,7 @@ const LINES: Record<ShoutKind, string[]> = {
   good: ['ভালো চালান! এখনই পৌঁছে যাব।', 'বাহ, মসৃণ চালাচ্ছেন!', 'এই ড্রাইভারকে বকশিশ দেওয়া দরকার।'],
   horn: ['হর্ন কম দেন, কান গেল!'],
   blockade: ['সামনে অবরোধ! থামেন!', 'এখন কী হবে? ফিরে যাব নাকি?'],
+  roof: ['ছাদ থেকে পড়ে যাব! আস্তে!', 'ভাই, ছাদে মানুষ আছে — ধীরে!', 'ও ড্রাইভার, উপরে আমরা উড়ে যাচ্ছি!'],
 };
 
 export interface PassengerEvent { kind: ShoutKind; text: string; }
