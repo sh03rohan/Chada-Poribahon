@@ -11,6 +11,8 @@ export interface RunResult {
   career?: RunOutcome;
   contractText?: string;
   repair?: number; damage?: number; toll?: number;
+  /** Phase 4 */
+  newBadges?: { icon: string; name: string }[]; rank?: number;
 }
 
 const NEWS = [
@@ -40,6 +42,12 @@ export function showResults(r: RunResult, onAgain: () => void) {
       (r.contractText ? `<span class="contract">${r.contractText}</span>` : '');
     car.classList.remove('hidden');
   } else car.classList.add('hidden');
+  const bd = $('res-badges');
+  const rankTxt = r.rank ? `<span class="rank">🏆 সেরা ট্রিপের তালিকায় #${bn(r.rank)}</span>` : '';
+  if ((r.newBadges && r.newBadges.length) || r.rank) {
+    bd.innerHTML = rankTxt + (r.newBadges ?? []).map((b) => `<span class="nb">${b.icon} নতুন ব্যাজ: <b>${b.name}</b></span>`).join('');
+    bd.classList.remove('hidden');
+  } else bd.classList.add('hidden');
   const news = NEWS[Math.floor(Math.random() * NEWS.length)](r);
   $('res-news').textContent = '📰 ' + news;
   root.classList.remove('hidden');

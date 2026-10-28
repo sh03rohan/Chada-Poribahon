@@ -21,7 +21,11 @@ export interface Profile {
   liveriesOwned: number[];
   livery: number;
   lastPlayed: string;
+  /** Phase 4 */
+  achievements: string[];
+  bestRuns: BestRun[];
 }
+export interface BestRun { net: number; stars: number; timeSec: number; passengers: number; date: string; }
 
 export interface RunSummary {
   net: number; stars: number; passengers: number; stopsDone: number; fines: number; timeSec: number; hardBrakes: number;
@@ -38,15 +42,16 @@ export const LEVEL_TITLES = ['হেল্পার', 'নতুন ড্রা
 const KEY = 'cp-career';
 const DEFAULTS: Profile = {
   version: 1, balance: 0, xp: 0, trips: 0, bestStars: 0, totalPassengers: 0, totalEarned: 0, contractsDone: 0,
-  upgrades: { brakes: 0, engine: 0, tyres: 0, horn: 0, livery: 0 }, liveriesOwned: [0], livery: 0, lastPlayed: '',
+  upgrades: { brakes: 0, engine: 0, tyres: 0, horn: 0, livery: 0 }, liveriesOwned: [0], livery: 0, lastPlayed: '', achievements: [], bestRuns: [],
 };
 
 export class Career {
   readonly profile: Profile;
+  lastRunDate = ''; lastRank = 0;
   constructor() {
     let saved: Partial<Profile> = {};
     try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { /* ignore */ }
-    this.profile = { ...DEFAULTS, ...saved, upgrades: { ...DEFAULTS.upgrades, ...(saved.upgrades ?? {}) } };
+    this.profile = { ...DEFAULTS, ...saved, upgrades: { ...DEFAULTS.upgrades, ...(saved.upgrades ?? {}) }, achievements: [...(saved.achievements ?? [])], bestRuns: [...(saved.bestRuns ?? [])], liveriesOwned: [...(saved.liveriesOwned ?? [0])] };
   }
   save() { try { localStorage.setItem(KEY, JSON.stringify(this.profile)); } catch { /* private mode */ } }
   reset() { Object.assign(this.profile, structuredClone(DEFAULTS)); this.save(); }
@@ -80,6 +85,11 @@ export class Career {
     p.totalPassengers += r.passengers; p.totalEarned += Math.max(0, earned);
     if (r.contractBonus) p.contractsDone++;
     p.lastPlayed = new Date().toISOString();
+    // leaderboard: keep the ten best runs by net income
+    this.lastRunDate = p.lastPlayed;
+    p.bestRuns.push({ net: earned, stars: r.stars, timeSec: Math.round(r.timeSec), passengers: r.passengers, date: p.lastPlayed });
+    p.bestRuns.sort((a, b) => b.net - a.net || b.stars - a.stars); p.bestRuns.length = Math.min(p.bestRuns.length, 10);
+    this.lastRank = p.bestRuns.findIndex((x) => x.date === p.lastPlayed) + 1; // 0 = not in the top ten
     this.save();
     const levelAfter = this.level;
     return { earned, xpGained, levelBefore, levelAfter, levelUp: levelAfter > levelBefore, balance: p.balance };

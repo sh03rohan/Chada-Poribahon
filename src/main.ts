@@ -31,6 +31,9 @@ import { DebugOverlay } from './game/debug.ts';
 import { showResults } from './game/results.ts';
 import { Career, LIVERIES } from './game/career.ts';
 import { Damage } from './game/damage.ts';
+import { evaluateAchievements } from './game/achievements.ts';
+import { buildRecordsPanel } from './game/records.ts';
+import { registerSW } from 'virtual:pwa-register';
 import { EventProps } from './world/eventProps.ts';
 import { buildGaragePanel, applyUpgradeMods } from './game/garage.ts';
 import { dailyContracts, evaluateContract, renderContractPicker, CONTRACTS, type ContractDef } from './game/contracts.ts';
@@ -105,6 +108,7 @@ class Game {
   /** contract chosen on the pre-trip card for the next run */
   contract: ContractDef | null = null;
   lastContract: import('./game/contracts.ts').ContractResult | null = null;
+  lastBadges: string[] = [];
   private contractPick: (() => ContractDef | null) | null = null;
   crashes = 0; fuelEmptied = false;
   /** Phase 3: ferry taken on the wrong branch; passengers riding on the roof */
@@ -244,6 +248,17 @@ class Game {
     $('menu-settings').onclick = () => this.openSettings();
     buildGaragePanel(this.career, () => this.applyUpgrades(), () => {});
     $('menu-garage').onclick = () => this.openGarage();
+    buildRecordsPanel(this.career, () => {});
+    $('menu-records').onclick = () => this.openRecords();
+    // PWA: offline cache + install button (shown only when the browser offers an install prompt)
+    if (import.meta.env.PROD) {
+      registerSW({ immediate: true, onOfflineReady: () => { const s = $('start-status'); s.textContent = (s.textContent ?? '') + ' · অফলাইনেও খেলা যাবে ✓'; } });
+    }
+    let installEvt: (Event & { prompt(): Promise<void> }) | null = null;
+    addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e as typeof installEvt; $('menu-install').classList.remove('hidden'); });
+    $('menu-install').onclick = async () => { if (!installEvt) return; await installEvt.prompt(); installEvt = null; $('menu-install').classList.add('hidden'); };
+    addEventListener('appinstalled', () => $('menu-install').classList.add('hidden'));
+    $('pause-records').onclick = () => this.openRecords();
     $('pause-garage').onclick = () => this.openGarage();
     this.applyUpgrades();
     this.refreshCareerChip();
@@ -258,6 +273,7 @@ class Game {
     $('pause-menu').onclick = () => this.goToLanding();
   }
   private openSettings() { $('settings').classList.remove('hidden'); }
+  openRecords(tab?: 'badges' | 'runs') { const r = $('records') as HTMLElement & { refresh?: (t?: 'badges' | 'runs') => void }; r.refresh?.(tab); r.classList.remove('hidden'); }
   openGarage() { const g = $('garage') as HTMLElement & { refresh?: () => void }; g.refresh?.(); g.classList.remove('hidden'); }
   /** Career upgrades → physics multipliers, livery paint, horn sound. */
   get mods() { return { ...MODS }; }
@@ -707,11 +723,19 @@ class Game {
     const outcome = this.career.recordRun({ net: this.ledger.net, stars: this.passengers.stars(), passengers: this.passengers.count, stopsDone: this.events.stopsDone, fines: this.ledger.fines, timeSec: this.elapsed, hardBrakes: sm.hardBrakes,
       contractBonus: cr?.done ? cr.def.bonus : 0, contractXp: cr?.done ? cr.def.xp : 0 });
     this.lastOutcome = outcome;
+    const hr = this.clockHour();
+    const fresh = evaluateAchievements({
+      stars: this.passengers.stars(), net: this.ledger.net, timeSec: this.elapsed, passengers: this.passengers.count + this.roof, fines: this.ledger.fines, crashes: this.crashes,
+      chadaPaid: this.ledger.chada, chadaRefused: this.incidents.chada.some((c) => c === 'done' || c === 'skipped') && this.ledger.chada === 0, missedStops: this.events.stops.filter((s) => s.missed).length, mood: this.passengers.mood,
+      damage: this.damage.value, ferry: this.ferryTaken, roof: this.roof, night: hr >= 20 || hr < 5, contractDone: !!cr?.done, refuels: this.fuel.refuels, hardBrakes: sm.hardBrakes,
+    }, this.career.profile, this.career.level);
+    this.career.save(); this.lastBadges = fresh.map((a) => a.id);
     showResults({
       timeSec: this.elapsed, passengers: this.passengers.count, income: this.events.income, mood: this.passengers.mood,
       stars: this.passengers.stars(), shouts: sm.shouts, hardBrakes: sm.hardBrakes, swerves: sm.swerves, stoppedAtRajbari: this.events.stoppedAtRajbari,
       stopsDone: this.events.stopsDone, stopsTotal: WORLD.stops.filter((x) => x.waiting > 0).length, fares: this.ledger.fares, fines: this.ledger.fines, chada: this.ledger.chada, fuel: this.ledger.fuel, charity: this.ledger.charity,
       career: outcome, contractText: cr?.text, repair: this.ledger.repair, damage: this.damage.value, toll: this.ledger.toll,
+      newBadges: fresh.map((a) => ({ icon: a.icon, name: a.name })), rank: this.career.lastRank,
     }, () => { this.startRun(); });
   }
 
@@ -776,7 +800,7 @@ class Game {
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
       fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
       checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
-      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken,
+      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {

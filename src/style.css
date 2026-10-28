@@ -104,7 +104,7 @@ html, body {
 #minimap-pct { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-weight: 700; font-size: 14px; text-shadow: 0 1px 2px #000; }
 
 /* ---- Panels ---- */
-#results, #pretrip, #fullmap, #pause, #settings, #howto, #garage {
+#results, #pretrip, #fullmap, #pause, #settings, #howto, #garage, #records {
   position: fixed; inset: 0; display: flex; align-items: safe center; justify-content: center;
   background: radial-gradient(ellipse at center, rgba(40, 30, 20, 0.7), rgba(0, 0, 0, 0.88));
   padding: 16px; z-index: 10; overflow: auto;
@@ -193,6 +193,18 @@ input[type=range] { width: 100%; accent-color: var(--red); }
 .contract { font-family: var(--font); text-align: left; background: #fff; border: 2px solid rgba(138, 18, 22, 0.3); border-radius: 10px; padding: 6px 10px; cursor: pointer; color: #2a1a0a; display: flex; flex-direction: column; gap: 1px; }
 .contract span { font-weight: 700; font-size: 15px; } .contract small { font-size: 12px; opacity: 0.85; line-height: 1.25; } .contract em { font-style: normal; font-size: 12px; color: var(--green); font-weight: 700; }
 .contract.on { border-color: var(--green); background: rgba(31,157,85,0.12); }
+
+/* ---- Records (badges + best runs) ---- */
+.records-panel { max-width: 720px; }
+.tabs { justify-content: center; margin: 4px 0 8px; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; max-height: 52vh; overflow: auto; }
+.badge { background: rgba(255,255,255,0.5); border: 1px solid rgba(138, 18, 22, 0.2); border-radius: 10px; padding: 6px 8px; text-align: left; opacity: 0.55; }
+.badge.on { opacity: 1; background: rgba(31,157,85,0.14); border-color: var(--green); }
+.bicon { font-size: 22px; display: block; } .badge b { display: block; font-size: 14px; } .badge small { display: block; font-size: 11px; line-height: 1.2; opacity: 0.85; }
+.runs { width: 100%; border-collapse: collapse; font-size: 14px; } .runs th { font-size: 12px; opacity: 0.7; text-align: left; padding: 2px 6px; } .runs td { padding: 3px 6px; border-top: 1px solid rgba(0,0,0,0.08); }
+.runs tr.latest td { background: rgba(255, 204, 51, 0.35); } .runs td b { color: var(--red); }
+#res-badges { display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: center; margin: 2px 0 8px; font-size: 14px; }
+#res-badges .nb { background: rgba(255, 204, 51, 0.35); border-radius: 8px; padding: 2px 8px; animation: bubble-in 0.5s ease-out; } #res-badges .rank { font-weight: 700; color: var(--green); }
 
 /* ---- Garage ---- */
 .garage-panel { max-width: 720px; text-align: left; }
@@ -307,7 +319,8 @@ input[type=range] { width: 100%; accent-color: var(--red); }
   .career-row { gap: 8px; } .career-row > b { font-size: 13px; } .career-bar { height: 5px; margin: 3px 0 1px; } .career-chip small { font-size: 10px; }
   #res-career { font-size: 12px; padding: 3px 8px; gap: 6px; margin: 2px 0 4px; }
   /* panels */
-  #results, #pretrip, #fullmap, #pause, #settings, #howto, #garage { padding: 6px; }
+  #results, #pretrip, #fullmap, #pause, #settings, #howto, #garage, #records { padding: 6px; }
+  .records-panel { max-width: 740px; } .badges { grid-template-columns: repeat(6, 1fr); gap: 4px; max-height: 50vh; } .badge { padding: 3px 5px; } .bicon { font-size: 16px; } .badge b { font-size: 11px; } .badge small { font-size: 9px; } .runs { font-size: 11px; } .runs td { padding: 1px 4px; } #res-badges { font-size: 11px; gap: 3px 8px; margin: 1px 0 3px; }
   .garage-panel { max-width: 700px; } .gcards { grid-template-columns: 1fr 1fr; gap: 4px; } .gcard { padding: 4px 8px; gap: 6px; } .gico { font-size: 20px; } .gbody b { font-size: 13px; } .gbody small, .gbody em { font-size: 10px; } .gbuy { font-size: 12px; padding: 4px 8px; } .swatch span { width: 28px; height: 28px; } .swatch small { font-size: 9px; } .gbal { font-size: 12px; margin: 2px 0 4px; } .gpaint { margin: 4px 0; } .gpaint > b { font-size: 12px; }
   .panel { padding: 6px 12px; max-height: calc(100vh - 12px); border-width: 3px; outline-width: 2px; border-radius: 12px; }
   .panel h1 { font-size: 22px; } .panel h2 { font-size: 16px; margin: 0 0 2px; }
