@@ -18,7 +18,7 @@ const finished = (page: Page) => page.waitForFunction(() => (window as unknown a
 test('records: first finished run unlocks badges and ranks #1; records panel lists all badges', async ({ page }) => {
   const errors = await boot(page, 'quality=low&hour=22');
   await page.click('#menu-records'); await page.waitForTimeout(200);
-  expect(await page.locator('.badge').count()).toBe(18);
+  expect(await page.locator('.badge').count()).toBe(19);
   expect(await page.locator('.badge.on').count()).toBe(0);
   await page.click('#records-close');
   await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);

@@ -7,7 +7,7 @@ import type { Profile } from './career.ts';
  */
 export interface RunFactsAll {
   stars: number; net: number; timeSec: number; passengers: number; fines: number; crashes: number; chadaPaid: number; chadaRefused: boolean;
-  missedStops: number; mood: number; damage: number; ferry: boolean; roof: number; night: boolean; contractDone: boolean; refuels: number; hardBrakes: number;
+  missedStops: number; mood: number; damage: number; ferry: boolean; roof: number; night: boolean; contractDone: boolean; refuels: number; hardBrakes: number; tips: number;
 }
 export interface AchievementDef { id: string; icon: string; name: string; desc: string; check: (run: RunFactsAll, p: Profile, level: number) => boolean; }
 
@@ -29,6 +29,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'hundred', icon: '💯', name: 'শত যাত্রী', desc: 'মোট ১০০ জন যাত্রী পৌঁছে দেওয়া', check: (_r, p) => p.totalPassengers >= 100 },
   { id: 'ostad', icon: '🎖️', name: 'ওস্তাদ', desc: 'লেভেল ৫-এ পৌঁছানো', check: (_r, _p, level) => level >= 5 },
   { id: 'contracts', icon: '📜', name: 'কন্ট্রাক্টর', desc: '৫টা কন্ট্রাক্ট পূরণ', check: (_r, p) => p.contractsDone >= 5 },
+  { id: 'tipped', icon: '💝', name: 'যাত্রীর দোয়া', desc: 'স্পেশাল যাত্রীর অনুরোধ রেখে বকশিশ পাওয়া', check: (r) => r.tips > 0 },
   { id: 'rich', icon: '💰', name: 'লাখপতি হওয়ার পথে', desc: 'ব্যালেন্স ৳৫০,০০০', check: (_r, p) => p.balance >= 50000 },
 ];
 

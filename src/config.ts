@@ -197,6 +197,8 @@ export const GAMEPLAY = {
   ferryLandS: 5420,
   roofSeats: 8,
   roofFare: 300,
+  /** special passengers: chance one boards after each stop, and how many per run at most */
+  specialChance: 0.65, specialMaxPerRun: 2,
   roofFine: 1000,
   roofSpeedCapKmh: 90,
   /** Phase 3 damage: % per m/s of impact above 1.2 m/s; repair ৳ per % at Dhaka */

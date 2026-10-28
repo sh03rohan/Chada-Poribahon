@@ -17,6 +17,7 @@ import { Road } from './world/road.ts';
 import { Props } from './world/props.ts';
 import { SkySystem } from './world/sky.ts';
 import { Weather, WEATHER_INFO, type WeatherKind } from './world/weather.ts';
+import { SPECIALS, describeOutcome, type ActiveSpecial, type SpecialDef, type SegmentMetrics } from './game/specials.ts';
 import { Stops } from './world/stops.ts';
 import { Blockade } from './world/blockade.ts';
 import { Traffic } from './world/traffic.ts';
@@ -113,6 +114,8 @@ class Game {
   lastBadges: string[] = [];
   private contractPick: (() => ContractDef | null) | null = null;
   crashes = 0; fuelEmptied = false;
+  /** special passenger currently riding, how many have ridden this run, and a forced pick for tests */
+  special: ActiveSpecial | null = null; specialsDone: { id: string; ok: boolean }[] = []; private forcedSpecial: string | null = null; horns = 0; private hornHeld = false;
   /** Phase 3: ferry taken on the wrong branch; passengers riding on the roof */
   ferryTaken = false; private ferryOffered = false; roof = 0; private roofRiders: Person[] = []; private roofOffered = false;
   private mirrorTarget: THREE.WebGLRenderTarget | null = null;
@@ -417,12 +420,12 @@ class Game {
     this.bus.setPassengers(this.passengers.count);
     this.ledger.reset(); this.ledger.fares = this.passengers.count * GAMEPLAY.fareKushtiaDhaka; // helper collected at the terminal
     this.events = new RouteEvents(this.blockade, this.passengers, this.hud, this.bus, this.ledger);
-    this.events.onStopBegin = (i) => this.beginBoarding(i);
+    this.events.onStopBegin = (i) => { this.settleSpecial(i); this.beginBoarding(i); };
     this.events.onStopEnd = (i) => this.endBoarding(i);
     if (this.incidents) this.incidents.reset();
     this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people); this.incidents.props3 = this.eventProps; this.incidents.onRoofCleared = () => this.clearRoof();
     this.fuel = new Fuel(this.hud, this.ledger, this.choice, this.passengers);
-    this.crashes = 0; this.fuelEmptied = false;
+    this.crashes = 0; this.fuelEmptied = false; this.special = null; this.specialsDone = []; this.horns = 0; this.hornHeld = false; this.setGoalPill(null);
     this.ferryTaken = false; this.ferryOffered = false; this.roofOffered = false; this.clearRoof();
     this.damage = new Damage(this.bus, this.hud, this.passengers); this.damage.reset();
     this.fuel.litres = GAMEPLAY.fuelTankLitres * (GAMEPLAY.fuelStartFraction[0] + Math.random() * (GAMEPLAY.fuelStartFraction[1] - GAMEPLAY.fuelStartFraction[0])); // the owner never fills it
@@ -650,6 +653,8 @@ class Game {
       if (kmh < 1 && (this.routeS < 120 || this.events.phase === 'stop')) { this.helperShoutTimer += dt; if (this.helperShoutTimer > 6) { this.helperShoutTimer = 0; this.helperShout(); } }
     }
     this.audio.update(dt, this.cur.rpm, this.cur.throttle, kmh, raw.horn && this.running, this.cur.onRoad, this.weather.wet);
+    if (this.running && raw.horn && !this.hornHeld) this.horns++; this.hornHeld = raw.horn;
+    if (this.special) this.special.maxKmh = Math.max(this.special.maxKmh, kmh);
 
     // rear-view mirror (cockpit only, every other frame)
     if (this.mirrorTarget && this.mirrorCam && this.cam.mode === 'cockpit' && !this.freeCam && (this.debug.frameCount & 1) === 0) {
@@ -716,6 +721,70 @@ class Game {
     for (const p of this.stops.waiting[i].slice()) if (p.target || p.action === 'queue') this.stops.board(i, p);
     this.boarding = this.boarding.filter((p) => p.root.parent);
     if (i === 0 && !this.roofOffered) { this.roofOffered = true; void this.offerRoof(); }
+    this.maybeBoardSpecial(i);
+  }
+
+  // ---- Special passengers ---------------------------------------------------
+  forceSpecial(id: string | null) { this.forcedSpecial = id; }
+  private segmentMetrics(): SegmentMetrics {
+    const sm = this.passengers.summary;
+    return { timeSec: this.elapsed, distM: this.routeS, hardBrakes: sm.hardBrakes, swerves: sm.swerves, fines: this.ledger.fines, crashes: this.crashes, horns: this.horns, maxKmh: 0, mood: this.passengers.mood };
+  }
+  private setGoalPill(text: string | null) {
+    const el = $('hud-goal'); document.body.classList.toggle('has-goal', !!text); if (!text) { el.classList.add('hidden'); return; }
+    el.textContent = text; el.classList.remove('hidden');
+  }
+  /** After the regular boarding at stop i: sometimes a special passenger climbs on with a request for the next leg. */
+  private maybeBoardSpecial(i: number) {
+    if (this.special || this.screen !== 'driving') return;
+    const next = WORLD.stops.slice(i + 1).find((st) => st.s > this.routeS + 300);
+    if (!next) return;
+    let def: SpecialDef | undefined;
+    if (this.forcedSpecial) { def = SPECIALS.find((d) => d.id === this.forcedSpecial); this.forcedSpecial = null; }
+    else {
+      if (this.specialsDone.length >= GAMEPLAY.specialMaxPerRun || Math.random() > GAMEPLAY.specialChance) return;
+      const unused = SPECIALS.filter((d) => !this.specialsDone.some((x) => x.id === d.id));
+      def = unused[Math.floor(Math.random() * unused.length)];
+    }
+    if (!def) return;
+    const distM = next.s - this.routeS;
+    this.special = { def, boardStop: i, start: this.segmentMetrics(), maxKmh: 0 };
+    // the figure: appears by the shed and walks to the door
+    const right = new THREE.Vector3(Math.cos(this.cur.yaw), 0, -Math.sin(this.cur.yaw));
+    const fwd = new THREE.Vector3(-Math.sin(this.cur.yaw), 0, -Math.cos(this.cur.yaw));
+    const door = new THREE.Vector3(this.bus.root.position.x, 0, this.bus.root.position.z).addScaledVector(right, -2.2).addScaledVector(fwd, 4.0);
+    const p = new Person(VARIANTS[def.variant]); p.position.copy(this.stops.shedFront[i]).addScaledVector(fwd, 1.5); p.walkSpeed = 1.3;
+    this.scene.add(p.root); this.people.add(p);
+    p.walkTo(door, 'queue', () => { this.scene.remove(p.root); this.people.remove(p); });
+    this.passengers.count = Math.min(GAMEPLAY.seats, this.passengers.count + 1); this.bus.setPassengers(this.passengers.count);
+    this.hud.bubble({ kind: 'good', text: `${def.icon} ${def.name}: ${def.greet}` });
+    this.toast(`${def.icon} ${def.name} উঠলেন — ${def.goal({ distM })} → বকশিশ ${bnTaka(def.tip)}`, 9000);
+    this.setGoalPill(`${def.icon} ${def.goal({ distM })}`);
+  }
+  /** Called when the bus stops at a later stop, or at the finish: judge the leg and pay (or not). */
+  private settleSpecial(i: number, atFinish = false) {
+    const sp = this.special; if (!sp || (!atFinish && i <= sp.boardStop)) return;
+    this.special = null;
+    const now = this.segmentMetrics();
+    const m: SegmentMetrics = { timeSec: now.timeSec - sp.start.timeSec, distM: now.distM - sp.start.distM, hardBrakes: now.hardBrakes - sp.start.hardBrakes, swerves: now.swerves - sp.start.swerves,
+      fines: now.fines - sp.start.fines, crashes: now.crashes - sp.start.crashes, horns: now.horns - sp.start.horns, maxKmh: sp.maxKmh, mood: now.mood };
+    const ok = sp.def.check(m);
+    this.specialsDone.push({ id: sp.def.id, ok });
+    if (ok) { this.ledger.tips += sp.def.tip; this.passengers.mood = Math.min(100, this.passengers.mood + 4); }
+    else this.passengers.mood = Math.max(0, this.passengers.mood - 8);
+    this.hud.bubble({ kind: ok ? 'good' : 'wait', text: `${sp.def.icon} ${sp.def.name}: ${ok ? sp.def.thanks : sp.def.sorry}` });
+    this.toast(describeOutcome(sp.def, ok), 7000);
+    this.setGoalPill(null);
+    if (!atFinish) {
+      // step off and walk to the shed
+      const right = new THREE.Vector3(Math.cos(this.cur.yaw), 0, -Math.sin(this.cur.yaw));
+      const fwd = new THREE.Vector3(-Math.sin(this.cur.yaw), 0, -Math.cos(this.cur.yaw));
+      const door = new THREE.Vector3(this.bus.root.position.x, 0, this.bus.root.position.z).addScaledVector(right, -2.2).addScaledVector(fwd, 4.0);
+      const p = new Person(VARIANTS[sp.def.variant]); p.position.copy(door).addScaledVector(right, -0.3); p.walkSpeed = 1.2;
+      this.scene.add(p.root); this.people.add(p);
+      p.walkTo(this.stops.shedFront[i].clone().addScaledVector(fwd, 2.5), 'idle', () => setTimeout(() => { this.scene.remove(p.root); this.people.remove(p); }, 8000));
+      this.passengers.count = Math.max(0, this.passengers.count - 1); this.bus.setPassengers(this.passengers.count);
+    }
   }
 
   /** Rajbari: the helper wants to put extra passengers on the roof — more fare, less grip, trouble at the checkpoint. */
@@ -774,6 +843,7 @@ class Game {
 
   finish() {
     this.finished = true; this.screen = 'results';
+    this.settleSpecial(-1, true);
     const sm = this.passengers.summary;
     this.ledger.repair = this.damage.repairCost;
     const cr = evaluateContract(this.contract, {
@@ -788,14 +858,14 @@ class Game {
     const fresh = evaluateAchievements({
       stars: this.passengers.stars(), net: this.ledger.net, timeSec: this.elapsed, passengers: this.passengers.count + this.roof, fines: this.ledger.fines, crashes: this.crashes,
       chadaPaid: this.ledger.chada, chadaRefused: this.incidents.chada.some((c) => c === 'done' || c === 'skipped') && this.ledger.chada === 0, missedStops: this.events.stops.filter((s) => s.missed).length, mood: this.passengers.mood,
-      damage: this.damage.value, ferry: this.ferryTaken, roof: this.roof, night: hr >= 20 || hr < 5, contractDone: !!cr?.done, refuels: this.fuel.refuels, hardBrakes: sm.hardBrakes,
+      damage: this.damage.value, ferry: this.ferryTaken, roof: this.roof, night: hr >= 20 || hr < 5, contractDone: !!cr?.done, refuels: this.fuel.refuels, hardBrakes: sm.hardBrakes, tips: this.ledger.tips,
     }, this.career.profile, this.career.level);
     this.career.save(); this.lastBadges = fresh.map((a) => a.id);
     showResults({
       timeSec: this.elapsed, passengers: this.passengers.count, income: this.events.income, mood: this.passengers.mood,
       stars: this.passengers.stars(), shouts: sm.shouts, hardBrakes: sm.hardBrakes, swerves: sm.swerves, stoppedAtRajbari: this.events.stoppedAtRajbari,
       stopsDone: this.events.stopsDone, stopsTotal: WORLD.stops.filter((x) => x.waiting > 0).length, fares: this.ledger.fares, fines: this.ledger.fines, chada: this.ledger.chada, fuel: this.ledger.fuel, charity: this.ledger.charity,
-      career: outcome, contractText: cr?.text, repair: this.ledger.repair, damage: this.damage.value, toll: this.ledger.toll,
+      career: outcome, contractText: cr?.text, repair: this.ledger.repair, damage: this.damage.value, toll: this.ledger.toll, tips: this.ledger.tips,
       newBadges: fresh.map((a) => ({ icon: a.icon, name: a.name })), rank: this.career.lastRank,
     }, () => { this.startRun(); });
   }
@@ -861,7 +931,7 @@ class Game {
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
       fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
       checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
-      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
+      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, special: this.special ? this.special.def.id : null, specialsDone: this.specialsDone, tips: this.ledger.tips, horns: this.horns, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {

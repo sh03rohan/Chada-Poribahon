@@ -11,7 +11,7 @@ export interface RunResult {
   /** career delta (Phase 3) */
   career?: RunOutcome;
   contractText?: string;
-  repair?: number; damage?: number; toll?: number;
+  repair?: number; damage?: number; toll?: number; tips?: number;
   /** Phase 4 */
   newBadges?: { icon: string; name: string }[]; rank?: number;
 }
@@ -35,6 +35,7 @@ export function showResults(r: RunResult, onAgain: () => void) {
     ['ভাড়া আদায়', bnTaka(r.fares ?? r.income)], ['জরিমানা', bnTaka(r.fines ?? 0)], ['চাঁদা', bnTaka(r.chada ?? 0)], ['তেল', bnTaka(r.fuel ?? 0)],
     ['মেরামত', `${bnTaka(r.repair ?? 0)}${r.damage ? ` (ক্ষতি ${bn(Math.round(r.damage))}%)` : ''}`],
     ['টোল / ফেরি', bnTaka(r.toll ?? 0)],
+    ['বকশিশ (স্পেশাল যাত্রী)', '+' + bnTaka(r.tips ?? 0)],
   ].map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('');
   const car = $('res-career');
   if (r.career) {

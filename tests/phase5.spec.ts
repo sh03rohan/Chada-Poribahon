@@ -48,3 +48,34 @@ test('weather: forecast on pre-trip, fog thickens + headlights, storm rains + li
   await expect(page.locator('#hud-msg')).toContainText('পরিষ্কার');
   expect(errors).toEqual([]);
 });
+
+const stopAt = (page: Page, s: number) => g(page, `(() => { __game.teleport(${s}); __game.simulate(1, { throttle: 0.5, autopilot: true }); for (let i = 0; i < 30 && __game.stats().kmh > 2; i++) __game.simulate(0.5, { throttle: 0, brake: 0.6, autopilot: true }); __game.simulate(1.5, { throttle: 0, handbrake: true, autopilot: true }); })()`);
+
+test('special passengers: dadi boards at Rajbari with a goal, tips at Faridpur after a smooth leg; student fails a slow leg', async ({ page }) => {
+  const errors = await boot(page, 'quality=low&hour=11&weather=clear');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  await g(page, '__game.traffic.enabled = false; __game.forceSpecial("dadi")');
+  await stopAt(page, 1990);
+  await g(page, '__game.simulate(10, { throttle: 0, handbrake: true, autopilot: true })'); await page.waitForTimeout(200);
+  let st = await g(page, '(() => { const s = __game.stats(); return { special: s.special, done: s.specialsDone, tips: s.tips, goal: document.getElementById("hud-goal").textContent, hidden: document.getElementById("hud-goal").classList.contains("hidden") }; })()') as { special: string | null; done: { id: string; ok: boolean }[]; tips: number; goal: string; hidden: boolean };
+  expect(st.special).toBe('dadi'); expect(st.hidden).toBe(false); expect(st.goal).toContain('হার্ড ব্রেক');
+  await page.screenshot({ path: `${SHOTS}/special-boarded.png` });
+  await g(page, '__game.choice.cancel()');
+  await stopAt(page, 3430); await page.waitForTimeout(200);
+  st = await g(page, '(() => { const s = __game.stats(); return { special: s.special, done: s.specialsDone, tips: s.tips, goal: "", hidden: document.getElementById("hud-goal").classList.contains("hidden") }; })()') as typeof st;
+  expect(st.special).toBeNull(); expect(st.done).toEqual([{ id: 'dadi', ok: true }]); expect(st.tips).toBe(200); expect(st.hidden).toBe(true);
+  // student wants speed: creep the leg Faridpur → Bhanga slowly and the exam is missed (no tip, mood dips)
+  await g(page, '__game.forceSpecial("student"); __game.simulate(10, { throttle: 0, handbrake: true, autopilot: true })'); await page.waitForTimeout(100);
+  expect((await g(page, '__game.stats().special'))).toBe('student');
+  await g(page, '__game.elapsed += 400');
+  const moodBefore = await g(page, '__game.passengers.mood') as number;
+  await stopAt(page, 4470); await page.waitForTimeout(200);
+  st = await g(page, '(() => { const s = __game.stats(); return { special: s.special, done: s.specialsDone, tips: s.tips, goal: "", hidden: true }; })()') as typeof st;
+  expect(st.done[1]).toEqual({ id: 'student', ok: false }); expect(st.tips).toBe(200);
+  expect(await g(page, '__game.passengers.mood') as number).toBeLessThan(moodBefore + 6);
+  await g(page, '__game.simulate(10, { throttle: 0, handbrake: true, autopilot: true }); __game.teleport(__game.road.length - 160); __game.simulate(30, { throttle: 1, autopilot: true })');
+  await finished(page); await page.waitForTimeout(200);
+  expect(await page.locator('#results').innerText()).toContain('বকশিশ');
+  expect(await g(page, '__game.stats().lastBadges') as string[]).toContain('tipped');
+  expect(errors).toEqual([]);
+});
