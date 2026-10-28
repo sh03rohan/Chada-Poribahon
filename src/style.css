@@ -348,3 +348,7 @@ input[type=range] { width: 100%; accent-color: var(--red); }
   #cine-caption { font-size: clamp(13px, 2.6vw, 22px); padding: 4px 12px; bottom: calc(7vh + 8px); }
   #cine-bars-top, #cine-bars-bottom { height: 7vh; }
 }
+
+/* Lightning flash (storm weather) */
+#flash { position: fixed; inset: 0; background: #e9f0ff; opacity: 0; pointer-events: none; z-index: 3; transition: opacity 0.35s ease-out; }
+#flash.on { opacity: 0.55; transition: opacity 0.03s; }

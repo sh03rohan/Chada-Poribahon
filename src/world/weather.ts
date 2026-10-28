@@ -4,7 +4,17 @@ import * as THREE from 'three';
  * Rain: a box of falling point sprites that follows the camera. `wet` ramps 0→1 over a few
  * seconds so the road/grip transition is smooth. Rendering uses a cheap PointsMaterial.
  */
+export type WeatherKind = 'clear' | 'rain' | 'fog' | 'storm';
+export const WEATHER_KINDS: WeatherKind[] = ['clear', 'rain', 'fog', 'storm'];
+export const WEATHER_INFO: Record<WeatherKind, { icon: string; name: string; effect: string }> = {
+  clear: { icon: '☀️', name: 'পরিষ্কার', effect: 'ভালো রাস্তা, দূর পর্যন্ত দেখা যায়' },
+  rain:  { icon: '🌧️', name: 'বৃষ্টি', effect: 'রাস্তা পিচ্ছিল — ব্রেক লম্বা, আস্তে বাঁক নিন' },
+  fog:   { icon: '🌫️', name: 'ঘন কুয়াশা', effect: 'সামনে কম দেখা যায় — হেডলাইট জ্বলবে, গতি কমান' },
+  storm: { icon: '⛈️', name: 'ঝড়-বৃষ্টি', effect: 'বজ্রপাত, ভারী বৃষ্টি, পিচ্ছিল রাস্তা — সবচেয়ে কঠিন' },
+};
+
 export class Weather {
+  kind: WeatherKind = 'clear';
   raining = false;
   wet = 0;                 // 0..1 smoothed
   private points: THREE.Points;
@@ -38,8 +48,21 @@ export class Weather {
     scene.add(this.points);
   }
 
-  toggle(): boolean { this.raining = !this.raining; return this.raining; }
-  set(on: boolean) { this.raining = on; }
+  toggle(): boolean { this.setKind(this.raining ? 'clear' : 'rain'); return this.raining; }
+  set(on: boolean) { this.setKind(on ? 'rain' : 'clear'); }
+  /** Pick a weather kind: rain and storm drive the drops (storm heavier), fog is sky-only. */
+  setKind(kind: WeatherKind) {
+    this.kind = kind;
+    this.raining = kind === 'rain' || kind === 'storm';
+    const storm = kind === 'storm';
+    const m = this.points.material as THREE.PointsMaterial;
+    m.size = storm ? 0.45 : 0.35; m.color.set(storm ? 0xb8c8dc : 0xcfe0f0);
+    for (let i = 0; i < this.count; i++) this.vel[i] = (storm ? 26 : 18) + Math.random() * 8;
+  }
+  /** Next kind in the cycle clear → rain → fog → storm → clear. */
+  next(): WeatherKind { return WEATHER_KINDS[(WEATHER_KINDS.indexOf(this.kind) + 1) % WEATHER_KINDS.length]; }
+  get storm() { return this.kind === 'storm'; }
+  get fog() { return this.kind === 'fog'; }
 
   update(dt: number, camPos: THREE.Vector3, velocity: THREE.Vector3) {
     const target = this.raining ? 1 : 0;
@@ -47,7 +70,7 @@ export class Weather {
     if (this.wet < 0.01 && !this.raining) { this.points.visible = false; return; }
     this.points.visible = true;
     const m = this.points.material as THREE.PointsMaterial;
-    m.opacity = 0.55 * Math.min(1, this.wet * 1.5);
+    m.opacity = (this.kind === 'storm' ? 0.75 : 0.55) * Math.min(1, this.wet * 1.5);
     // Drops fall and streak backwards relative to vehicle motion; wrap within the box around the camera.
     this.points.position.copy(camPos);
     const vx = -velocity.x * 0.35, vz = -velocity.z * 0.35;

@@ -40,7 +40,7 @@
       <div id="bubbles"></div>
       <div id="hud-buttons">
         <button class="icon-btn" id="btn-cam" title="ক্যামেরা">📷</button>
-        <button class="icon-btn" id="btn-weather" title="রোদ/বৃষ্টি">🌧️</button>
+        <button class="icon-btn" id="btn-weather" title="আবহাওয়া বদলান">🌧️</button>
         <button class="icon-btn" id="btn-map" title="ম্যাপ">🗺️</button>
         <button class="icon-btn" id="btn-pause" title="বিরতি">⏸</button>
       </div>
@@ -102,6 +102,7 @@
         <p class="hint">রাজবাড়ীতে থামুন, ফরিদপুরের কাছে অবরোধ হতে পারে, আর দৌলতদিয়ার মোড়ে ভুল করবেন না — পদ্মা সেতুর রাস্তাই ঢাকা।</p>
         <div id="pretrip-contracts" class="contract-box"></div>
         <p class="hint clock-note">🕒 <b>আসল সময়ের দিন-রাত:</b> খেলার আলো আপনার ফোনের ঘড়ি অনুযায়ী চলে — এখন <span id="pretrip-clock">—</span>। রাতে খেললে রাত, ভোরে খেললে ভোর।</p>
+        <p class="hint weather-note">🌦️ <b>আজকের আবহাওয়া:</b> <span id="pretrip-weather">—</span></p>
         <button id="pretrip-go" class="btn-primary">যাত্রা শুরু</button>
       </div>
     </div>
@@ -193,6 +194,7 @@
 
     <div id="crack" class="hidden"></div>
     <div id="fade"></div>
+    <div id="flash"></div>
     <div id="debug" class="hidden"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

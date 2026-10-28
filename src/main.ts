@@ -16,7 +16,7 @@ import { BusAudio } from './vehicle/audio.ts';
 import { Road } from './world/road.ts';
 import { Props } from './world/props.ts';
 import { SkySystem } from './world/sky.ts';
-import { Weather } from './world/weather.ts';
+import { Weather, WEATHER_INFO, type WeatherKind } from './world/weather.ts';
 import { Stops } from './world/stops.ts';
 import { Blockade } from './world/blockade.ts';
 import { Traffic } from './world/traffic.ts';
@@ -189,7 +189,6 @@ class Game {
     this.scene.add(this.incidentProps.group);
     this.sky = new SkySystem(this.renderer, this.scene, q.shadows, q.shadowMapSize);
     this.weather = new Weather(this.scene, q.rainCount);
-    if (params.get('rain') === '1') { this.weather.set(true); this.weather.wet = 1; this.sky.setRain(1); }
 
     this.bus = await loadBus({ anisotropy: maxAniso, shadows: q.shadows, people: this.people });
     this.scene.add(this.bus.root);
@@ -225,6 +224,7 @@ class Game {
     if (params.get('people') === '1') this.debugPeopleLineup();
     this.resetRun();
     this.applyNight();
+    { const urlW = this.urlWeather(); if (urlW) this.applyWeather(urlW, true); }
     this.resize();
     this.ready = true;
     status.textContent += `  ·  গ্রাফিক্স: ${TIER_LABEL[this.tier]}`;
@@ -310,7 +310,54 @@ class Game {
     const rush = h >= GAMEPLAY.morningRushStart && h < GAMEPLAY.morningRushEnd;
     const effect = night ? 'রাত — হেডলাইট জ্বলবে, কুয়াশা, স্ট্যান্ডে যাত্রী কম' : rush ? 'সকালের অফিস টাইম — স্ট্যান্ডে যাত্রী দেড় গুণ' : 'দিন — স্বাভাবিক যাত্রী';
     $('pretrip-clock').textContent = `${bnClock(h)} (${effect})`;
+    // today's weather: URL override, else drawn once per pre-trip (fog is likelier at night/dawn)
+    const w = this.urlWeather() ?? this.rollWeather(night || h < 8);
+    this.applyWeather(w, true);
+    const wi = WEATHER_INFO[w];
+    $('pretrip-weather').textContent = `${wi.icon} ${wi.name} — ${wi.effect}`;
   }
+  private urlWeather(): WeatherKind | null {
+    const w = params.get('weather');
+    if (w === 'clear' || w === 'rain' || w === 'fog' || w === 'storm') return w;
+    if (params.get('rain') === '1') return 'rain';
+    return null;
+  }
+  private rollWeather(foggyHours: boolean): WeatherKind {
+    const r = Math.random();
+    const fogP = foggyHours ? 0.25 : 0.12;
+    if (r < 0.52) return 'clear';
+    if (r < 0.52 + 0.2) return 'rain';
+    if (r < 0.52 + 0.2 + fogP) return 'fog';
+    return 'storm';
+  }
+  /** Switch the whole scene to a weather kind: drops, sky/fog/exposure, lights, HUD icon. */
+  applyWeather(kind: WeatherKind, instant = false) {
+    this.weather.setKind(kind);
+    if (instant) this.weather.wet = this.weather.raining ? 1 : 0;
+    this.sky.setRain(this.weather.raining ? 1 : 0);
+    this.sky.setFog(kind === 'fog' ? 1 : 0);
+    this.sky.setStorm(kind === 'storm' ? 1 : 0);
+    this.lightningIn = kind === 'storm' ? 2 + Math.random() * 4 : Infinity;
+    $('btn-weather').textContent = WEATHER_INFO[kind].icon;
+    this.applyNight();
+  }
+  private lightningIn = Infinity; private thunderIn = Infinity;
+  /** Storm: flash the sky + overlay now and then, thunder rolls in a beat later. */
+  private updateLightning(dt: number) {
+    if (this.weather.storm && this.running && !this.paused) {
+      this.lightningIn -= dt;
+      if (this.lightningIn <= 0) {
+        this.lightningIn = 5 + Math.random() * 11;
+        this.sky.flash(1);
+        const el = $('flash'); el.classList.add('on'); setTimeout(() => el.classList.remove('on'), 90);
+        this.thunderIn = 0.4 + Math.random() * 1.4;
+        this.lightningCount++;
+      }
+    }
+    if (this.thunderIn !== Infinity) { this.thunderIn -= dt; if (this.thunderIn <= 0) { this.thunderIn = Infinity; this.audio.sting('thunder'); } }
+    this.sky.tick(dt);
+  }
+  lightningCount = 0;
 
   async playIntro() {
     this.screen = 'intro';
@@ -401,6 +448,7 @@ class Game {
     this.running = true;
     this.hud.message(`শুভ যাত্রা! আস্তে চালান, যাত্রী নিয়ে ${ROUTE.to} চলুন`, true, 3500);
     this.toast(`🕒 আসল সময়: ${bnClock(this.clockHour())} — খেলার দিন-রাত আপনার ঘড়ি অনুযায়ী চলে`, 7000);
+    if (this.weather.kind !== 'clear') { const wi = WEATHER_INFO[this.weather.kind]; this.toast(`${wi.icon} আজ ${wi.name}: ${wi.effect}`, 8000); }
     this.bus.setCockpitMode(this.cam.mode === 'cockpit');
     this.tutorialStep = this.settings.value.tutorialSeen ? 99 : 0; this.tutorialTimer = 0;
     this.helperShout();
@@ -412,15 +460,16 @@ class Game {
   }
 
   toggleWeather() {
-    const on = this.weather.toggle();
-    this.sky.setRain(on ? 1 : 0);
-    this.hud.message(on ? 'বৃষ্টি শুরু — রাস্তা পিচ্ছিল!' : 'রোদ উঠেছে ☀️', !on, 2500);
+    const kind = this.weather.next();
+    this.applyWeather(kind);
+    const wi = WEATHER_INFO[kind];
+    this.hud.message(`${wi.icon} ${wi.name} — ${wi.effect}`, kind === 'clear', 2500);
   }
 
   applyNight() {
     const night = this.sky.state.night;
     this.props.setNight(night); this.roundabouts?.setNight(night);
-    this.bus.setLights({ headlights: night || this.weather.wet > 0.5, brake: this.cur.brake, reverse: this.cur.v < -0.2 });
+    this.bus.setLights({ headlights: night || this.weather.wet > 0.5 || this.weather.fog, brake: this.cur.brake, reverse: this.cur.v < -0.2 });
   }
 
   resize() {
@@ -580,7 +629,8 @@ class Game {
     this.weather.update(dt, this.cam.camera.position, vel);
     this.road.setWet(this.weather.wet);
     const night = this.sky.state.night;
-    this.bus.setLights({ headlights: night || this.weather.wet > 0.5, brake: this.cur.brake, reverse: this.cur.v < -0.2 });
+    this.bus.setLights({ headlights: night || this.weather.wet > 0.5 || this.weather.fog, brake: this.cur.brake, reverse: this.cur.v < -0.2 });
+    this.updateLightning(dt);
     if (this.weather.wet > 0.05) { this.wiperPhase = (this.wiperPhase + dt * 0.7) % 1; this.bus.setWipers(this.wiperPhase); } else this.bus.setWipers(null);
     this.speedoTimer += dt;
     if (this.speedoTimer > 0.1) { this.speedoTimer = 0; this.bus.updateSpeedo(kmh, this.cur.rpm, this.cur.gear + 1); }
@@ -811,7 +861,7 @@ class Game {
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
       fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
       checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
-      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken,
+      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {
