@@ -6,13 +6,13 @@ fs.mkdirSync(SHOTS, { recursive: true });
 
 type Stats = {
   kmh: number; s: number; lateral: number; zeroToSixty: number | null; topSpeed: number; onRoad: boolean; phase: string;
-  blockade: string; fps: number; worstFrame: number; spikes: number; cam: string; busProcedural: boolean; passengers: number; mood: number;
+  blockade: string; fps: number; worstFrame: number; spikes: number; cam: string; busProcedural: boolean; passengers: number; mood: number; special: string | null;
 };
 
 async function boot(page: Page, query: string) {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`/?autostart=1&quality=low&${query}`);
+  await page.goto(`/?autostart=1&quality=low&${query}${query.includes('weather=') ? '' : '&weather=clear'}`); // tests pin the weather: the pre-trip roll is random
   await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 90_000 });
   await page.waitForTimeout(800);
   expect(errors, 'no runtime errors').toEqual([]);
@@ -101,7 +101,7 @@ test('route: Rajbari stop, blockade wait + police clear, finish at Dhaka', async
   st = await g(page, '__game.simulate(1, { throttle: 0, brake: 1, autopilot: true })') as Stats;
   expect(st.phase, 'stopped at Rajbari').toBe('stop');
   st = await g(page, '__game.simulate(6, { throttle: 0, brake: 1, autopilot: true })') as Stats;
-  expect(st.passengers).toBe(24 - 7 + 12);
+  expect(st.passengers - (st.special ? 1 : 0), 'regular exchange (+1 if a special rider boarded)').toBe(24 - 7 + 12);
   await page.screenshot({ path: `${SHOTS}/rajbari.png` });
   if (await page.locator('#choice').isVisible()) await page.click('#choice-b'); // decline the roof-load offer
 
@@ -146,7 +146,7 @@ test('performance: no frame spikes after warm-up (software renderer, low tier)',
 
 test('camera follows the bus when a run is started from the menu (not autostart)', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
-  await page.goto('/?quality=low&hour=10');
+  await page.goto('/?quality=low&hour=10&weather=clear');
   await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 90_000 });
   await page.click('#menu-start');
   await page.waitForTimeout(600);

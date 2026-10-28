@@ -358,3 +358,12 @@ input[type=range] { width: 100%; accent-color: var(--red); }
 #hud-goal.hidden { display: none; }
 body.has-goal #bubbles { top: calc(350px + var(--sat)); }
 @media (max-height: 560px) { #hud-goal { top: calc(150px + var(--sat)); left: calc(6px + var(--sal)); max-width: 32vw; font-size: 10px; padding: 3px 7px; } body.has-goal #bubbles { top: calc(180px + var(--sat)); } }
+
+/* Photo mode overlay */
+#photo { position: fixed; inset: 0; z-index: 6; touch-action: none; cursor: grab; user-select: none; }
+#photo.hidden { display: none; }
+#photo:active { cursor: grabbing; }
+#photo-bar { position: absolute; left: 50%; bottom: calc(14px + var(--sab)); transform: translateX(-50%); display: flex; gap: 10px; align-items: center; background: rgba(14, 30, 52, 0.85); border-radius: 14px; padding: 8px 14px; color: #fff; white-space: nowrap; }
+#photo-bar .hint { font-size: 13px; opacity: 0.9; }
+#photo-bar button { padding: 8px 14px; font-size: 14px; }
+@media (max-width: 760px) { #photo-bar .hint { display: none; } }

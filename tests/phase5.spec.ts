@@ -7,7 +7,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
 async function boot(page: Page, query: string, errors: string[] = []) {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
-  await page.goto(`/?${query}`);
+  await page.goto(`/?${query}${query.includes('weather=') ? '' : '&weather=clear'}`); // tests pin the weather: the pre-trip roll is random
   await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 120_000 });
   await page.waitForTimeout(500);
   return errors;
@@ -94,5 +94,30 @@ test('audio layers: crowd near a stand, bell + train at the crossing, siren at t
   await lv('siren', 0.5); await lv('crowd', 0.5);
   await g(page, '__game.teleport(__game.stats().world.bridgeStartS + 200); __game.simulate(0.3, { throttle: 0, handbrake: true })');
   await lv('water', 0.6);
+  expect(errors).toEqual([]);
+});
+
+test('photo mode: pause → orbit camera with HUD hidden, saves a captioned PNG, F / Esc toggle from driving', async ({ page }) => {
+  const errors = await boot(page, 'quality=low&hour=16&weather=clear');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  await g(page, '__game.traffic.enabled = false; __game.teleport(3400); __game.simulate(0.3, { throttle: 0, handbrake: true })');
+  await page.keyboard.press('KeyP'); await page.waitForTimeout(200);
+  await page.click('#pause-photo'); await page.waitForTimeout(200);
+  expect(await g(page, '(() => ({ on: __game.photo.on, paused: __game.paused, hud: document.getElementById("hud").classList.contains("hidden"), pause: document.getElementById("pause").classList.contains("hidden") }))()')).toEqual({ on: true, paused: true, hud: true, pause: true });
+  const before = await g(page, '__game.photo.yaw') as number;
+  await page.mouse.move(640, 360); await page.mouse.down(); await page.mouse.move(400, 360, { steps: 6 }); await page.mouse.up();
+  expect(await g(page, '__game.photo.yaw') as number).not.toBeCloseTo(before, 3);
+  const dl = page.waitForEvent('download', { timeout: 20_000 });
+  await page.click('#photo-save');
+  const d = await dl; expect(d.suggestedFilename()).toMatch(/chada-poribohon-\d+\.png/);
+  expect(await g(page, '__game.photo.lastBlob?.size ?? 0') as number).toBeGreaterThan(20_000);
+  await page.screenshot({ path: `${SHOTS}/photo-mode.png` });
+  await page.click('#photo-close'); await page.waitForTimeout(200);
+  expect(await g(page, '(() => ({ on: __game.photo.on, paused: __game.paused, pause: document.getElementById("pause").classList.contains("hidden") }))()')).toEqual({ on: false, paused: true, pause: false });
+  await page.click('#pause-resume'); await page.waitForTimeout(100);
+  await page.keyboard.press('KeyF'); await page.waitForTimeout(100);
+  expect(await g(page, '__game.photo.on')).toBe(true);
+  await page.keyboard.press('Escape'); await page.waitForTimeout(100);
+  expect(await g(page, '(() => ({ on: __game.photo.on, paused: __game.paused }))()')).toEqual({ on: false, paused: false });
   expect(errors).toEqual([]);
 });

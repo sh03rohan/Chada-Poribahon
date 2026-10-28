@@ -1,0 +1,16 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 740, height: 360 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
+await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
+await page.goto('http://localhost:5173/?quality=low&hour=11&weather=storm&touch=1');
+await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 120000 });
+await page.click('#menu-start'); await page.waitForTimeout(400);
+await page.screenshot({ path: 'test-results/p5-mobile-pretrip.png' });
+await page.click('#pretrip-go'); await page.waitForTimeout(300);
+await page.evaluate(() => { __game.traffic.enabled = false; __game.forceSpecial('mother'); __game.teleport(1990); __game.simulate(1, { throttle: 0.5, autopilot: true }); for (let i = 0; i < 30 && __game.stats().kmh > 2; i++) __game.simulate(0.5, { throttle: 0, brake: 0.6, autopilot: true }); __game.simulate(12, { throttle: 0, handbrake: true, autopilot: true }); __game.choice.cancel(); });
+await page.waitForTimeout(2500);
+await page.screenshot({ path: 'test-results/p5-mobile-goal.png' });
+await page.evaluate(() => __game.openPhoto()); await page.waitForTimeout(2500);
+await page.screenshot({ path: 'test-results/p5-mobile-photo.png' });
+await browser.close();

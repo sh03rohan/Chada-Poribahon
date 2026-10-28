@@ -7,7 +7,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
 async function boot(page: Page, query: string, errors: string[] = []) {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/404|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
-  await page.goto(`/?${query}`);
+  await page.goto(`/?${query}${query.includes('weather=') ? '' : '&weather=clear'}`); // tests pin the weather: the pre-trip roll is random
   await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 90_000 });
   await page.waitForTimeout(600);
   return errors;

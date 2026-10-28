@@ -126,6 +126,7 @@
         <div class="menu">
           <button id="pause-resume" class="btn-primary">চালিয়ে যান</button>
           <button id="pause-map">ম্যাপ</button>
+          <button id="pause-photo">📸 ফটো মোড</button>
           <button id="pause-garage">গ্যারেজ</button>
           <button id="pause-records">রেকর্ড</button>
           <button id="pause-settings">সেটিংস</button>
@@ -194,6 +195,14 @@
     </div>
 
     <div id="crack" class="hidden"></div>
+    <!-- Photo mode: orbit the bus, save a captioned PNG -->
+    <div id="photo" class="hidden">
+      <div id="photo-bar">
+        <span class="hint">📸 ড্র্যাগ করে ঘোরান · স্ক্রল / পিঞ্চ করে জুম</span>
+        <button id="photo-save" class="btn-primary">📥 ছবি সেভ</button>
+        <button id="photo-close">✕ ফিরে যান</button>
+      </div>
+    </div>
     <div id="fade"></div>
     <div id="flash"></div>
     <div id="debug" class="hidden"></div>

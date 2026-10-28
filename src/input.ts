@@ -23,6 +23,7 @@ export class InputManager {
   sensitivity = 1;
   onPause: (() => void) | null = null;
   onMap: (() => void) | null = null;
+  onPhoto: (() => void) | null = null;
 
   constructor(touchRoot: HTMLElement) {
     addEventListener('keydown', (e) => {
@@ -33,6 +34,7 @@ export class InputManager {
       if (e.code === 'KeyR') this.onWeather?.();
       if (e.code === 'Escape' || e.code === 'KeyP') this.onPause?.();
       if (e.code === 'KeyM') this.onMap?.();
+      if (e.code === 'KeyF') this.onPhoto?.();
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));

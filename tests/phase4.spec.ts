@@ -7,7 +7,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
 async function boot(page: Page, query: string, errors: string[] = []) {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
-  await page.goto(`/?${query}`);
+  await page.goto(`/?${query}${query.includes('weather=') ? '' : '&weather=clear'}`); // tests pin the weather: the pre-trip roll is random
   await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 120_000 });
   await page.waitForTimeout(500);
   return errors;
@@ -47,7 +47,7 @@ test('pwa: manifest with PNG icons is served and the icons exist', async ({ page
 });
 
 test('route: Dhaka → Sylhet builds its own world (names, stops, scenery), finishes at Sylhet; switching routes reloads', async ({ page }) => {
-  const errors = await boot(page, 'quality=low&hour=11&route=dhaka-sylhet');
+  const errors = await boot(page, 'quality=low&hour=11&route=dhaka-sylhet&weather=clear');
   expect(await page.locator('#hud-route b').textContent()).toBe('ঢাকা → সিলেট');
   const w = await g(page, '(() => { const s = __game.stats(); const sc = __game.scene.getObjectByName("scenery"); return { stop0: __game.road.length > 6000, len: __game.road.length, sceneryMeshes: sc ? sc.children.length : 0 }; })()') as { len: number; sceneryMeshes: number };
   console.log('sylhet world', w);
@@ -58,7 +58,7 @@ test('route: Dhaka → Sylhet builds its own world (names, stops, scenery), fini
   await page.click('#pretrip-go'); await page.waitForTimeout(300);
   // Narsingdi stop serves passengers like Rajbari does
   await g(page, '(() => { __game.traffic.enabled = false; __game.teleport(1880); let st = __game.stats(); for (let i = 0; i < 60 && st.s < 1972; i++) st = __game.simulate(0.5, { throttle: 1, autopilot: true }); for (let i = 0; i < 40 && st.kmh > 2; i++) st = __game.simulate(0.5, { throttle: 0, brake: 1, autopilot: true }); __game.simulate(1.5, { throttle: 0, handbrake: true, autopilot: true }); __game.simulate(7, { throttle: 0, handbrake: true, autopilot: true }); })()');
-  const st = await g(page, '(() => { const s = __game.stats(); return { stops: s.stops.map((x) => x.done), pax: s.passengers, banner: document.getElementById("hud-banner-title").textContent }; })()') as { stops: boolean[]; pax: number };
+  const st = await g(page, '(() => { const s = __game.stats(); return { stops: s.stops.map((x) => x.done), pax: s.passengers - (s.special ? 1 : 0), banner: document.getElementById("hud-banner-title").textContent }; })()') as { stops: boolean[]; pax: number };
   console.log('narsingdi', st);
   expect(st.stops[0]).toBe(true); expect(st.pax).toBe(24 - 7 + 12);
   await g(page, 'if (__game.choice.open) __game.choice.cancel()');

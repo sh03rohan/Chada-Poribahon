@@ -1,7 +1,7 @@
-# চাঁদা পরিবহন (Chada Poribohon) — Phase 4
+# চাঁদা পরিবহন (Chada Poribohon) — Phase 5
 
 A browser-based Bangladeshi bus-driving game. Vite + TypeScript + three.js, no framework.
-Routes: কুষ্টিয়া → রাজবাড়ী → ফরিদপুর → ভাঙ্গা → পদ্মা সেতু → ঢাকা (~6 km) and ঢাকা → নরসিংদী → মেঘনা সেতু → শায়েস্তাগঞ্জ → চা বাগান → শ্রীমঙ্গল → সিলেট (~6.5 km); left-hand traffic.
+Routes: কুষ্টিয়া → রাজবাড়ী → ফরিদপুর → ভাঙ্গা → পদ্মা সেতু → ঢাকা (~6 km), ঢাকা → নরসিংদী → মেঘনা সেতু → শায়েস্তাগঞ্জ → চা বাগান → শ্রীমঙ্গল → সিলেট (~6.5 km) and ঢাকা → কাঁচপুর → মেঘনা-গোমতী সেতু → কুমিল্লা → সীতাকুণ্ড পাহাড় → সমুদ্র → চট্টগ্রাম (~6.5 km); left-hand traffic.
 
 ```
 npm install
@@ -244,7 +244,7 @@ rig has no interior passenger instances or canvas speedometer.
   (rickshaw/van present) and overtaking.
 
 `window.__game` exposes `simulate(seconds, input)`, `teleport(s)`, `stats()`, `switchCamera(mode)`,
-`toggleWeather()`, `setFreeCamera(pos, look)` for ad-hoc checks in the console.
+`toggleWeather()`, `applyWeather(kind)`, `forceSpecial(id)`, `openPhoto()`, `setFreeCamera(pos, look)` for ad-hoc checks in the console.
 
 ## Phase 2 — money, incidents and fuel
 
@@ -344,15 +344,49 @@ Tests: `tests/phase3.spec.ts` (career, garage, contracts, damage, the three even
   wrong-turn branch, every event distance (`WORLD` numbers), stops, junction directions, signposts,
   town clusters, map waypoints, scenery ranges and the Bangla names used in messages (bridge, ghat,
   gates, toll sign…). `applyRoute()` copies the chosen route into `WORLD`/`ROUTE` before the world is
-  built; the pre-trip card lists the routes and switching one reloads the page. **ঢাকা → সিলেট** adds
+  built; the pre-trip card lists the routes and switching one reloads the page. ঢাকা → চট্টগ্রাম
+  arrived in Phase 5. **ঢাকা → সিলেট** adds
   the Meghna bridge with its toll plaza and camera, a level crossing near Dhaka, the Narsingdi and
   Sayestaganj junctions, an accident after Sayestaganj, the blockade before the hills, **haor**
   wetlands (water on both sides, dykes, boats) after the bridge and **tea-garden hills** (rows of
   bushes on mounds, shade trees) around Sreemangal (`world/scenery.ts`). The sky box now follows the
-  bus so long routes never leave it. ঢাকা → চট্টগ্রাম is listed as coming soon.
+  bus so long routes never leave it.
 
 Probes: `scripts/probe-records.mjs`, `probe-pwa.mjs`, `probe-route.mjs <route-id>`, `probe-hud.mjs`.
 Tests: `tests/phase4.spec.ts` (records, PWA manifest, Sylhet world + route switching).
+
+## Phase 5 — Chattogram, weather, special passengers, sound, photo mode
+
+* **ঢাকা → চট্টগ্রাম** (`src/routes.ts`): Kanchpur, the Meghna–Gumti bridge with toll plaza and
+  camera, Comilla, a Chandpur-ghat wrong turn with its own ferry, a checkpoint and blockade, bare
+  **hills** around Sitakunda and the **sea** on the right for the last stretch (beach, ships) before
+  Alankar and the Chattogram gate (`world/scenery.ts` `hills` / `sea` ranges).
+* **Weather** (`world/weather.ts`, `world/sky.ts`): each pre-trip rolls **clear / rain / fog / storm**
+  (fog is likelier at night and dawn; `?weather=fog` etc. forces one) and prints a forecast line on the
+  card plus a toast at departure. Fog brings an overcast dome, dense grey fog (~250 m view), a dim sun and
+  headlights; storm darkens the sky, rains harder, and strikes **lightning** every 5–16 s (scene flash
+  + screen flash, then a synthesised thunder roll). Rain and storm share the slippery-road grip. The
+  🌧️ button / `R` cycles the four kinds.
+* **Special passengers** (`game/specials.ts`): after a stop, one of six named riders may board with a
+  request for the leg to the next stop — দাদি (no hard brakes), the exam student (be quick), রোগীর
+  সাথে ভাবি (quick but gentle), the businessman (few horns, no fines), the mother with a baby (no horn,
+  no hard brake), the photographer (stay under 65 km/h). They greet in a speech bubble, the goal sits in
+  a purple pill under the minimap, and at the next stop they thank you with a **tip** (ledger row on the
+  results card, 💝 badge) or grumble and the bus's mood drops. At most two per run, 65 % chance each;
+  `__game.forceSpecial(id)` for tests.
+* **Sound** (`vehicle/audio.ts`): ambience layers mixed from where the bus is — crowd murmur at bus
+  stands and the blockade, the **rail bell** while the gates are down, the **train** rumble and horn by
+  distance, a **police siren** sweep, river water on the bridges and the ghat branch — and melodic
+  stings for tips (cash), fines / an unhappy rider (fail), tolls (ding), new badges / a met contract
+  (badge) and a level-up fanfare. Everything is still synthesised; gains live in `AUDIO`.
+* **Photo mode** (`game/photo.ts`): from the pause menu (📸) or `F` while driving. The game pauses, every
+  HUD layer hides and the camera orbits the bus (drag / wheel / pinch). **ছবি সেভ** renders a clean frame,
+  stamps "চাঁদা পরিবহন · route · time" and shares it (Web Share with files on phones) or downloads a PNG.
+  `Esc` / ✕ returns to where you came from.
+* **Fix**: the toast column was outside the right-hand stack and overlapped the top HUD pills.
+
+Probes: `scripts/probe-weather.mjs`, `probe-specials.mjs`, `probe-audio.mjs`, `probe-photo.mjs`.
+Tests: `tests/phase5.spec.ts` (Chattogram route, weather, special passengers, audio layers, photo mode).
 
 ## Extension points
 

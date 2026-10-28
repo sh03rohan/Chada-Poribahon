@@ -17,6 +17,7 @@ import { Road } from './world/road.ts';
 import { Props } from './world/props.ts';
 import { SkySystem } from './world/sky.ts';
 import { Weather, WEATHER_INFO, type WeatherKind } from './world/weather.ts';
+import { PhotoMode } from './game/photo.ts';
 import { SPECIALS, describeOutcome, type ActiveSpecial, type SpecialDef, type SegmentMetrics } from './game/specials.ts';
 import { Stops } from './world/stops.ts';
 import { Blockade } from './world/blockade.ts';
@@ -96,6 +97,7 @@ class Game {
   /** test hooks */
   autopilotRoad: Road | null = null; autopilotDir: 1 | -1 = 1;
   freeCam: { pos: THREE.Vector3; look: THREE.Vector3; fov?: number } | null = null;
+  photo = new PhotoMode(); private photoFrom: 'driving' | 'pause' = 'driving';
   wiperPhase = 0; speedoTimer = 0; minimapTimer = 0; clockTimer = 0;
   lastFrame = performance.now();
   ready = false;
@@ -144,7 +146,8 @@ class Game {
     this.input.onCamera = () => this.switchCamera();
     this.input.onDebug = () => this.debug.toggle();
     this.input.onWeather = () => this.toggleWeather();
-    this.input.onPause = () => { if (this.screen === 'driving') this.togglePause(); };
+    this.input.onPause = () => { if (this.photo.on) { this.photo.close(); return; } if (this.screen === 'driving') this.togglePause(); };
+    this.input.onPhoto = () => { if (this.screen === 'driving') this.openPhoto(); };
     this.input.onMap = () => { if (this.screen === 'driving') this.toggleMap(); };
     $('btn-cam').onclick = () => this.switchCamera();
     $('btn-weather').onclick = () => this.toggleWeather();
@@ -283,6 +286,7 @@ class Game {
     $('pause-resume').onclick = () => this.togglePause(false);
     $('pause-map').onclick = () => { this.toggleMap(true); };
     $('pause-settings').onclick = () => this.openSettings();
+    $('pause-photo').onclick = () => this.openPhoto();
     $('pause-howto').onclick = () => $('howto').classList.remove('hidden');
     $('pause-menu').onclick = () => this.goToLanding();
   }
@@ -409,6 +413,25 @@ class Game {
     this.resetRun(); this.sky.setTime(6.3); this.applyNight();
   }
 
+  /** Photo mode: pause, hide every HUD layer and hand the camera to the orbit. */
+  openPhoto() {
+    if (this.photo.on || this.screen !== 'driving') return;
+    this.photoFrom = this.paused ? 'pause' : 'driving';
+    this.paused = true; $('pause').classList.add('hidden'); $('fullmap').classList.add('hidden');
+    this.hud.show(false); $('minimap').classList.add('hidden'); $('touch').classList.add('hidden'); $('crack').classList.add('hidden');
+    this.photo.open({
+      busPos: () => this.bus.root.position.clone(),
+      setFreeCam: (pos, look, fov) => { this.freeCam = { pos, look, fov }; },
+      renderClean: () => { this.photo.update(); this.cam.camera.position.copy(this.freeCam!.pos); this.cam.camera.lookAt(this.freeCam!.look); this.cam.camera.fov = 45; this.cam.camera.updateProjectionMatrix(); this.renderer.render(this.scene, this.cam.camera); return this.renderer.domElement; },
+      hour: () => this.sky.state.hour,
+      onClose: () => {
+        this.freeCam = null; this.cam.snap();
+        this.hud.show(true); $('minimap').classList.remove('hidden');
+        if (isMobile() || params.get('touch') === '1') $('touch').classList.remove('hidden');
+        if (this.photoFrom === 'pause') $('pause').classList.remove('hidden'); else this.paused = false;
+      },
+    });
+  }
   togglePause(force?: boolean) {
     const on = force ?? !this.paused;
     this.paused = on; $('pause').classList.toggle('hidden', !on);
@@ -649,6 +672,7 @@ class Game {
     this.syncVisual(alpha);
     const rough = this.cur.onRoad ? 0.15 : 1;
     if (this.screen === 'landing') this.landingCamera(dt);
+    this.photo.update();
     if (this.freeCam) { this.cam.camera.position.copy(this.freeCam.pos); this.cam.camera.lookAt(this.freeCam.look); if (this.freeCam.fov) { this.cam.camera.fov = this.freeCam.fov; this.cam.camera.updateProjectionMatrix(); } }
     else this.cam.update(this.bus.root, this.bus.body, kmh, rough, dt, this.cur.aLat);
     this.sky.follow(this.bus.root.position);
