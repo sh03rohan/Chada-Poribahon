@@ -12,7 +12,7 @@ await page.click('#menu-start'); await page.waitForTimeout(500);
 await page.screenshot({ path: `test-results/route-${route}-pretrip.png` });
 console.log('route buttons:', await page.evaluate(() => [...document.querySelectorAll('.route-select button')].map((b) => b.textContent.trim() + (b.classList.contains('on') ? ' [on]' : '') + (b.disabled ? ' [disabled]' : ''))));
 await page.click('#pretrip-go'); await page.waitForTimeout(400);
-const shots = route === 'dhaka-sylhet' ? [[60, 'start'], [1980, 'narsingdi'], [3100, 'bridge'], [3650, 'haor'], [5500, 'teahills'], [6100, 'sylhet']] : [[60, 'start'], [5000, 'bridge']];
+const shots = route === 'dhaka-sylhet' ? [[60, 'start'], [1980, 'narsingdi'], [3100, 'bridge'], [3650, 'haor'], [5500, 'teahills'], [6100, 'sylhet']] : route === 'dhaka-chattogram' ? [[60, 'start'], [2440, 'fork'], [5500, 'hills'], [6150, 'sea']] : [[60, 'start'], [5000, 'bridge']];
 for (const [s, name] of shots) {
   await page.evaluate((s) => { __game.traffic.enabled = false; __game.teleport(s); __game.simulate(0.3, { throttle: 0, handbrake: true }); }, s);
   await page.waitForTimeout(500);

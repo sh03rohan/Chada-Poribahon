@@ -7,6 +7,8 @@ import { WORLD } from './config.ts';
  */
 export type RouteId = 'kushtia-dhaka' | 'dhaka-sylhet' | 'dhaka-chattogram';
 
+export interface Scenery { teaHills: [number, number][]; haor: [number, number][]; hills?: [number, number][]; sea?: { range: [number, number]; side: -1 | 1 }[] }
+
 type WorldNumbers = Pick<typeof WORLD, 'stops' | 'chadaSpots' | 'checkpointS' | 'speedCameraS' | 'pumpS' | 'forkS' | 'andolonS' | 'bridgeStartS' | 'bridgeEndS' | 'finishS' | 'roundabouts' | 'kerbRanges' | 'tollS' | 'railS' | 'accidentS' | 'highwayStartS'>;
 
 export interface RouteDef {
@@ -37,7 +39,7 @@ export interface RouteDef {
   clusters: { s: number; n: number; spread: number }[];
   hawkerSpots: number[];
   waypoints: [number, string][];
-  scenery: { teaHills: [number, number][]; haor: [number, number][] };
+  scenery: Scenery;
 }
 
 const KUSHTIA: RouteDef = {
@@ -134,7 +136,53 @@ const SYLHET: RouteDef = {
   scenery: { teaHills: [[5250, 5950]], haor: [[3520, 3880]] },
 };
 
-const CHATTOGRAM: RouteDef = { ...KUSHTIA, id: 'dhaka-chattogram', label: 'ঢাকা → চট্টগ্রাম', from: 'ঢাকা', to: 'চট্টগ্রাম', toLoc: 'চট্টগ্রামে', available: false };
+const CHATTOGRAM: RouteDef = {
+  id: 'dhaka-chattogram', label: 'ঢাকা → চট্টগ্রাম', from: 'ঢাকা', to: 'চট্টগ্রাম', toLoc: 'চট্টগ্রামে', available: true,
+  route: [
+    [400, 0], [350, 25], [300, 0], [450, -35], [300, 0],
+    [450, 0],            // Kanchpur straight (stop 2000, junction 2130)
+    [300, 30], [250, 0],
+    [700, 0],            // Meghna-Gumti bridge (2880–3460), toll 2830, camera 3200
+    [300, -25], [350, 0], // Comilla (stop 3950, junction 4080)
+    [400, 0],            // accident 4380
+    [300, 40], [400, 0], // andolon 5000 (Feni)
+    [350, -30], [300, 0], // Sitakunda hills (5250–5950), stop 5700
+    [600, 0],            // sea on the right, Chattogram from 6000, finish 6450
+  ],
+  branch: [[60, 0], [140, -38], [230, 0], [60, 12], [40, 0]],
+  world: {
+    stops: [
+      { s: 2000, name: 'কাঁচপুর', waiting: 12, getOff: 7, fare: 350 },
+      { s: 3950, name: 'কুমিল্লা', waiting: 8, getOff: 6, fare: 250 },
+      { s: 5700, name: 'সীতাকুণ্ড', waiting: 6, getOff: 4, fare: 150 },
+      { s: 6300, name: 'অলংকার (চট্টগ্রাম)', waiting: 0, getOff: 10, fare: 0 },
+    ],
+    chadaSpots: [600, 4600], checkpointS: 2700, speedCameraS: 3200, pumpS: 1250, forkS: 2460, andolonS: 5000,
+    bridgeStartS: 2880, bridgeEndS: 3460, finishS: 6450,
+    roundabouts: [{ s: 2130, name: 'কাঁচপুর' }, { s: 4080, name: 'কুমিল্লা' }, { s: 6250, name: 'চট্টগ্রাম' }],
+    kerbRanges: [[1800, 2300], [3800, 4200], [6000, 6600]], tollS: 2830, railS: 900, accidentS: 4380, highwayStartS: 6000,
+  },
+  ferryLandS: 3600,
+  names: {
+    startGate: ['ঢাকা সায়েদাবাদ টার্মিনাল', 'শুভ যাত্রা'], finishGate: ['চট্টগ্রাম', 'স্বাগতম'], bridge: 'মেঘনা-গোমতী সেতু', river: 'মেঘনা',
+    tollSign: ['মেঘনা-গোমতী টোল প্লাজা', 'বাস ৳১,৫০০ · থামুন'], correctWay: 'চট্টগ্রাম ➜ মেঘনা সেতু', wrongWayBoard: ['চাঁদপুর ঘাট ➜', 'ফেরি'],
+    ghat: 'চাঁদপুর ফেরি ঘাট', ghatSign: ['ফেরি ঘাট ২ কিমি', 'ভারী যানবাহন লাইন'], forkName: 'দাউদকান্দি মোড়', branchLabel: 'চাঁদপুর ঘাট (ভুল রাস্তা)', lostStops: 'কুমিল্লা-সীতাকুণ্ডের যাত্রী',
+  },
+  directions: {
+    'কাঁচপুর': ['চট্টগ্রাম', 'ঢাকা', 'নারায়ণগঞ্জ', 'সিলেট'],
+    'কুমিল্লা': ['চট্টগ্রাম', 'ঢাকা', 'কুমিল্লা শহর', 'নোয়াখালী'],
+    'চট্টগ্রাম': ['চট্টগ্রাম শহর', 'ঢাকা', 'বন্দর', 'কক্সবাজার'],
+  },
+  signs: [
+    [350, ['কাঁচপুর ১.৬ কিমি', 'চট্টগ্রাম ৬.১ কিমি'], '#1f6fb5'], [1700, ['কাঁচপুর বাস স্ট্যান্ড', 'সামনে থামুন'], '#1f9d55'],
+    [2600, ['মেঘনা-গোমতী সেতু', 'সাবধানে চালান'], '#1f6fb5'], [3700, ['গতিসীমা', '৮০'], '#d8262c'],
+    [2760, ['মেঘনা সেতু', 'গতি কমান'], '#1f6fb5'], [5300, ['সীতাকুণ্ড পাহাড়', 'সাবধান — বাঁক'], '#1f9d55'], [5800, ['চট্টগ্রাম ০.৭ কিমি', 'স্বাগতম'], '#1f9d55'],
+  ],
+  clusters: [{ s: 2000, n: 10, spread: 160 }, { s: 600, n: 4, spread: 90 }, { s: 4700, n: 5, spread: 120 }, { s: 3950, n: 9, spread: 150 }, { s: 5700, n: 5, spread: 110 }, { s: 6150, n: 16, spread: 260 }],
+  hawkerSpots: [1960, 2060, 600, 6200, 6080, 4700],
+  waypoints: [[40, 'ঢাকা'], [2000, 'কাঁচপুর'], [2460, 'দাউদকান্দি মোড়'], [3170, 'মেঘনা সেতু'], [3950, 'কুমিল্লা'], [5700, 'সীতাকুণ্ড'], [6450, 'চট্টগ্রাম']],
+  scenery: { teaHills: [], haor: [], hills: [[5200, 6000]], sea: [{ range: [5950, 6480], side: 1 }] },
+};
 
 export const ROUTES: RouteDef[] = [KUSHTIA, SYLHET, CHATTOGRAM];
 

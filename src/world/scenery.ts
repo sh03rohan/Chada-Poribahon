@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Road } from './road.ts';
 import type { QualityTier } from '../config.ts';
 import { WORLD } from '../config.ts';
+import type { Scenery } from '../routes.ts';
 
 /**
  * Route-specific landscape: tea-garden hills (rows of bushes on rolling mounds, a few shade trees)
@@ -17,7 +18,7 @@ function paint(g: THREE.BufferGeometry, c: THREE.ColorRepresentation) {
 let seed = 11;
 const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 
-export function buildScenery(road: Road, scenery: { teaHills: [number, number][]; haor: [number, number][] }, tier: QualityTier): THREE.Group {
+export function buildScenery(road: Road, scenery: Scenery, tier: QualityTier): THREE.Group {
   const group = new THREE.Group(); group.name = 'scenery';
   const edge = WORLD.roadWidth / 2 + WORLD.shoulderWidth;
   const density = tier === 'low' ? 0.5 : tier === 'medium' ? 0.8 : 1;
@@ -45,6 +46,36 @@ export function buildScenery(road: Road, scenery: { teaHills: [number, number][]
         if (rnd() < 0.6) { parts.push(paint(new THREE.CylinderGeometry(0.25, 0.35, 6, 6).translate(p.x, h + 2.5, p.z), 0x5a3a22)); parts.push(paint(new THREE.SphereGeometry(3.2, 8, 6).scale(1.4, 0.6, 1.4).translate(p.x, h + 6, p.z), 0x2f6d2a)); }
       }
     }
+  }
+
+  // ---- bare hills (Sitakunda): taller mounds with a few trees, no bush rows
+  for (const [s0, s1] of scenery.hills ?? []) {
+    for (let s = s0 + 20; s < s1; s += 45) {
+      for (const side of [-1, 1]) {
+        const rx = 30 + rnd() * 25, rz = 26 + rnd() * 20, h = 9 + rnd() * 12;
+        const lat = side * (edge + 12 + rx + rnd() * 30);
+        const p = at(s, lat);
+        parts.push(paint(new THREE.SphereGeometry(1, 16, 9, 0, Math.PI * 2, 0, Math.PI / 2).scale(rx, h, rz).translate(p.x, -0.2, p.z), rnd() < 0.5 ? 0x4f8a3e : 0x5f9a46));
+        const trees = Math.round(6 * density);
+        for (let k = 0; k < trees; k++) {
+          const u = (rnd() - 0.5) * 1.5, v = (rnd() - 0.5) * 1.5; if (u * u + v * v > 0.85) continue;
+          const y = h * Math.sqrt(Math.max(0, 1 - u * u - v * v)) - 0.2;
+          parts.push(paint(new THREE.CylinderGeometry(0.2, 0.3, 4, 5).translate(p.x + u * rx, y + 1.8, p.z + v * rz), 0x5a3a22));
+          parts.push(paint(new THREE.SphereGeometry(2.2, 7, 5).scale(1.3, 0.8, 1.3).translate(p.x + u * rx, y + 4.2, p.z + v * rz), 0x2f6d2a));
+        }
+      }
+    }
+  }
+  // ---- sea on one side: wide water to the horizon, beach strip, a couple of ships
+  for (const sea of scenery.sea ?? []) {
+    const [s0, s1] = sea.range; const side = sea.side;
+    const pts: number[] = [], idx: number[] = []; let k = 0;
+    for (let s = s0; s <= s1; s += 10) { const a = at(s, side * (edge + 14)), b = at(s, side * 900); pts.push(a.x, -0.06, a.z, b.x, -0.06, b.z); if (s > s0) idx.push(k - 2, k - 1, k, k - 1, k + 1, k); k += 2; }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3)); g.setIndex(idx); g.computeVertexNormals();
+    const sm = new THREE.MeshStandardMaterial({ color: 0x2f6f8f, roughness: 0.1, metalness: 0.25, transparent: true, opacity: 0.95, side: THREE.DoubleSide });
+    group.add(new THREE.Mesh(g, sm));
+    for (let s = s0; s < s1; s += 10) { const p = at(s + 5, side * (edge + 8)); parts.push(paint(new THREE.BoxGeometry(12, 0.12, 10.2).rotateY(p.yaw).translate(p.x, -0.04, p.z), 0xd9c9a0)); }
+    for (let i = 0; i < 3; i++) { const p = at(s0 + 80 + i * 150, side * (edge + 250 + rnd() * 300)); parts.push(paint(new THREE.BoxGeometry(60, 8, 12).rotateY(rnd()).translate(p.x, 3.5, p.z), 0x3a3f4a)); parts.push(paint(new THREE.BoxGeometry(14, 10, 10).translate(p.x + 18, 12, p.z), 0xe8e8e8)); }
   }
 
   // ---- haor: water on both sides, a dyke edge, boats and bamboo poles
@@ -79,11 +110,13 @@ export function buildScenery(road: Road, scenery: { teaHills: [number, number][]
 }
 
 /** true where ordinary roadside props must not be placed (over haor water / on the tea mounds). */
-export function sceneryExcludes(road: Road, scenery: { teaHills: [number, number][]; haor: [number, number][] }) {
+export function sceneryExcludes(road: Road, scenery: Scenery) {
   return (x: number, z: number) => {
     const l = road.locate(x, z, 0);
     for (const [a, b] of scenery.haor) if (l.s > a && l.s < b && Math.abs(l.lateral) > WORLD.roadWidth / 2 + WORLD.shoulderWidth + 4) return true;
     for (const [a, b] of scenery.teaHills) if (l.s > a && l.s < b && Math.abs(l.lateral) > WORLD.roadWidth / 2 + WORLD.shoulderWidth + 8) return true;
+    for (const [a, b] of scenery.hills ?? []) if (l.s > a && l.s < b && Math.abs(l.lateral) > WORLD.roadWidth / 2 + WORLD.shoulderWidth + 10) return true;
+    for (const sea of scenery.sea ?? []) if (l.s > sea.range[0] && l.s < sea.range[1] && Math.sign(l.lateral) === sea.side && Math.abs(l.lateral) > WORLD.roadWidth / 2 + WORLD.shoulderWidth + 3) return true;
     return false;
   };
 }
