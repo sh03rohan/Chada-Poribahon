@@ -33,6 +33,8 @@ export interface BusRig {
   setDamage?(level: number): void;
   /** high beam: longer, brighter headlight cones (night hazards) */
   setHighBeam?(on: boolean): void;
+  /** visible light cones in front of the headlights (0 = hidden; fog/night raise it) */
+  setBeamCones?(k: number): void;
   /** engine smoke sprites (animated by the damage model) */
   smoke?: THREE.Sprite[];
   /** repaint the side livery + paint colour (garage); optional on GLB rigs */
@@ -287,6 +289,9 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   const headMatL = headMat.clone(); // left lamp gets its own material so damage can kill it
   const indMat = new THREE.MeshStandardMaterial({ color: 0xff9a1a, emissive: 0xff7a00, emissiveIntensity: 0.3, roughness: 0.3 });
   const headlights: THREE.SpotLight[] = [];
+  const cones: THREE.Mesh[] = [];
+  const coneTex = (() => { const c = document.createElement('canvas'); c.width = 4; c.height = 64; const x = c.getContext('2d')!; const g = x.createLinearGradient(0, 0, 0, 64); g.addColorStop(0, 'rgba(255,245,215,0)'); g.addColorStop(0.15, 'rgba(255,245,215,1)'); g.addColorStop(1, 'rgba(255,245,215,0)'); x.fillStyle = g; x.fillRect(0, 0, 4, 64); return new THREE.CanvasTexture(c); })();
+  const coneMat = new THREE.MeshBasicMaterial({ map: coneTex, color: 0xfff1cf, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false });
   for (const x of [-0.82, 0.82]) {
     const h = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.08, 20).rotateX(Math.PI / 2), x < 0 ? headMatL : headMat); h.position.set(x, 1.08, zF - 0.02); body.add(h);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.025, 8, 20), chrome); ring.position.set(x, 1.08, zF - 0.04); body.add(ring);
@@ -294,6 +299,9 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
     const spot = new THREE.SpotLight(0xfff1d6, 0, 70, 0.5, 0.55, 1.2);
     spot.position.set(x, 1.1, zF); spot.target.position.set(x * 1.5, 0.0, zF - 30);
     body.add(spot, spot.target); headlights.push(spot);
+    // additive light cone (fog / night): open cone, bright at the lamp, fading along its length
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(2.6, 16, 18, 1, true).rotateX(Math.PI / 2).translate(0, 0, -8), coneMat);
+    cone.position.set(x, 1.05, zF - 0.1); cone.rotation.x = 0.045; cone.renderOrder = 3; cone.visible = false; body.add(cone); cones.push(cone);
   }
   // Mirrors
   for (const x of [-1, 1]) {
@@ -469,7 +477,7 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   const driverHandOverride: { L: THREE.Vector3 | null; R: THREE.Vector3 | null } = { L: null, R: null };
 
   // ---- Draw-call merge: static parts → a few vertex-coloured meshes -------------
-  const skip = new Set<THREE.Object3D>([door, steeringWheel, ...wipers, driver.root, helper.root, ...riders.map((r) => r.root), seats, skinMesh, clothMesh, hairMesh, speedoMesh, rearView, bumper]);
+  const skip = new Set<THREE.Object3D>([door, steeringWheel, ...cones, ...wipers, driver.root, helper.root, ...riders.map((r) => r.root), seats, skinMesh, clothMesh, hairMesh, speedoMesh, rearView, bumper]);
   mergeStaticMeshes(body, skip, opts.shadows);
   for (const g of [door, steeringWheel, ...wipers, ...wheelSpin]) mergeStaticMeshes(g, new Set(), opts.shadows);
 
@@ -539,6 +547,7 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
     updateSpeedo(kmh, rpm, gear) { speedo.update(kmh, rpm, gear); },
     smoke,
     setHighBeam(on) { highBeam = on; rig.setLights({ headlights: lightsOn, brake: 0, reverse: false }); },
+    setBeamCones(k) { const on = k > 0.01 && lightsOn; coneMat.opacity = Math.min(0.5, k * (highBeam ? 1.4 : 1)); cones.forEach((c, i) => { c.visible = on && !(i === 0 && headlightsDead); c.scale.set(highBeam ? 1.15 : 1, highBeam ? 1.15 : 1, highBeam ? 1.6 : 1); }); },
     setDamage(level) {
       // bent bumper from ~50 %, dead left headlight from ~30 %
       const bend = Math.max(0, (level - 0.45) / 0.55);

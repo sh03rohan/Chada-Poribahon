@@ -33,3 +33,28 @@ test('post-processing: none on low, basic on medium, full (GTAO) on high; frames
   }
   void frameOnce;
 });
+
+test('lighting: cascades on high, sun rays at dawn, headlight cones + lamp pools at night, cones in fog', async ({ page }) => {
+  test.setTimeout(600_000);
+  let errors = await boot(page, 'quality=high&hour=6.6');
+  const st = () => g(page, '(() => { const s = __game.stats(); return { csm: s.csm, rays: s.raysOpacity, cones: __game.bus.body.children.filter((c) => c.visible && c.geometry && c.geometry.type === "ConeGeometry").length, pools: __game.props.poolMat ? __game.props.poolMat.opacity : -1, sunI: __game.sky.sunIntensity }; })()') as Promise<{ csm: boolean; rays: number; cones: number; pools: number; sunI: number }>;
+  let s = await st(); expect(s.csm).toBe(true); expect(s.rays).toBeGreaterThan(0.3); expect(s.sunI).toBeGreaterThan(0.5);
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  await g(page, '__game.traffic.enabled = false; __game.teleport(2650); __game.simulate(0.3, { throttle: 0, handbrake: true })');
+  let f0 = await g(page, '__game.frames') as number;
+  await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0 + 1, f0, { timeout: 240_000 });
+  await page.screenshot({ path: `${SHOTS}/light-dawn-high.png` });
+  expect(errors).toEqual([]);
+  errors = await boot(page, 'quality=medium&hour=21');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  await g(page, '__game.traffic.enabled = false; __game.teleport(1990); __game.simulate(0.3, { throttle: 0, handbrake: true })');
+  f0 = await g(page, '__game.frames') as number;
+  await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0 + 1, f0, { timeout: 120_000 });
+  s = await st(); expect(s.csm).toBe(false); expect(s.cones).toBe(2); expect(s.pools).toBeGreaterThan(0.2); expect(s.rays).toBe(0);
+  await page.screenshot({ path: `${SHOTS}/light-night-medium.png` });
+  await g(page, '__game.applyWeather("fog", true); __game.sky.setTime(11); __game.applyNight()');
+  f0 = await g(page, '__game.frames') as number;
+  await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0, f0, { timeout: 120_000 });
+  s = await st(); expect(s.cones).toBe(2); expect(s.pools).toBe(0);
+  expect(errors).toEqual([]);
+});

@@ -201,6 +201,11 @@ export class Props {
     const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe9b0, emissive: 0xffd27a, emissiveIntensity: 0 });
     this.nightEmissives.push(lampMat);
     const lamps = new THREE.InstancedMesh(lampGeo, lampMat, places.length);
+    // warm pool of light on the ground under each lamp at night (additive disc, no real light)
+    const poolC = document.createElement('canvas'); poolC.width = poolC.height = 64; const pctx = poolC.getContext('2d')!; const pg = pctx.createRadialGradient(32, 32, 2, 32, 32, 32); pg.addColorStop(0, 'rgba(255,255,255,1)'); pg.addColorStop(0.5, 'rgba(255,255,255,0.35)'); pg.addColorStop(1, 'rgba(255,255,255,0)'); pctx.fillStyle = pg; pctx.fillRect(0, 0, 64, 64);
+    this.poolMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(poolC), color: 0xffc46a, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    const pools = new THREE.InstancedMesh(new THREE.CircleGeometry(5.5, 18).rotateX(-Math.PI / 2), this.poolMat, places.length);
+    pools.renderOrder = 1; pools.frustumCulled = false;
     places.forEach((s, i) => {
       const side = i % 2 === 0 ? 1 : -1;
       const { pos, yaw } = placeAt(this.road, s, side * (WORLD.roadWidth / 2 + WORLD.shoulderWidth + 0.3));
@@ -210,8 +215,9 @@ export class Props {
       COLLIDERS.add(pos.x, pos.z, 0.18);
       const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
       _m.compose(pos.clone().addScaledVector(right, -side * 1.75).add(new THREE.Vector3(0, 6.95, 0)), _q, _s); lamps.setMatrixAt(i, _m);
+      _m.compose(pos.clone().addScaledVector(right, -side * 1.75).setY(0.03), new THREE.Quaternion(), _s); pools.setMatrixAt(i, _m);
     });
-    mesh.instanceMatrix.needsUpdate = true; lamps.instanceMatrix.needsUpdate = true;
+    mesh.instanceMatrix.needsUpdate = true; lamps.instanceMatrix.needsUpdate = true; pools.instanceMatrix.needsUpdate = true; this.group.add(pools);
     this.group.add(mesh, lamps);
   }
 
@@ -381,7 +387,9 @@ export class Props {
     }
   }
 
+  poolMat: THREE.MeshBasicMaterial | null = null;
   setNight(on: boolean) {
     for (const m of this.nightEmissives) m.emissiveIntensity = on ? 2.5 : 0;
+    if (this.poolMat) this.poolMat.opacity = on ? 0.42 : 0;
   }
 }
