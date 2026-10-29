@@ -23,7 +23,7 @@ export function mergeStaticMeshes(group: THREE.Object3D, skip: Set<THREE.Object3
 
   const walk = (o: THREE.Object3D) => {
     if (skip.has(o)) return;
-    if (o.type === 'Mesh') {
+    if (o.type === 'Mesh' && !(o as THREE.InstancedMesh).isInstancedMesh && !(o as THREE.SkinnedMesh).isSkinnedMesh) {
       const m = o as THREE.Mesh;
       if (!Array.isArray(m.material) && !m.morphTargetInfluences) {
         if (bakeable(m.material)) {

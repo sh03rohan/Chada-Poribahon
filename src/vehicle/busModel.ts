@@ -221,7 +221,7 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   const interiorMat = new THREE.MeshStandardMaterial({ color: 0xe9e2cf, roughness: 0.9, side: THREE.BackSide });
   const glass = new THREE.MeshPhysicalMaterial({
     color: 0xaacbe0, transparent: true, opacity: 0.18, roughness: 0.04, metalness: 0.0,
-    depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.4, clearcoat: 1, clearcoatRoughness: 0.05,
+    depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.8, clearcoat: 1, clearcoatRoughness: 0.04, reflectivity: 0.9,
   });
   const chrome = new THREE.MeshStandardMaterial({ color: 0xcfd4d8, roughness: 0.25, metalness: 0.9 });
   const black = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.7 });
@@ -338,9 +338,43 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   const luggage = cast(new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 2.2), new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.9 }))); luggage.position.set(0.1, D.height + 0.5, 1.2); body.add(luggage);
   const sack = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), new THREE.MeshStandardMaterial({ color: 0xc9b58a, roughness: 1 })); sack.scale.set(1, 0.7, 1.3); sack.position.set(-0.5, D.height + 0.5, -1.4); body.add(sack);
 
+  // ---- Detail pass: rivet strips, mud flaps, dirt skirt, tarp + rope over the luggage -------------
+  {
+    // rivets: two strips per side (waistline, roof seam), one instanced mesh
+    const rivetGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.012, 8).rotateZ(Math.PI / 2);
+    const rows: [number, number][] = []; // [y, zStart..zEnd by step]
+    const zs: number[] = []; for (let u = U_REAR + 0.35; u < U_FRONT - 0.7; u += 0.26) zs.push(-u);
+    for (const y of [WIN_Y0 - 0.12, D.height - 0.22, D.skirtHeight + 0.22]) rows.push([y, 0]);
+    const rivets = new THREE.InstancedMesh(rivetGeo, new THREE.MeshStandardMaterial({ color: 0xd9dde0, roughness: 0.35, metalness: 0.85 }), rows.length * zs.length * 2);
+    const rm = new THREE.Matrix4(); let ri = 0;
+    for (const side of [1, -1]) for (const [y] of rows) for (const z of zs) { rm.makeTranslation(side * (W / 2 + 0.012), y, z); rivets.setMatrixAt(ri++, rm); }
+    rivets.instanceMatrix.needsUpdate = true; rivets.name = 'rivets'; body.add(rivets);
+    // mud flaps behind every wheel (forward is −z, so "behind" is +z)
+    const flapMat = new THREE.MeshStandardMaterial({ color: 0x1a1816, roughness: 0.95 });
+    const flapGeo = new THREE.BoxGeometry(0.56, 0.5, 0.03);
+    const tx0 = PHYSICS.trackWidth / 2;
+    for (const [x, z] of [[-tx0, -PHYSICS.lf], [tx0, -PHYSICS.lf], [-tx0, PHYSICS.lr], [tx0, PHYSICS.lr]]) {
+      const f = cast(new THREE.Mesh(flapGeo, flapMat)); f.position.set(x, 0.42, z + PHYSICS.wheelRadius + 0.3); f.rotation.x = -0.12; body.add(f);
+      const mud = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.22), new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 1, transparent: true, opacity: 0.55, depthWrite: false })); mud.position.set(x, 0.28, z + PHYSICS.wheelRadius + 0.33); mud.rotation.x = -0.12; mud.renderOrder = 2; body.add(mud);
+    }
+    // dirt skirt: a brown splash that fades up the lower body, both sides and the rear
+    const dc = document.createElement('canvas'); dc.width = 512; dc.height = 64; const dctx = dc.getContext('2d')!;
+    const dg = dctx.createLinearGradient(0, 64, 0, 0); dg.addColorStop(0, 'rgba(92,70,48,0.7)'); dg.addColorStop(0.45, 'rgba(92,70,48,0.3)'); dg.addColorStop(1, 'rgba(92,70,48,0)'); dctx.fillStyle = dg; dctx.fillRect(0, 0, 512, 64);
+    for (let i = 0; i < 700; i++) { dctx.fillStyle = `rgba(70,52,34,${0.2 + Math.random() * 0.5})`; const y = 64 - Math.pow(Math.random(), 0.6) * 50; dctx.fillRect(Math.random() * 512, y, 1 + Math.random() * 3, 1 + Math.random() * 2); }
+    const dirtTex = new THREE.CanvasTexture(dc); dirtTex.colorSpace = THREE.SRGBColorSpace; dirtTex.anisotropy = opts.anisotropy;
+    const dirtMat = new THREE.MeshStandardMaterial({ map: dirtTex, transparent: true, roughness: 1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
+    const skirtLen = L - 1.2, skirtH = 0.62;
+    for (const side of [1, -1]) { const sk = new THREE.Mesh(new THREE.PlaneGeometry(skirtLen, skirtH), dirtMat); sk.position.set(side * (W / 2 + 0.015), D.skirtHeight + skirtH / 2 - 0.02, 0.1); sk.rotation.y = side * Math.PI / 2; sk.renderOrder = 2; body.add(sk); }
+    const skRear = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.3, skirtH * 0.8), dirtMat); skRear.position.set(0, D.skirtHeight + skirtH * 0.4, -U_REAR + 0.016); skRear.renderOrder = 2; body.add(skRear);
+    // tarp over the luggage with rope ties
+    const tarp = cast(new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.34, 2.36), new THREE.MeshStandardMaterial({ color: 0x2a5a9a, roughness: 0.85 }))); tarp.position.set(0.1, D.height + 0.66, 1.2); body.add(tarp);
+    const rope = new THREE.MeshStandardMaterial({ color: 0xc9b58a, roughness: 1 });
+    for (const z of [0.4, 1.2, 2.0]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.84, 0.014, 5, 24, Math.PI).rotateZ(Math.PI).rotateY(Math.PI / 2), rope); r.position.set(0.1, D.height + 0.5, z); r.scale.set(1, 0.42, 1); body.add(r); }
+  }
+
   // ---- Wheels ------------------------------------------------------------------
   const tread = makeTyreTread();
-  const tyreMat = new THREE.MeshStandardMaterial({ map: tread, color: 0x2a2a2a, roughness: 0.95 });
+  const tyreMat = new THREE.MeshStandardMaterial({ map: tread, color: 0x2e2a26, roughness: 0.95 });
   const tyreGeo = new THREE.CylinderGeometry(PHYSICS.wheelRadius, PHYSICS.wheelRadius, 0.3, 28).rotateZ(Math.PI / 2);
   const rimGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.32, 20).rotateZ(Math.PI / 2);
   const hubGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.38, 12).rotateZ(Math.PI / 2);
