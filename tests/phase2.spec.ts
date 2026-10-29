@@ -148,7 +148,7 @@ test('map: minimap + full map + fork signboards + wrong branch warning & recover
 });
 
 test('landing + intro: frames at 3/10/16/21/26 s, skip works at every second, intro remembered', async ({ page }) => {
-  test.setTimeout(900_000); // software GL: the 30-skip loop alone runs ~5 min
+  test.setTimeout(1_200_000); // software GL at ~2 fps: the 30-skip loop alone takes most of the budget
   const errors = await boot(page, 'quality=low&hour=10'); // low tier keeps the 30-skip loop inside the budget on software GL
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${SHOTS}/landing.png` });
@@ -167,8 +167,8 @@ test('landing + intro: frames at 3/10/16/21/26 s, skip works at every second, in
   expect(await page.locator('#pretrip').isVisible()).toBe(true);
   await page.screenshot({ path: `${SHOTS}/pretrip.png` });
   expect(await g(page, '__game.settings.value.introSeen')).toBe(true);
-  // skip at every second via the button, Esc, Space and tap (timeline runs 8× faster to keep the test short)
-  await g(page, '__game.cinematic.timeScale = 8');
+  // skip at every second via the button, Esc, Space and tap (timeline runs 12× faster to keep the test short)
+  await g(page, '__game.cinematic.timeScale = 12');
   for (let sec = 0; sec <= 29; sec++) {
     await g(page, '(void __game.playIntro(), 0)');
     await page.waitForFunction(() => (window as unknown as { __game: { stats(): { cineActive: boolean } } }).__game.stats().cineActive, null, { timeout: 10_000 });

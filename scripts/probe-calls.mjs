@@ -1,0 +1,11 @@
+import { chromium } from '@playwright/test';
+const port = process.argv[2] ?? '5173';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
+await page.goto(`http://localhost:${port}/?quality=low&hour=6.3&weather=clear`);
+await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 120000 });
+await page.waitForTimeout(3000);
+const r = await page.evaluate(() => { const g = __game; const t0 = performance.now(); const f0 = g.frames ?? 0; let c0 = 0; return new Promise((res) => { const id = setInterval(() => { c0++; }, 100); setTimeout(() => { clearInterval(id); const n = (g.frames ?? 0) - f0; res({ calls: g.renderer.info.render.calls, tris: g.renderer.info.render.triangles, frames: n, msPerFrame: n ? Math.round((performance.now() - t0) / n) : null }); }, 8000); }); });
+console.log(`port ${port} landing low tier`, r);
+await browser.close();
