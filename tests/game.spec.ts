@@ -12,7 +12,7 @@ type Stats = {
 async function boot(page: Page, query: string) {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`/?autostart=1&quality=low&${query}${query.includes('weather=') ? '' : '&weather=clear'}`); // tests pin the weather: the pre-trip roll is random
+  await page.goto(`/?autostart=1&quality=low&${query}${query.includes('weather=') ? '' : '&weather=clear'}&hazards=0`); // tests pin the weather and Phase 6 hazards (random otherwise)
   await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 90_000 });
   await page.waitForTimeout(800);
   expect(errors, 'no runtime errors').toEqual([]);
@@ -146,7 +146,7 @@ test('performance: no frame spikes after warm-up (software renderer, low tier)',
 
 test('camera follows the bus when a run is started from the menu (not autostart)', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
-  await page.goto('/?quality=low&hour=10&weather=clear');
+  await page.goto('/?quality=low&hour=10&weather=clear&hazards=0');
   await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 90_000 });
   await page.click('#menu-start');
   await page.waitForTimeout(600);

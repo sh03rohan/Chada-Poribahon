@@ -1,4 +1,4 @@
-# চাঁদা পরিবহন (Chada Poribohon) — Phase 5
+# চাঁদা পরিবহন (Chada Poribohon) — Phase 6
 
 A browser-based Bangladeshi bus-driving game. Vite + TypeScript + three.js, no framework.
 Routes: কুষ্টিয়া → রাজবাড়ী → ফরিদপুর → ভাঙ্গা → পদ্মা সেতু → ঢাকা (~6 km), ঢাকা → নরসিংদী → মেঘনা সেতু → শায়েস্তাগঞ্জ → চা বাগান → শ্রীমঙ্গল → সিলেট (~6.5 km) and ঢাকা → কাঁচপুর → মেঘনা-গোমতী সেতু → কুমিল্লা → সীতাকুণ্ড পাহাড় → সমুদ্র → চট্টগ্রাম (~6.5 km); left-hand traffic.
@@ -244,7 +244,7 @@ rig has no interior passenger instances or canvas speedometer.
   (rickshaw/van present) and overtaking.
 
 `window.__game` exposes `simulate(seconds, input)`, `teleport(s)`, `stats()`, `switchCamera(mode)`,
-`toggleWeather()`, `applyWeather(kind)`, `forceSpecial(id)`, `openPhoto()`, `setFreeCamera(pos, look)` for ad-hoc checks in the console.
+`toggleWeather()`, `applyWeather(kind)`, `forceSpecial(id)`, `openPhoto()`, `toggleHighBeam()`, `signals.force(i, state)`, `cattle.force(i)`, `setFreeCamera(pos, look)` for ad-hoc checks in the console.
 
 ## Phase 2 — money, incidents and fuel
 
@@ -387,6 +387,32 @@ Tests: `tests/phase4.spec.ts` (records, PWA manifest, Sylhet world + route switc
 
 Probes: `scripts/probe-weather.mjs`, `probe-specials.mjs`, `probe-audio.mjs`, `probe-photo.mjs`.
 Tests: `tests/phase5.spec.ts` (Chattogram route, weather, special passengers, audio layers, photo mode).
+
+## Phase 6 — daily challenge, minibus, night hazards, traffic signals
+
+* **আজকের চ্যালেঞ্জ** (`game/challenge.ts`): a PRNG seeded with the date picks the route, clock hour,
+  weather and contract, so everyone drives the same run that day. The main-menu panel shows today's
+  conditions, your best and the last days' scores; **খেলুন** switches route if needed (reload) and
+  the pre-trip card locks everything. Score = net income + stars × 500 + contract bonus; the best per
+  day is kept in `localStorage` (`cp-challenge`) and the results card has a share button (Web Share /
+  clipboard). `?challenge=1` or `?challenge=YYYY-MM-DD` boots straight into one.
+* **Minibus** (`BUSES` in `game/career.ts`): the garage sells an 8 m minibus (24 seats, 62 % mass,
+  shorter axles, 105 km/h cap, quicker off the line). The procedural bus model now takes dimensions
+  per build (window bays, seat rows and axles follow the body), and the physics reads bus multipliers
+  from `MODS` (mass, busTorque, busGrip, busCapKmh). Switching buses reloads the page.
+* **Night hazards**: about 30 % of trucks, vans, rickshaws and autos run without lamps at night (dark
+  instance colour, no glow — lit vehicles get instanced head/tail lamps); `L` / 🔦 toggles the bus's
+  **high beam** (longer, brighter cones; oncoming lit traffic flashes back). At village spots a herder
+  walks three cows across the road when the bus is 220 m out (`world/cattle.ts`); cows are solid, a
+  hit shoves the cow aside and costs ৳2,000 compensation plus mood.
+* **Traffic signals** (`world/signals.ts`): three town junctions per route get a signal pole with an
+  arm, a three-lamp head, a stop line and a zebra crossing, cycling green 14 s → amber 3 s → red 12 s
+  with per-signal offsets. Crossing the line on red costs ৳800 (traffic police) and mood; a clean stop
+  on red is praised. AI traffic in the bus's direction queues at red/amber lines.
+* Route data gained `cattleS` and `signalsS`; the pre-trip hint paragraph is built from the route.
+
+Probes: `scripts/probe-challenge.mjs`, `probe-minibus.mjs`, `probe-night.mjs`, `probe-signals.mjs`.
+Tests: `tests/phase6.spec.ts` (daily challenge, minibus, night hazards, traffic signals).
 
 ## Extension points
 

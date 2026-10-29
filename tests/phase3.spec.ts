@@ -10,7 +10,7 @@ async function boot(page: Page, query: string, errors: string[] = [], career: Re
     localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true }));
     if (c && !localStorage.getItem('cp-career')) localStorage.setItem('cp-career', JSON.stringify(c));
   }, career);
-  await page.goto(`/?${query}${query.includes('weather=') ? '' : '&weather=clear'}`); // tests pin the weather: the pre-trip roll is random
+  await page.goto(`/?${query}${query.includes('weather=') ? '' : '&weather=clear'}&hazards=0`); // tests pin the weather and Phase 6 hazards (random otherwise)
   await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 90_000 });
   await page.waitForTimeout(500);
   return errors;

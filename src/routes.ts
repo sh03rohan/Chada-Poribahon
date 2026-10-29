@@ -9,7 +9,7 @@ export type RouteId = 'kushtia-dhaka' | 'dhaka-sylhet' | 'dhaka-chattogram';
 
 export interface Scenery { teaHills: [number, number][]; haor: [number, number][]; hills?: [number, number][]; sea?: { range: [number, number]; side: -1 | 1 }[] }
 
-type WorldNumbers = Pick<typeof WORLD, 'stops' | 'chadaSpots' | 'checkpointS' | 'speedCameraS' | 'pumpS' | 'forkS' | 'andolonS' | 'bridgeStartS' | 'bridgeEndS' | 'finishS' | 'roundabouts' | 'kerbRanges' | 'tollS' | 'railS' | 'accidentS' | 'highwayStartS' | 'cattleS'>;
+type WorldNumbers = Pick<typeof WORLD, 'stops' | 'chadaSpots' | 'checkpointS' | 'speedCameraS' | 'pumpS' | 'forkS' | 'andolonS' | 'bridgeStartS' | 'bridgeEndS' | 'finishS' | 'roundabouts' | 'kerbRanges' | 'tollS' | 'railS' | 'accidentS' | 'highwayStartS' | 'cattleS' | 'signalsS'>;
 
 export interface RouteDef {
   id: RouteId;
@@ -64,7 +64,7 @@ const KUSHTIA: RouteDef = {
     chadaSpots: [1150, 4300], checkpointS: 3000, speedCameraS: 4900, pumpS: 2700, forkS: 2460, andolonS: 3850,
     bridgeStartS: 4650, bridgeEndS: 5350, finishS: 6050,
     roundabouts: [{ s: 2130, name: 'রাজবাড়ী' }, { s: 3560, name: 'ফরিদপুর' }, { s: 5720, name: 'ঢাকা' }],
-    kerbRanges: [[1750, 2550], [3250, 3950], [5450, 6150]], tollS: 4600, railS: 1650, accidentS: 3250, highwayStartS: 5400, cattleS: [1450, 4150],
+    kerbRanges: [[1750, 2550], [3250, 3950], [5450, 6150]], tollS: 4600, railS: 1650, accidentS: 3250, highwayStartS: 5400, cattleS: [1450, 4150], signalsS: [2300, 3750, 5600],
   },
   ferryLandS: 5420,
   names: {
@@ -112,7 +112,7 @@ const SYLHET: RouteDef = {
     chadaSpots: [600, 4600], checkpointS: 2700, speedCameraS: 3200, pumpS: 1250, forkS: 2460, andolonS: 5000,
     bridgeStartS: 2880, bridgeEndS: 3460, finishS: 6450,
     roundabouts: [{ s: 2130, name: 'নরসিংদী' }, { s: 4080, name: 'শায়েস্তাগঞ্জ' }, { s: 6250, name: 'সিলেট' }],
-    kerbRanges: [[1800, 2300], [3800, 4200], [6000, 6600]], tollS: 2830, railS: 900, accidentS: 4380, highwayStartS: 6000, cattleS: [1700, 5300],
+    kerbRanges: [[1800, 2300], [3800, 4200], [6000, 6600]], tollS: 2830, railS: 900, accidentS: 4380, highwayStartS: 6000, cattleS: [1700, 5300], signalsS: [2250, 4180, 6100],
   },
   ferryLandS: 3600,
   names: {
@@ -160,7 +160,7 @@ const CHATTOGRAM: RouteDef = {
     chadaSpots: [600, 4600], checkpointS: 2700, speedCameraS: 3200, pumpS: 1250, forkS: 2460, andolonS: 5000,
     bridgeStartS: 2880, bridgeEndS: 3460, finishS: 6450,
     roundabouts: [{ s: 2130, name: 'কাঁচপুর' }, { s: 4080, name: 'কুমিল্লা' }, { s: 6250, name: 'চট্টগ্রাম' }],
-    kerbRanges: [[1800, 2300], [3800, 4200], [6000, 6600]], tollS: 2830, railS: 900, accidentS: 4380, highwayStartS: 6000, cattleS: [1800, 5450],
+    kerbRanges: [[1800, 2300], [3800, 4200], [6000, 6600]], tollS: 2830, railS: 900, accidentS: 4380, highwayStartS: 6000, cattleS: [1800, 5450], signalsS: [2250, 4180, 6100],
   },
   ferryLandS: 3600,
   names: {

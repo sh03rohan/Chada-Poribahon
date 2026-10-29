@@ -7,7 +7,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
 async function boot(page: Page, query: string, errors: string[] = []) {
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
-  await page.goto(`/?${query}${query.includes('weather=') ? '' : '&weather=clear'}`); // tests pin the weather: the pre-trip roll is random
+  await page.goto(`/?${query}${query.includes('weather=') ? '' : '&weather=clear'}&hazards=0`); // tests pin the weather and Phase 6 hazards (random otherwise)
   await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 120_000 });
   await page.waitForTimeout(500);
   return errors;

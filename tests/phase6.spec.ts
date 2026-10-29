@@ -92,3 +92,25 @@ test('night hazards: unlit vehicles exist at night, L toggles the high beam, a h
   await expect(page.locator('#hud-msg')).toContainText('গরুকে ধাক্কা');
   expect(errors).toEqual([]);
 });
+
+test('traffic signals: running a red costs ৳800, a clean stop is praised, AI traffic waits at the line', async ({ page }) => {
+  const errors = await boot(page, 'quality=low&hour=15&weather=clear');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  const st = () => g(page, '(() => { const s = __game.stats(); return { signals: s.signals, redLights: s.redLights, fines: s.ledger.fines }; })()') as Promise<{ signals: { s: number; state: string; ran: boolean; stoppedOk: boolean }[]; redLights: number; fines: number }>;
+  expect((await st()).signals.length).toBe(3);
+  await g(page, '__game.traffic.enabled = false; __game.signals.force(0, "red"); const s = __game.stats().signals[0].s; __game.teleport(s - 30); __game.simulate(0.3, { throttle: 0, handbrake: true })');
+  await page.waitForTimeout(2500); await page.screenshot({ path: `${SHOTS}/signal-red.png` });
+  await g(page, 'const s = __game.stats().signals[0].s; __game.teleport(s - 80); __game.simulate(9, { throttle: 1, autopilot: true })');
+  let s = await st(); expect(s.signals[0].ran).toBe(true); expect(s.redLights).toBe(1); expect(s.fines).toBe(800);
+  await expect(page.locator('#hud-msg')).toContainText('লাল বাতিতে পার', { timeout: 8000 });
+  // stop properly at the second one, go on green: no further fine
+  await g(page, '__game.signals.force(1, "red"); const s = __game.stats().signals[1].s; __game.teleport(s - 10); __game.simulate(1.5, { throttle: 0, handbrake: true, autopilot: true })');
+  s = await st(); expect(s.signals[1].stoppedOk).toBe(true);
+  await expect(page.locator('#hud-msg')).toContainText('থেমেছেন', { timeout: 8000 });
+  await g(page, '__game.signals.force(1, "green"); __game.simulate(6, { throttle: 1, autopilot: true })');
+  s = await st(); expect(s.signals[1].ran).toBe(false); expect(s.fines).toBe(800);
+  // AI traffic: a car approaching a red stops before the line
+  const car = await g(page, '(() => { __game.traffic.enabled = true; __game.signals.force(2, "red"); const vs = __game.traffic.vehicles; for (const v of vs) v.s = 200 + Math.random() * 100; const c = vs.find((v) => v.type === "car"); const s = __game.stats().signals[2].s; c.s = s - 60; c.dir = 1; c.lateral = -1.75; c.swerve = 0; c.speed = 15; c.maxSpeed = 20; c.overtake = 0; c.hitT = 0; __game.teleport(s - 110); __game.simulate(8, { throttle: 0, handbrake: true }); return { s: c.s, speed: c.speed, line: s + 2.6 }; })()') as { s: number; speed: number; line: number };
+  expect(car.speed).toBeLessThan(1); expect(car.s).toBeLessThan(car.line); expect(car.s).toBeGreaterThan(car.line - 12);
+  expect(errors).toEqual([]);
+});

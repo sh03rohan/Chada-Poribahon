@@ -156,6 +156,8 @@ export const WORLD = {
   highwayStartS: 5400,   // divided highway with a planted median from here to the finish
   /** village spots where a herder walks cows across the road */
   cattleS: [1450, 4150],
+  /** town traffic signals (stop line 2.6 m past each) */
+  signalsS: [2300, 3750, 5600],
   medianWidth: 2.4,
 };
 
@@ -204,6 +206,8 @@ export const GAMEPLAY = {
   roofFine: 1000,
   /** compensation to the owner for hitting a cow */
   cowFine: 2000,
+  /** traffic police fine for running a red light */
+  redLightFine: 800,
   roofSpeedCapKmh: 90,
   /** Phase 3 damage: % per m/s of impact above 1.2 m/s; repair ৳ per % at Dhaka */
   damagePerImpactMs: 2.4,
