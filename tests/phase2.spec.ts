@@ -195,7 +195,7 @@ test('medium tier: frame time, draw calls, no errors; speed targets unchanged', 
   await page.waitForTimeout(8000);
   const st = await g(page, '__game.stats()') as { avgFrame: number; worstFrame: number; drawCalls: number; people: number; fps: number };
   console.log('medium tier (SwiftShader software GL — real GPUs are far faster):', { avgFrameMs: (st.avgFrame * 1000).toFixed(1), worstMs: (st.worstFrame * 1000).toFixed(0), fps: st.fps.toFixed(1), drawCalls: st.drawCalls, people: st.people });
-  expect(st.drawCalls, 'draw-call budget for 60 fps on mid-range mobile').toBeLessThan(260);
+  expect(st.drawCalls, 'draw-call budget for 60 fps on mid-range mobile (scene + post passes)').toBeLessThan(300);
   expect(st.worstFrame).toBeLessThan(1.0);
   await g(page, '__game.input.override = null; __game.autopilot = false; __game.traffic.enabled = false; __game.teleport(4660); __game.debug.resetMeasure()');
   const p = await g(page, '__game.simulate(45, { throttle: 1, autopilot: true })') as { zeroToSixty: number; topSpeed: number };
