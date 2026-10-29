@@ -18,12 +18,15 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 export type PostLevel = 'none' | 'basic' | 'full';
 
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null as THREE.Texture | null }, saturation: { value: 1.12 }, contrast: { value: 1.06 }, warmth: { value: 0.025 }, vignette: { value: 0.32 }, night: { value: 0 } },
+  uniforms: { tDiffuse: { value: null as THREE.Texture | null }, saturation: { value: 1.12 }, contrast: { value: 1.06 }, warmth: { value: 0.025 }, vignette: { value: 0.32 }, night: { value: 0 }, heat: { value: 0 }, time: { value: 0 } },
   vertexShader: /* glsl */`varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
-    uniform sampler2D tDiffuse; uniform float saturation, contrast, warmth, vignette, night; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform float saturation, contrast, warmth, vignette, night, heat, time; varying vec2 vUv;
     void main() {
-      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      // heat haze: a faint ripple over the lower half of the frame at noon
+      vec2 uv = vUv; float hz = heat * smoothstep(0.62, 0.25, vUv.y) * smoothstep(0.0, 0.25, vUv.y);
+      uv.x += sin(vUv.y * 90.0 + time * 2.2) * 0.0016 * hz; uv.y += sin(vUv.x * 70.0 + time * 1.7) * 0.0010 * hz;
+      vec3 c = texture2D(tDiffuse, uv).rgb;
       float l = dot(c, vec3(0.299, 0.587, 0.114));
       c = mix(vec3(l), c, saturation);
       c = (c - 0.5) * contrast + 0.5;
@@ -61,7 +64,8 @@ export class PostStack {
   }
   setSize(w: number, h: number) { this.composer.setSize(w, h); }
   /** night / fog: lamps and headlights bloom more, the grade cools */
-  setMood(night: boolean, fog: number) {
+  setMood(night: boolean, fog: number, heat = 0, time = 0) {
+    this.grade.uniforms.heat.value = this.level === 'full' ? heat : 0; this.grade.uniforms.time.value = time;
     if (this.bloom) { this.bloom.strength = night ? 0.6 : 0.14 + fog * 0.06; this.bloom.threshold = night ? 0.55 : 0.94; this.bloom.radius = night ? 0.5 : 0.3; }
     this.grade.uniforms.night.value = night ? 1 : 0;
   }

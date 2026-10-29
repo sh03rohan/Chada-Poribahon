@@ -71,3 +71,33 @@ test('bus detail: rivets, mud flaps, dirt skirt and tarp exist and the side phot
   await page.screenshot({ path: `${SHOTS}/bus-detail-side.png` });
   expect(errors).toEqual([]);
 });
+
+test('particles: exhaust under throttle, dust off the shoulder, windscreen rain in the cockpit, tea-stall smoke at night', async ({ page }) => {
+  test.setTimeout(480_000);
+  let errors = await boot(page, 'quality=medium&hour=15');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  const st = () => g(page, '(() => { const s = __game.stats(); return { particles: s.particles, glass: s.glassRain, onRoad: __game.cur.onRoad }; })()') as Promise<{ particles: number; glass: boolean; onRoad: boolean }>;
+  await g(page, '__game.traffic.enabled = false; __game.teleport(2650); __game.simulate(3, { throttle: 1, autopilot: true }); __game.input.override = { throttle: 1 }; __game.autopilot = true');
+  let f0 = await g(page, '__game.frames') as number;
+  await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0 + 2, f0, { timeout: 120_000 });
+  let s = await st(); expect(s.particles).toBeGreaterThan(5); expect(s.glass).toBe(false);
+  const exhaustOnly = s.particles;
+  await g(page, '__game.input.override = null; __game.autopilot = false; __game.teleport(2650); __game.simulate(3, { throttle: 1, steer: -0.6 }); __game.input.override = { throttle: 1, steer: -0.2 }');
+  f0 = await g(page, '__game.frames') as number;
+  await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0 + 2, f0, { timeout: 120_000 });
+  s = await st(); expect(s.onRoad).toBe(false); expect(s.particles).toBeGreaterThan(exhaustOnly);
+  await page.screenshot({ path: `${SHOTS}/particles-dust.png` });
+  expect(errors).toEqual([]);
+  errors = await boot(page, 'quality=medium&hour=12&weather=rain&view=cockpit');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  await g(page, '__game.traffic.enabled = false; __game.switchCamera("cockpit"); __game.teleport(2650); __game.simulate(2, { throttle: 1, autopilot: true })');
+  f0 = await g(page, '__game.frames') as number;
+  await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0 + 1, f0, { timeout: 120_000 });
+  s = await st(); expect(s.glass).toBe(true);
+  await page.screenshot({ path: `${SHOTS}/particles-rain-cockpit.png` });
+  await g(page, '__game.switchCamera("chase"); __game.applyWeather("clear", true); __game.sky.setTime(21); __game.applyNight(); __game.teleport(1150); __game.simulate(0.3, { throttle: 0, handbrake: true })');
+  f0 = await g(page, '__game.frames') as number;
+  await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0 + 2, f0, { timeout: 120_000 });
+  s = await st(); expect(s.glass).toBe(false); expect(s.particles).toBeGreaterThan(3);
+  expect(errors).toEqual([]);
+});

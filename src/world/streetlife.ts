@@ -29,6 +29,8 @@ export class StreetLife {
   readonly group = new THREE.Group();
   readonly scenes: Scene[] = [];
   active: Band[] = [];
+  /** kettle positions of the tea stalls (smoke emitters) */
+  readonly teaSpots: THREE.Vector3[] = [];
   constructor(private road: Road, private people: PeopleManager, stopsS: number[], hawkerSpots: number[]) {
     const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.9 });
     const cloth = [0xd8262c, 0x1f6fb5, 0xf2a900, 0x1f9d55].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 }));
@@ -81,6 +83,7 @@ export class StreetLife {
       const roof = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.06, 3.6), tin); roof.position.set(0, 2.4, -0.3); roof.rotation.x = 0.1; g.add(roof);
       const counter = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.9, 0.5), wood); counter.position.set(0, 0.45, 0.05); g.add(counter);
       const kettle = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.3, 10), tin); kettle.position.set(-0.8, 1.05, 0.05); g.add(kettle);
+      this.teaSpots.push(new THREE.Vector3(-0.8, 1.25, 0.05).applyAxisAngle(new THREE.Vector3(0, 1, 0), g.rotation.y).add(g.position));
       const bench = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.06, 0.35), wood); bench.position.set(0, 0.45, 1.3); g.add(bench);
       for (const x of [-1.2, 1.2]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.45, 0.3), wood); l.position.set(x, 0.22, 1.3); g.add(l); }
       const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe2a0, emissive: 0xffc860, emissiveIntensity: 0 }); tea.lamps.push(lampMat);
