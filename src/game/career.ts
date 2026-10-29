@@ -6,6 +6,7 @@ import { bn, bnTaka } from '../util/bangla.ts';
  * XP drives the level/title, and the garage upgrade levels live here too.
  */
 export type UpgradeId = 'brakes' | 'engine' | 'tyres' | 'horn' | 'livery';
+export type BusId = 'bus' | 'mini';
 
 export interface Profile {
   version: number;
@@ -24,6 +25,9 @@ export interface Profile {
   /** Phase 4 */
   achievements: string[];
   bestRuns: BestRun[];
+  /** Phase 6: garage buses */
+  busesOwned: BusId[];
+  bus: BusId;
 }
 export interface BestRun { net: number; stars: number; timeSec: number; passengers: number; date: string; }
 
@@ -42,7 +46,7 @@ export const LEVEL_TITLES = ['হেল্পার', 'নতুন ড্রা
 const KEY = 'cp-career';
 const DEFAULTS: Profile = {
   version: 1, balance: 0, xp: 0, trips: 0, bestStars: 0, totalPassengers: 0, totalEarned: 0, contractsDone: 0,
-  upgrades: { brakes: 0, engine: 0, tyres: 0, horn: 0, livery: 0 }, liveriesOwned: [0], livery: 0, lastPlayed: '', achievements: [], bestRuns: [],
+  upgrades: { brakes: 0, engine: 0, tyres: 0, horn: 0, livery: 0 }, liveriesOwned: [0], livery: 0, lastPlayed: '', achievements: [], bestRuns: [], busesOwned: ['bus'], bus: 'bus',
 };
 
 export class Career {
@@ -51,7 +55,7 @@ export class Career {
   constructor() {
     let saved: Partial<Profile> = {};
     try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { /* ignore */ }
-    this.profile = { ...DEFAULTS, ...saved, upgrades: { ...DEFAULTS.upgrades, ...(saved.upgrades ?? {}) }, achievements: [...(saved.achievements ?? [])], bestRuns: [...(saved.bestRuns ?? [])], liveriesOwned: [...(saved.liveriesOwned ?? [0])] };
+    this.profile = { ...DEFAULTS, ...saved, upgrades: { ...DEFAULTS.upgrades, ...(saved.upgrades ?? {}) }, achievements: [...(saved.achievements ?? [])], bestRuns: [...(saved.bestRuns ?? [])], liveriesOwned: [...(saved.liveriesOwned ?? [0])], busesOwned: [...(saved.busesOwned ?? ['bus'])] };
   }
   save() { try { localStorage.setItem(KEY, JSON.stringify(this.profile)); } catch { /* private mode */ } }
   reset() { Object.assign(this.profile, structuredClone(DEFAULTS)); this.save(); }
@@ -126,5 +130,19 @@ export const LIVERIES: LiveryScheme[] = [
   { id: 3, name: 'বেগুনি', main: '#7a3fa0', dark: '#4a1f66', cost: 2500 },
   { id: 4, name: 'কমলা', main: '#e8731a', dark: '#8a3f08', cost: 2500 },
 ];
+
+/** Buses: the big route bus and a lighter minibus. Dimensions feed the procedural model, the rest the physics. */
+export interface BusDef {
+  id: BusId; name: string; icon: string; desc: string; cost: number;
+  dims: { length: number; width: number; height: number; floorHeight: number; skirtHeight: number };
+  lf: number; lr: number; massScale: number; torque: number; grip: number; capKmh: number; seats: number; initialPassengers: number;
+}
+export const BUSES: BusDef[] = [
+  { id: 'bus', name: 'বড় বাস', icon: '🚌', desc: '১১ মিটারের লাইনের বাস — ৩৬ সিট, বেশি ভাড়া, ভারী', cost: 0,
+    dims: { length: 11.2, width: 2.5, height: 3.3, floorHeight: 0.95, skirtHeight: 0.42 }, lf: 3.2, lr: 2.8, massScale: 1, torque: 1, grip: 1, capKmh: Infinity, seats: 36, initialPassengers: 24 },
+  { id: 'mini', name: 'মিনিবাস', icon: '🚐', desc: '৮ মিটারের হালকা মিনিবাস — ২৪ সিট, চটপটে, কম দূরত্বে থামে, কিন্তু ১০৫-এর বেশি ওঠে না', cost: 45000,
+    dims: { length: 8.2, width: 2.3, height: 3.05, floorHeight: 0.85, skirtHeight: 0.4 }, lf: 2.4, lr: 2.0, massScale: 0.62, torque: 0.78, grip: 1.05, capKmh: 105, seats: 24, initialPassengers: 16 },
+];
+export function busDef(id: BusId): BusDef { return BUSES.find((b) => b.id === id) ?? BUSES[0]; }
 
 export function upgradeCost(def: UpgradeDef, level: number): number | null { return level < def.costs.length ? def.costs[level] : null; }

@@ -7,7 +7,7 @@ import { createProceduralBus, type BusRig } from './busModel.ts';
  *   body, wheel_FL, wheel_FR, wheel_RL, wheel_RR, steering_wheel (optional), door (optional)
  * Any missing required node → falls back to the procedural bus.
  */
-export async function loadBus(opts: { anisotropy: number; shadows: boolean; people?: import('../world/people.ts').PeopleManager }): Promise<BusRig> {
+export async function loadBus(opts: { anisotropy: number; shadows: boolean; people?: import('../world/people.ts').PeopleManager; dims?: import('./busModel.ts').BusDims }): Promise<BusRig> {
   try {
     const head = await fetch('/assets/bus.glb', { method: 'HEAD' });
     const type = head.headers.get('content-type') || '';

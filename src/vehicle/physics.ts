@@ -61,10 +61,10 @@ export function copyState(dst: VehicleState, src: VehicleState): void {
 }
 
 /** Garage upgrade multipliers (set from the career profile before a run). */
-export const MODS = { brake: 1, torque: 1, grip: 1, /** damage: */ dmgTorque: 1, dmgBrake: 1, speedCapKmh: Infinity, /** roof load: */ roofGrip: 1, roofCapKmh: Infinity };
+export const MODS = { brake: 1, torque: 1, grip: 1, /** damage: */ dmgTorque: 1, dmgBrake: 1, speedCapKmh: Infinity, /** roof load: */ roofGrip: 1, roofCapKmh: Infinity, /** bus model: */ mass: 1, busTorque: 1, busGrip: 1, busCapKmh: Infinity };
 
 export function torqueAt(rpm: number): number {
-  return rawTorqueAt(rpm) * MODS.torque * MODS.dmgTorque;
+  return rawTorqueAt(rpm) * MODS.torque * MODS.dmgTorque * MODS.busTorque;
 }
 function rawTorqueAt(rpm: number): number {
   const c = P.torqueCurve;
@@ -133,7 +133,7 @@ export function stepVehicle(s: VehicleState, input: VehicleInput, surf: SurfaceI
   // ---- Longitudinal forces ----------------------------------------------
   let throttleEff = s.throttle;
   // Soft governor
-  const cap = Math.min(MODS.speedCapKmh, MODS.roofCapKmh);
+  const cap = Math.min(MODS.speedCapKmh, MODS.roofCapKmh, MODS.busCapKmh);
   const govStart = Math.min(P.targetTopSpeedKmh, cap - 6), govEnd = Math.min(P.governorKmh, cap);
   if (kmh > govStart) throttleEff *= Math.max(0, 1 - (kmh - govStart) / Math.max(1, govEnd - govStart));
   if (s.shiftTimer > 0) throttleEff *= 0.08;
@@ -155,23 +155,23 @@ export function stepVehicle(s: VehicleState, input: VehicleInput, surf: SurfaceI
   const vAbs = Math.abs(s.v);
   const fDrag = 0.5 * P.airDensity * P.dragCoefficient * P.frontalArea * vAbs * vAbs;
   const crr = P.rollingResistance + (surf.onRoad ? 0 : P.offRoadResistance);
-  const fRoll = vAbs > 0.05 ? crr * P.mass * G : 0;
+  const fRoll = vAbs > 0.05 ? crr * (P.mass * MODS.mass) * G : 0;
   const fBrake = P.brakeForce * MODS.brake * MODS.dmgBrake * (s.v > 0.3 ? s.brake : 0) + (input.handbrake ? P.handbrakeForce : 0);
 
   let fNet = fEngine + fReverse;
   const sign = s.v >= 0 ? 1 : -1;
   const resist = (fDrag + fRoll + fBrake) * sign;
   // Prevent resistance from reversing the sign of velocity in one step.
-  const maxResistImpulse = Math.abs(s.v) * P.mass / dt;
+  const maxResistImpulse = Math.abs(s.v) * (P.mass * MODS.mass) / dt;
   const resistClamped = Math.min(Math.abs(resist), maxResistImpulse) * sign;
   fNet -= resistClamped;
-  if (s.v < -0.01 && fReverse === 0 && s.brake < 0.5) fNet += Math.min(Math.abs(s.v) * P.mass / dt, P.brakeForce * 0.5); // decel reverse when released
+  if (s.v < -0.01 && fReverse === 0 && s.brake < 0.5) fNet += Math.min(Math.abs(s.v) * (P.mass * MODS.mass) / dt, P.brakeForce * 0.5); // decel reverse when released
 
-  let aLong = fNet / P.mass;
+  let aLong = fNet / (P.mass * MODS.mass);
   if (input.handbrake && Math.abs(s.v) < 0.2 && s.throttle < 0.3) { aLong = 0; s.v = 0; }
 
   // ---- Lateral / yaw (bicycle model with grip limit) -----------------------
-  let mu = (surf.wet ? P.gripWet : P.gripDry) * MODS.grip * MODS.roofGrip;
+  let mu = (surf.wet ? P.gripWet : P.gripDry) * MODS.grip * MODS.roofGrip * MODS.busGrip;
   if (!surf.onRoad) mu = Math.min(mu, P.gripOffRoad);
   if (input.handbrake) mu = Math.min(mu, P.gripHandbrake);
   const aMax = mu * G;

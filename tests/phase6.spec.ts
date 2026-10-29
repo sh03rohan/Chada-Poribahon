@@ -42,3 +42,28 @@ test('daily challenge: a dated seed fixes route/hour/weather/contract, the pre-t
   await expect(page.locator('#challenge-body')).toContainText('২৯/১০/২০২৬');
   expect(errors).toEqual([]);
 });
+
+test('garage minibus: bought with balance, survives reload, shorter body with 24 seats, lighter/quicker physics with a 105 km/h cap', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => { localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })); if (!localStorage.getItem('cp-career')) localStorage.setItem('cp-career', JSON.stringify({ balance: 60000, xp: 2500, trips: 5 })); });
+  await page.goto('/?quality=low&hour=12&weather=clear');
+  await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 120_000 });
+  expect(await g(page, '(() => { const s = __game.stats(); return [s.bus, s.seats, s.busLength]; })()')).toEqual(['bus', 36, 11.2]);
+  await page.click('#menu-garage'); await page.waitForTimeout(200);
+  expect(await page.locator('.gcard.bus').count()).toBe(2);
+  await page.screenshot({ path: `${SHOTS}/garage-buses.png` });
+  await page.click('.gbus[data-bus="mini"]');  // buys + reloads
+  await page.waitForTimeout(1500);
+  await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 120_000 });
+  const st = await g(page, '(() => { const s = __game.stats(); return { bus: s.bus, seats: s.seats, len: s.busLength, mass: s.mods.mass, cap: s.mods.busCapKmh, balance: s.career.balance, owned: s.career.busesOwned }; })()') as { bus: string; seats: number; len: number; mass: number; cap: number; balance: number; owned: string[] };
+  expect(st).toMatchObject({ bus: 'mini', seats: 24, len: 8.2, cap: 105, balance: 15000 }); expect(st.mass).toBeLessThan(0.7); expect(st.owned).toEqual(['bus', 'mini']);
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  await expect(page.locator('#hud-pass')).toContainText('/ ২৪', { timeout: 10_000 });
+  await g(page, '__game.traffic.enabled = false; __game.teleport(3400); __game.simulate(0.3, { throttle: 0, handbrake: true }); __game.openPhoto(); __game.photo.yaw = 1.2; __game.photo.pitch = 0.15; __game.photo.dist = 13');
+  await page.waitForTimeout(2500); await page.screenshot({ path: `${SHOTS}/minibus-side.png` });
+  const perf = await g(page, '(() => { __game.photo.close(); __game.teleport(4660); const st = __game.simulate(40, { throttle: 1, autopilot: true }); return { zeroToSixty: st.zeroToSixty, top: st.topSpeed }; })()') as { zeroToSixty: number; top: number };
+  console.log('minibus perf', perf);
+  expect(perf.zeroToSixty).toBeLessThan(9.5); expect(perf.top).toBeGreaterThan(95); expect(perf.top).toBeLessThan(108);
+  expect(errors).toEqual([]);
+});

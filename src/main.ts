@@ -18,6 +18,7 @@ import { Props } from './world/props.ts';
 import { SkySystem } from './world/sky.ts';
 import { Weather, WEATHER_INFO, type WeatherKind } from './world/weather.ts';
 import { PhotoMode } from './game/photo.ts';
+import { BUSES, busDef } from './game/career.ts';
 import { dailyChallenge, dateId, describeChallenge, recordChallenge, loadBook, challengeScore, shareText, challengeDateLabel, type Challenge } from './game/challenge.ts';
 import { SPECIALS, describeOutcome, type ActiveSpecial, type SpecialDef, type SegmentMetrics } from './game/specials.ts';
 import { Stops } from './world/stops.ts';
@@ -99,6 +100,7 @@ class Game {
   autopilotRoad: Road | null = null; autopilotDir: 1 | -1 = 1;
   freeCam: { pos: THREE.Vector3; look: THREE.Vector3; fov?: number } | null = null;
   photo = new PhotoMode(); private photoFrom: 'driving' | 'pause' = 'driving';
+  busDef = BUSES[0];
   /** daily challenge in progress (fixed route/hour/weather/contract) */
   challenge: Challenge | null = null; private fixedHour: number | null = null; lastChallenge: { score: number; best: number; isBest: boolean; runs: number } | null = null;
   wiperPhase = 0; speedoTimer = 0; minimapTimer = 0; clockTimer = 0;
@@ -199,7 +201,13 @@ class Game {
     this.sky = new SkySystem(this.renderer, this.scene, q.shadows, q.shadowMapSize);
     this.weather = new Weather(this.scene, q.rainCount);
 
-    this.bus = await loadBus({ anisotropy: maxAniso, shadows: q.shadows, people: this.people });
+    // bus model from the garage: dimensions for the body, axles / mass / torque / seats for the physics
+    const bd = busDef(this.career.profile.bus);
+    PHYSICS.lf = bd.lf; PHYSICS.lr = bd.lr; PHYSICS.wheelbase = bd.lf + bd.lr;
+    MODS.mass = bd.massScale; MODS.busTorque = bd.torque; MODS.busGrip = bd.grip; MODS.busCapKmh = bd.capKmh;
+    GAMEPLAY.seats = bd.seats; GAMEPLAY.initialPassengers = bd.initialPassengers;
+    this.busDef = bd;
+    this.bus = await loadBus({ anisotropy: maxAniso, shadows: q.shadows, people: this.people, dims: bd.dims });
     this.scene.add(this.bus.root);
     this.bus.setPassengers(this.passengers.count);
     this.events = new RouteEvents(this.blockade, this.passengers, this.hud, this.bus, this.ledger);
@@ -1022,7 +1030,7 @@ class Game {
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
       fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
       checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
-      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, special: this.special ? this.special.def.id : null, challenge: this.challenge?.id ?? null, lastChallenge: this.lastChallenge, fixedHour: this.fixedHour, audio: { ...this.audio.levels }, world: { railS: WORLD.railS, andolonS: WORLD.andolonS, bridgeStartS: WORLD.bridgeStartS, bridgeEndS: WORLD.bridgeEndS, tollS: WORLD.tollS, accidentS: WORLD.accidentS }, specialsDone: this.specialsDone, tips: this.ledger.tips, horns: this.horns, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
+      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, special: this.special ? this.special.def.id : null, bus: this.busDef.id, seats: GAMEPLAY.seats, busLength: this.busDef.dims.length, challenge: this.challenge?.id ?? null, lastChallenge: this.lastChallenge, fixedHour: this.fixedHour, audio: { ...this.audio.levels }, world: { railS: WORLD.railS, andolonS: WORLD.andolonS, bridgeStartS: WORLD.bridgeStartS, bridgeEndS: WORLD.bridgeEndS, tollS: WORLD.tollS, accidentS: WORLD.accidentS }, specialsDone: this.specialsDone, tips: this.ledger.tips, horns: this.horns, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {

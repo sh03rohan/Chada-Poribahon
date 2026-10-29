@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeStaticMeshes } from './mergeStatic.ts';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { BUS_DIMENSIONS as D, PHYSICS } from '../config.ts';
+import { BUS_DIMENSIONS, PHYSICS } from '../config.ts';
 import { Person, DRIVER_VARIANT, HELPER_VARIANT, VARIANTS, type PeopleManager, type Action } from '../world/people.ts';
 import { makeSideLivery, makeRearBoard, makeDestinationBoard, makeFrontStrip, makeTyreTread, makeBlobShadow, Speedometer, PALETTE } from './livery.ts';
 
@@ -46,8 +46,12 @@ export interface BusRig {
 type Tag = 'body' | 'glass' | 'under';
 interface ProfilePt { u: number; y: number; tag: Tag; }
 
-const L = D.length, W = D.width, HALF = L / 2;
-const U_FRONT = HALF, U_REAR = -HALF + 0.3; // u = -z (positive toward the front)
+export type BusDims = typeof BUS_DIMENSIONS;
+let D: BusDims = BUS_DIMENSIONS;
+let L = D.length, W = D.width, HALF = L / 2;
+let U_FRONT = HALF, U_REAR = -HALF + 0.3; // u = -z (positive toward the front)
+/** Choose the body dimensions for the next createProceduralBus() (the minibus is shorter and narrower). */
+export function setBusDims(d: BusDims) { D = d; L = D.length; W = D.width; HALF = L / 2; U_FRONT = HALF; U_REAR = -HALF + 0.3; }
 const CORNER_R = 0.17;
 const WIN_Y0 = 1.78, WIN_Y1 = 2.82;
 const DASH_TOP = 1.72;
@@ -150,7 +154,7 @@ function sideWindows(): WindowRect[] {
   const wins: WindowRect[] = [{ u0: 3.35, u1: 5.05, y0: WIN_Y0, y1: 2.88 }]; // driver / door window
   const w = 1.45, gap = 0.2;
   let u1 = 3.35 - gap;
-  for (let i = 0; i < 5; i++) { wins.push({ u0: u1 - w, u1, y0: WIN_Y0, y1: WIN_Y1 }); u1 -= w + gap; }
+  while (u1 - w > U_REAR + 0.45) { wins.push({ u0: u1 - w, u1, y0: WIN_Y0, y1: WIN_Y1 }); u1 -= w + gap; } // as many bays as the body is long
   return wins;
 }
 
@@ -198,7 +202,8 @@ function sidePanelShape(profile: ProfilePt[], mirror: boolean): THREE.Shape {
   return shape;
 }
 
-export function createProceduralBus(opts: { anisotropy: number; shadows: boolean; people?: PeopleManager }): BusRig {
+export function createProceduralBus(opts: { anisotropy: number; shadows: boolean; people?: PeopleManager; dims?: BusDims }): BusRig {
+  setBusDims(opts.dims ?? BUS_DIMENSIONS);
   const root = new THREE.Group(); root.name = 'bus';
   const body = new THREE.Group(); body.name = 'body';
   root.add(body);
@@ -398,8 +403,8 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   ])!;
   const seatMat = new THREE.MeshStandardMaterial({ color: 0x8a2d3a, roughness: 0.85 });
   const seatPositions: THREE.Vector3[] = [];
-  for (let z = -2.9; z < 4.6; z += 0.78) for (const x of [-0.95, -0.47, 0.47, 0.95]) {
-    if (z < -2.2 && x < 0) continue; // door well at the front left
+  for (let z = -(HALF - 2.7); z < HALF - 1.0; z += 0.78) for (const x of [-0.95, -0.47, 0.47, 0.95]) {
+    if (z < -(HALF - 3.4) && x < 0) continue; // door well at the front left
     seatPositions.push(new THREE.Vector3(x, D.floorHeight, z));
   }
   const seats = new THREE.InstancedMesh(seatGeo, seatMat, seatPositions.length);

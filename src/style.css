@@ -214,7 +214,7 @@ input[type=range] { width: 100%; accent-color: var(--red); }
 .gico { font-size: 28px; width: 36px; text-align: center; }
 .gbody { flex: 1; min-width: 0; } .gbody b { font-size: 16px; } .gbody small { display: block; font-size: 12px; opacity: 0.8; line-height: 1.25; } .gbody em { display: block; font-style: normal; font-size: 12px; color: var(--green); font-weight: 700; }
 .gdots i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: rgba(0,0,0,0.15); margin-left: 2px; vertical-align: middle; } .gdots i.on { background: var(--green); }
-.gbuy { font-family: var(--font); font-size: 14px; font-weight: 700; border: 0; border-radius: 8px; padding: 6px 12px; background: var(--red); color: #fff; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 0 #8a1216; }
+.gbuy, .gbus { font-family: var(--font); font-size: 14px; font-weight: 700; border: 0; border-radius: 8px; padding: 6px 12px; background: var(--red); color: #fff; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 0 #8a1216; }
 .gbuy[disabled] { background: #9a9a9a; box-shadow: none; cursor: not-allowed; opacity: 0.8; }
 .gpaint { margin: 10px 0 6px; } .gpaint > b { display: block; margin-bottom: 4px; }
 .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -379,3 +379,5 @@ body.has-goal #bubbles { top: calc(350px + var(--sat)); }
 #challenge .row { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
 #challenge .row button { font-family: var(--font); font-size: 18px; font-weight: 700; border: 0; border-radius: 12px; padding: 10px 22px; cursor: pointer; background: rgba(255,255,255,0.9); color: #2a1a0a; }
 #challenge .row .btn-primary { background: var(--red); color: #fff; }
+.gbuses { margin-top: 10px; text-align: left; } .gbuses > b { display: block; margin-bottom: 2px; } .gbuses .hint { display: block; margin: 0 0 6px; }
+.gcard.bus.on { outline: 2px solid var(--green, #1f8a4a); } .gon { color: #1f8a4a; font-size: 13px; }
