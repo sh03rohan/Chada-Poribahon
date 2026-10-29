@@ -72,6 +72,7 @@
           <button id="menu-start" class="btn-primary">শুরু করুন</button>
           <button id="menu-garage">🔧 গ্যারেজ</button>
           <button id="menu-records">🏆 রেকর্ড</button>
+          <button id="menu-challenge">🗓️ আজকের চ্যালেঞ্জ</button>
           <button id="menu-install" class="hidden">📲 ফোনে ইনস্টল করুন</button>
           <button id="menu-settings">সেটিংস</button>
           <button id="menu-howto">কীভাবে খেলবেন</button>
@@ -101,8 +102,9 @@
           <button class="route" disabled>ঢাকা → চট্টগ্রাম <span class="soon">শিগগিরই</span></button>
         </div>
         <canvas id="pretrip-map" width="900" height="420"></canvas>
-        <p class="hint">রাজবাড়ীতে থামুন, ফরিদপুরের কাছে অবরোধ হতে পারে, আর দৌলতদিয়ার মোড়ে ভুল করবেন না — পদ্মা সেতুর রাস্তাই ঢাকা।</p>
+        <p class="hint" id="pretrip-hint">—</p>
         <div id="pretrip-contracts" class="contract-box"></div>
+        <div id="pretrip-challenge" class="chal-box hidden"></div>
         <p class="hint clock-note">🕒 <b>আসল সময়ের দিন-রাত:</b> খেলার আলো আপনার ফোনের ঘড়ি অনুযায়ী চলে — এখন <span id="pretrip-clock">—</span>। রাতে খেললে রাত, ভোরে খেললে ভোর।</p>
         <p class="hint weather-note">🌦️ <b>আজকের আবহাওয়া:</b> <span id="pretrip-weather">—</span></p>
         <button id="pretrip-go" class="btn-primary">যাত্রা শুরু</button>
@@ -140,6 +142,15 @@
     <div id="settings" class="hidden"></div>
     <div id="garage" class="hidden"></div>
     <div id="records" class="hidden"></div>
+
+    <!-- Daily challenge -->
+    <div id="challenge" class="hidden">
+      <div class="panel records-panel">
+        <h2>🗓️ আজকের চ্যালেঞ্জ</h2>
+        <div id="challenge-body" class="rec-body"></div>
+        <div class="row"><button id="challenge-play" class="btn-primary">খেলুন</button><button id="challenge-close">ফিরে যান</button></div>
+      </div>
+    </div>
 
     <!-- How to play -->
     <div id="howto" class="hidden">
@@ -186,6 +197,7 @@
         <div id="res-grid"></div>
         <div id="res-career" class="hidden"></div>
         <div id="res-badges" class="hidden"></div>
+        <div id="res-challenge" class="hidden"></div>
         <p id="res-news"></p>
         <div class="row">
           <button id="btn-share">ছবি শেয়ার করুন</button>

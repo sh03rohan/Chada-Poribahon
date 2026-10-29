@@ -104,7 +104,7 @@ html, body {
 #minimap-pct { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-weight: 700; font-size: 14px; text-shadow: 0 1px 2px #000; }
 
 /* ---- Panels ---- */
-#results, #pretrip, #fullmap, #pause, #settings, #howto, #garage, #records {
+#results, #pretrip, #fullmap, #pause, #settings, #howto, #garage, #records, #challenge {
   position: fixed; inset: 0; display: flex; align-items: safe center; justify-content: center;
   background: radial-gradient(ellipse at center, rgba(40, 30, 20, 0.7), rgba(0, 0, 0, 0.88));
   padding: 16px; z-index: 10; overflow: auto;
@@ -319,7 +319,7 @@ input[type=range] { width: 100%; accent-color: var(--red); }
   .career-row { gap: 8px; } .career-row > b { font-size: 13px; } .career-bar { height: 5px; margin: 3px 0 1px; } .career-chip small { font-size: 10px; }
   #res-career { font-size: 12px; padding: 3px 8px; gap: 6px; margin: 2px 0 4px; }
   /* panels */
-  #results, #pretrip, #fullmap, #pause, #settings, #howto, #garage, #records { padding: 6px; }
+  #results, #pretrip, #fullmap, #pause, #settings, #howto, #garage, #records, #challenge { padding: 6px; }
   .records-panel { max-width: 740px; } .badges { grid-template-columns: repeat(6, 1fr); gap: 4px; max-height: 50vh; } .badge { padding: 3px 5px; } .bicon { font-size: 16px; } .badge b { font-size: 11px; } .badge small { font-size: 9px; } .runs { font-size: 11px; } .runs td { padding: 1px 4px; } #res-badges { font-size: 11px; gap: 3px 8px; margin: 1px 0 3px; }
   .garage-panel { max-width: 700px; } .gcards { grid-template-columns: 1fr 1fr; gap: 4px; } .gcard { padding: 4px 8px; gap: 6px; } .gico { font-size: 20px; } .gbody b { font-size: 13px; } .gbody small, .gbody em { font-size: 10px; } .gbuy { font-size: 12px; padding: 4px 8px; } .swatch span { width: 28px; height: 28px; } .swatch small { font-size: 9px; } .gbal { font-size: 12px; margin: 2px 0 4px; } .gpaint { margin: 4px 0; } .gpaint > b { font-size: 12px; }
   .panel { padding: 6px 12px; max-height: calc(100vh - 12px); border-width: 3px; outline-width: 2px; border-radius: 12px; }
@@ -367,3 +367,15 @@ body.has-goal #bubbles { top: calc(350px + var(--sat)); }
 #photo-bar .hint { font-size: 13px; opacity: 0.9; }
 #photo-bar button { padding: 8px 14px; font-size: 14px; }
 @media (max-width: 760px) { #photo-bar .hint { display: none; } }
+
+/* Daily challenge */
+.chal-today { font-size: 16px; margin: 4px 0; }
+.chal-best { font-size: 16px; margin: 6px 0 10px; color: var(--red); }
+.chal-box { display: flex; flex-direction: column; gap: 4px; background: #fff4d6; border: 2px solid var(--accent); border-radius: 12px; padding: 10px 14px; margin: 8px 0; text-align: left; }
+.chal-box b { font-size: 17px; } .chal-box small { opacity: 0.8; }
+#res-challenge { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin: 6px 0; font-size: 16px; }
+#res-challenge.hidden { display: none; }
+#res-challenge button { font-family: var(--font); font-weight: 700; border: 0; border-radius: 10px; padding: 6px 12px; cursor: pointer; background: #1f6fb5; color: #fff; }
+#challenge .row { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
+#challenge .row button { font-family: var(--font); font-size: 18px; font-weight: 700; border: 0; border-radius: 12px; padding: 10px 22px; cursor: pointer; background: rgba(255,255,255,0.9); color: #2a1a0a; }
+#challenge .row .btn-primary { background: var(--red); color: #fff; }

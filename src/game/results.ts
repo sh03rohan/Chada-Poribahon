@@ -12,6 +12,8 @@ export interface RunResult {
   career?: RunOutcome;
   contractText?: string;
   repair?: number; damage?: number; toll?: number; tips?: number;
+  /** Phase 6: daily challenge line + share text */
+  challengeText?: string; challengeShare?: string;
   /** Phase 4 */
   newBadges?: { icon: string; name: string }[]; rank?: number;
 }
@@ -51,6 +53,17 @@ export function showResults(r: RunResult, onAgain: () => void) {
     bd.innerHTML = rankTxt + (r.newBadges ?? []).map((b) => `<span class="nb">${b.icon} নতুন ব্যাজ: <b>${b.name}</b></span>`).join('');
     bd.classList.remove('hidden');
   } else bd.classList.add('hidden');
+  const ch = $('res-challenge');
+  if (r.challengeText) {
+    ch.innerHTML = `<span>${r.challengeText}</span><button id="btn-chal-share">📤 স্কোর শেয়ার</button>`;
+    ch.classList.remove('hidden');
+    $('btn-chal-share').onclick = async () => {
+      const text = r.challengeShare ?? '';
+      const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
+      try { if (nav.share) { await nav.share({ text }); return; } } catch { /* cancelled */ }
+      try { await navigator.clipboard.writeText(text); $('btn-chal-share').textContent = '✅ কপি হয়েছে'; } catch { /* no clipboard */ }
+    };
+  } else ch.classList.add('hidden');
   const news = NEWS[Math.floor(Math.random() * NEWS.length)](r);
   $('res-news').textContent = '📰 ' + news;
   root.classList.remove('hidden');
