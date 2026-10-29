@@ -296,7 +296,7 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
     const h = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.08, 20).rotateX(Math.PI / 2), x < 0 ? headMatL : headMat); h.position.set(x, 1.08, zF - 0.02); body.add(h);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.025, 8, 20), chrome); ring.position.set(x, 1.08, zF - 0.04); body.add(ring);
     const ind = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.05), indMat); ind.position.set(x * 1.28, 0.9, zF - 0.02); body.add(ind);
-    const spot = new THREE.SpotLight(0xfff1d6, 0, 70, 0.5, 0.55, 1.2);
+    const spot = new THREE.SpotLight(0xfff1d6, 0, 70, 0.5, 0.6, 1.6);
     spot.position.set(x, 1.1, zF); spot.target.position.set(x * 1.5, 0.0, zF - 30);
     body.add(spot, spot.target); headlights.push(spot);
     // additive light cone (fog / night): open cone, bright at the lamp, fading along its length
@@ -534,7 +534,7 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
       lightsOn = on;
       headMat.emissiveIntensity = on ? (highBeam ? 5.5 : 3.5) : 0.15;
       if (!headlightsDead) headMatL.emissiveIntensity = headMat.emissiveIntensity;
-      headlights.forEach((s, i) => { s.intensity = on && !(i === 0 && headlightsDead) ? (highBeam ? 1700 : 900) : 0; s.distance = highBeam ? 130 : 70; s.angle = highBeam ? 0.42 : 0.5; });
+      headlights.forEach((s, i) => { s.intensity = on && !(i === 0 && headlightsDead) ? (highBeam ? 1150 : 620) : 0; s.distance = highBeam ? 130 : 75; s.angle = highBeam ? 0.42 : 0.5; });
       tailMat.emissiveIntensity = (on ? 1.2 : 0.25) + brake * 5;
       revMat.emissiveIntensity = reverse ? 2.5 : 0;
     },
@@ -581,7 +581,7 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
     updateSpeedo(kmh, rpm, gear) { speedo.update(kmh, rpm, gear); },
     smoke,
     setHighBeam(on) { highBeam = on; rig.setLights({ headlights: lightsOn, brake: 0, reverse: false }); },
-    setBeamCones(k) { const on = k > 0.01 && lightsOn; coneMat.opacity = Math.min(0.5, k * (highBeam ? 1.4 : 1)); cones.forEach((c, i) => { c.visible = on && !(i === 0 && headlightsDead); c.scale.set(highBeam ? 1.15 : 1, highBeam ? 1.15 : 1, highBeam ? 1.6 : 1); }); },
+    setBeamCones(k) { const on = k > 0.01 && lightsOn; coneMat.opacity = Math.min(0.28, k * (highBeam ? 1.3 : 1)); cones.forEach((c, i) => { c.visible = on && !(i === 0 && headlightsDead); c.scale.set(highBeam ? 1.15 : 1, highBeam ? 1.15 : 1, highBeam ? 1.6 : 1); }); },
     setDamage(level) {
       // bent bumper from ~50 %, dead left headlight from ~30 %
       const bend = Math.max(0, (level - 0.45) / 0.55);

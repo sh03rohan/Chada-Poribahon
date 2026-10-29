@@ -93,7 +93,8 @@ test('damage: crashes add damage, cap speed and weaken brakes; repair is charged
   const ram = () => g(page, `(() => { const g = __game; const vs = g.traffic.vehicles; const car = vs.find((v) => v.type === 'car');
     for (const v of vs) v.s = 5000 + Math.random() * 500; g.teleport(1480); car.s = 1560; car.dir = 1; car.lateral = -1.75; car.swerve = 0; car.speed = 0; car.maxSpeed = 0.01; car.hitT = 0;
     g.simulate(9, { throttle: 1, autopilot: true }); return g.stats().damage; })()`) as Promise<number>;
-  for (let i = 0; i < 3; i++) { await ram(); await page.waitForTimeout(700); }
+  // the crash is booked in the physics step; the damage/mood penalty is applied on the next rendered frame
+  for (let i = 0; i < 3; i++) { await ram(); const f0 = await g(page, '__game.frames') as number; await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0, f0, { timeout: 60_000 }); }
   const st = await g(page, '(() => { const s = __game.stats(); return { damage: s.damage, mods: s.mods, crashes: s.crashes }; })()') as { damage: number; mods: { dmgBrake: number; speedCapKmh: number | null }; crashes: number };
   console.log('after 3 rams', st);
   expect(st.damage).toBeGreaterThanOrEqual(50); expect(st.mods.dmgBrake).toBeLessThan(1); expect(st.mods.speedCapKmh).not.toBeNull();

@@ -73,7 +73,7 @@ test('night hazards: unlit vehicles exist at night, L toggles the high beam, a h
   await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
   const st = () => g(page, '(() => { const s = __game.stats(); return { highBeam: s.highBeam, unlit: s.unlit, cattle: s.cattle.map((c) => c.state), cowHits: s.cowHits, fines: s.ledger.fines, crashes: s.crashes, beamHidden: document.getElementById("btn-beam").classList.contains("hidden"), dist: __game.bus.headlights[1].distance }; })()') as Promise<{ highBeam: boolean; unlit: number; cattle: string[]; cowHits: number; fines: number; crashes: number; beamHidden: boolean; dist: number }>;
   let s = await st();
-  expect(s.unlit).toBeGreaterThan(0); expect(s.beamHidden).toBe(false); expect(s.highBeam).toBe(false); expect(s.dist).toBe(70);
+  expect(s.unlit).toBeGreaterThan(0); expect(s.beamHidden).toBe(false); expect(s.highBeam).toBe(false); expect(s.dist).toBe(75);
   await page.keyboard.press('KeyL'); await page.waitForTimeout(100);
   s = await st(); expect(s.highBeam).toBe(true); expect(s.dist).toBe(130);
   await expect(page.locator('#btn-beam')).toHaveClass(/on/);

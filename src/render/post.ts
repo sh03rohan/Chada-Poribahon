@@ -18,7 +18,7 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 export type PostLevel = 'none' | 'basic' | 'full';
 
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null as THREE.Texture | null }, saturation: { value: 1.12 }, contrast: { value: 1.06 }, warmth: { value: 0.025 }, vignette: { value: 0.32 }, night: { value: 0 }, heat: { value: 0 }, time: { value: 0 } },
+  uniforms: { tDiffuse: { value: null as THREE.Texture | null }, saturation: { value: 1.12 }, contrast: { value: 1.06 }, warmth: { value: 0.025 }, vignette: { value: 0.1 }, night: { value: 0 }, heat: { value: 0 }, time: { value: 0 } },
   vertexShader: /* glsl */`varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */`
     uniform sampler2D tDiffuse; uniform float saturation, contrast, warmth, vignette, night, heat, time; varying vec2 vUv;
@@ -57,7 +57,7 @@ export class PostStack {
     }
     // tone-map first: the procedural sky is HDR-bright, so the bloom has to look at display values
     this.composer.addPass(new OutputPass());
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.14, 0.3, 0.94);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.08, 0.25, 0.97);
     this.composer.addPass(this.bloom);
     this.grade = new ShaderPass(GradeShader); this.composer.addPass(this.grade);
     this.smaa = new SMAAPass(); this.composer.addPass(this.smaa);
@@ -65,8 +65,8 @@ export class PostStack {
   setSize(w: number, h: number) { this.composer.setSize(w, h); }
   /** night / fog: lamps and headlights bloom more, the grade cools */
   setMood(night: boolean, fog: number, heat = 0, time = 0) {
-    this.grade.uniforms.heat.value = this.level === 'full' ? heat : 0; this.grade.uniforms.time.value = time;
-    if (this.bloom) { this.bloom.strength = night ? 0.6 : 0.14 + fog * 0.06; this.bloom.threshold = night ? 0.55 : 0.94; this.bloom.radius = night ? 0.5 : 0.3; }
+    this.grade.uniforms.heat.value = this.level === 'full' && new URLSearchParams(location.search).get('haze') === '1' ? heat : 0; this.grade.uniforms.time.value = time;
+    if (this.bloom) { this.bloom.strength = night ? 0.26 : 0.08 + fog * 0.04; this.bloom.threshold = night ? 0.82 : 0.97; this.bloom.radius = night ? 0.3 : 0.25; }
     this.grade.uniforms.night.value = night ? 1 : 0;
   }
   render() { this.composer.render(); }

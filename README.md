@@ -447,7 +447,7 @@ depth and material response, inside the phone budget. By quality tier:
 
 | | low | medium | high |
 |---|---|---|---|
-| post-processing (`render/post.ts`) | none | bloom (after tone mapping) → grade + vignette → SMAA | + GTAO, heat haze at noon |
+| post-processing (`render/post.ts`, opt-in via settings) | none | bloom (after tone mapping) → grade + vignette → SMAA | + GTAO, heat haze with `?haze=1` |
 | shadows | none | one 1024 sun map | three cascades, 2048 (`render/shadows.ts`, `?csm=0` to compare) |
 | rear-view mirror | — | live | live |
 
@@ -468,9 +468,24 @@ depth and material response, inside the phone budget. By quality tier:
   frame at most, static meshes of signals/cows/stalls are merged, instanced meshes are left out of
   the merge. Draw calls are counted across every post pass (`stats().drawCalls`).
 
+* **Smoothness and clarity pass** (after play-testing on phones): post-processing is now opt-in
+  (settings → ইফেক্ট; `?post=basic|full` still forces it), pixel ratio is capped at 1 / 1.25 / 1.5 by
+  tier, bloom is much weaker with a high threshold so night frames stay crisp, the headlight spots
+  are dimmer with a steeper falloff and the volumetric cones only appear in fog or storm (the white
+  wash in front of the bus at night came from spot + cone + bloom stacking), and a watchdog drops to
+  the low tier after 12 s under 28 fps (unless `?quality=` was given).
+* **Traffic never rams the bus**: the bus is a lead vehicle for same-direction traffic whenever it is
+  on the main road (parked at the start too), the lateral test uses each vehicle's real position and
+  width, closing on the bus within 55 m triggers a hard brake, overtakers do not abort alongside the
+  bus, and recycled/wrapped vehicles never land in the 200 m behind or 120 m ahead of it (nor at full
+  speed behind it). Cars, bikes and buses overtake a stopped bus when the other lane is clear;
+  trucks, rickshaws and vans queue behind. A touch from behind no longer counts as a crash or damage
+  (`stats().rearHits`).
+
 Probes: `scripts/probe-post.mjs`, `probe-ground.mjs`, `probe-light.mjs`, `probe-bus.mjs`,
-`probe-scenery.mjs`, `probe-particles.mjs`, `probe-calls.mjs <port>`.
-Tests: `tests/phase8.spec.ts` (post levels and frame luma, lighting, bus detail, particles, UI).
+`probe-scenery.mjs`, `probe-particles.mjs`, `probe-calls.mjs <port>`, `probe-traffic-ram.mjs`.
+Tests: `tests/phase8.spec.ts` (post levels and frame luma, lighting, bus detail, particles, UI,
+traffic no-ram).
 
 ## Extension points
 

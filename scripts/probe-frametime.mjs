@@ -1,0 +1,17 @@
+import { chromium } from '@playwright/test';
+const port = process.argv[2] || '5173', q = process.argv[3] || 'medium', hour = process.argv[4] || '21';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
+const t0 = Date.now();
+await page.goto(`http://localhost:${port}/?quality=${q}&hour=${hour}&weather=clear&hazards=0&view=chase`, { timeout: 240000, waitUntil: 'commit' });
+await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 240000 });
+const load = Date.now() - t0;
+await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+await page.evaluate(() => { __game.simulate(3, { throttle: 1, autopilot: true }); __game.input.override = { throttle: 1 }; __game.autopilot = true; });
+const f0 = await page.evaluate(() => __game.frames); const t1 = Date.now();
+await page.waitForFunction((f0) => __game.frames >= f0 + 6, f0, { timeout: 300000 });
+const ms = (Date.now() - t1) / 6;
+const st = await page.evaluate(() => { const s = __game.stats(); return { post: s.post, drawCalls: s.drawCalls, csm: s.csm, kmh: Math.round(s.kmh), pr: __game.renderer.getPixelRatio() }; });
+console.log(JSON.stringify({ port, q, hour, loadMs: load, msPerFrame: Math.round(ms), ...st }));
+await browser.close();

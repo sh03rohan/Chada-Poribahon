@@ -15,10 +15,13 @@ async function boot(page: Page, query: string, errors: string[] = []) {
 const g = (page: Page, expr: string) => page.evaluate(expr);
 const frameOnce = (page: Page) => page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0, 0, { timeout: 60_000 });
 
-test('post-processing: none on low, basic on medium, full (GTAO) on high; frames render without errors and the glass stays clear', async ({ page }) => {
-  test.setTimeout(420_000);
+test('post-processing: off by default (effects setting opt-in); none on low, basic on medium, full (GTAO) on high when enabled; frames render without errors and the glass stays clear', async ({ page }) => {
+  test.setTimeout(480_000);
+  // effects are opt-in now (phones were lagging): with the setting off every tier runs the plain renderer
+  await boot(page, 'quality=high&hour=15&view=chase');
+  expect(await g(page, '__game.stats().post')).toBe('none');
   for (const [q, level] of [['low', 'none'], ['medium', 'basic'], ['high', 'full']] as const) {
-    const errors = await boot(page, `quality=${q}&hour=15&view=chase`);
+    const errors = await boot(page, `quality=${q}&hour=15&view=chase&post=${level}`);
     expect(await g(page, '__game.stats().post')).toBe(level);
     await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
     await g(page, '__game.traffic.enabled = false; __game.teleport(3400); __game.simulate(0.3, { throttle: 0, handbrake: true })');
@@ -34,7 +37,7 @@ test('post-processing: none on low, basic on medium, full (GTAO) on high; frames
   void frameOnce;
 });
 
-test('lighting: cascades on high, sun rays at dawn, headlight cones + lamp pools at night, cones in fog', async ({ page }) => {
+test('lighting: cascades on high, sun rays at dawn, lamp pools at night, headlight cones only in fog', async ({ page }) => {
   test.setTimeout(600_000);
   let errors = await boot(page, 'quality=high&hour=6.6');
   const st = () => g(page, '(() => { const s = __game.stats(); return { csm: s.csm, rays: s.raysOpacity, cones: __game.bus.body.children.filter((c) => c.visible && c.geometry && c.geometry.type === "ConeGeometry").length, pools: __game.props.poolMat ? __game.props.poolMat.opacity : -1, sunI: __game.sky.sunIntensity }; })()') as Promise<{ csm: boolean; rays: number; cones: number; pools: number; sunI: number }>;
@@ -50,7 +53,7 @@ test('lighting: cascades on high, sun rays at dawn, headlight cones + lamp pools
   await g(page, '__game.traffic.enabled = false; __game.teleport(1990); __game.simulate(0.3, { throttle: 0, handbrake: true })');
   f0 = await g(page, '__game.frames') as number;
   await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0 + 1, f0, { timeout: 120_000 });
-  s = await st(); expect(s.csm).toBe(false); expect(s.cones).toBe(2); expect(s.pools).toBeGreaterThan(0.2); expect(s.rays).toBe(0);
+  s = await st(); expect(s.csm).toBe(false); expect(s.cones).toBe(0); /* clear night: no cones (they washed the view white) */ expect(s.pools).toBeGreaterThan(0.2); expect(s.rays).toBe(0);
   await page.screenshot({ path: `${SHOTS}/light-night-medium.png` });
   await g(page, '__game.applyWeather("fog", true); __game.sky.setTime(11); __game.applyNight()');
   f0 = await g(page, '__game.frames') as number;
@@ -115,4 +118,28 @@ test('UI polish: results card draws the trip trace with stops marked, panels ani
   expect(t.samples).toBeGreaterThan(10); expect(t.events).toBeGreaterThanOrEqual(1); expect(t.green).toBeGreaterThan(200); expect(t.anim).toBe('panel-in');
   await page.screenshot({ path: `${SHOTS}/results-trace.png` });
   expect(errors).toEqual([]);
+});
+
+test('traffic never rams the bus: fast vehicles behind a stopped bus brake and queue (or overtake when clear), no rear hits, no damage', async ({ page }) => {
+  test.setTimeout(420_000);
+  await boot(page, 'quality=low&hour=21&view=chase');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  // 40 s parked at the start with the normal flow around us
+  await g(page, '__game.simulate(40, { throttle: 0, handbrake: true })');
+  let st = await g(page, '(() => { const s = __game.stats(); return { rearHits: s.rearHits, crashes: s.crashes, damage: s.damage }; })()') as { rearHits: number; crashes: number; damage: number };
+  expect(st).toEqual({ rearHits: 0, crashes: 0, damage: 0 });
+  // then a car, a truck, a bike, a bus and a rickshaw at full speed 40–190 m behind the parked bus
+  await g(page, `(() => { __game.teleport(1000); const vs = __game.traffic.vehicles, ps = __game.routeS;
+    for (const v of vs) { v.s = ps + 400 + Math.random() * 200; v.overtake = 0; v.swerve = 0; v.hitT = 0; }
+    const set = (t, back, lat) => { const v = vs.find((x) => x.type === t); v.dir = 1; v.s = ps - back; v.lateral = lat; v.swerve = 0; v.speed = v.maxSpeed; v.overtake = 0; };
+    set('car', 70, -1.75); set('truck', 110, -1.75); set('bike', 150, -1.75); set('rickshaw', 40, -3.05); set('bus', 190, -1.75);
+    __game.simulate(25, { throttle: 0, handbrake: true }); })()`);
+  const near = await g(page, '__game.traffic.vehicles.filter((v) => v.dir === 1 && Math.abs(v.s - __game.routeS) < 60).map((v) => ({ t: v.type, d: Math.round(v.s - __game.routeS), kmh: Math.round(v.speed * 3.6), ot: v.overtake, lat: +(v.lateral + v.swerve).toFixed(1) }))') as { t: string; d: number; kmh: number; ot: number; lat: number }[];
+  console.log('around the parked bus after 25 s', JSON.stringify(near));
+  st = await g(page, '(() => { const s = __game.stats(); return { rearHits: s.rearHits, crashes: s.crashes, damage: s.damage }; })()') as typeof st;
+  expect(st).toEqual({ rearHits: 0, crashes: 0, damage: 0 });
+  // whoever is still behind has either stopped short of the bus or is passing it in the other lane;
+  // the truck and rickshaw never overtake, so they queue
+  for (const v of near.filter((v) => v.d < 0)) { if (v.ot === 1) expect(v.lat).toBeGreaterThan(0.5); else { expect(v.d).toBeLessThan(-8); expect(v.kmh).toBeLessThan(3); } }
+  expect(near.some((v) => (v.t === 'truck' || v.t === 'rickshaw') && v.d < 0)).toBe(true);
 });

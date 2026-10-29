@@ -39,7 +39,9 @@ test('weather: forecast on pre-trip, fog thickens + headlights, storm rains + li
   expect(fog.weather).toBe('fog'); expect(fog.fog).toBeGreaterThan(0.005); expect(fog.wet).toBeLessThan(0.1);
   expect(await g(page, '__game.bus.headlights.some((s) => s.intensity > 0)')).toBeTruthy();
   await page.screenshot({ path: `${SHOTS}/weather-fog.png` });
-  await g(page, '__game.applyWeather("storm", true); __game.lightningIn = 0.1; __game.simulate(1, { throttle: 0.3 })'); await page.waitForTimeout(300);
+  await g(page, '__game.applyWeather("storm", true); __game.lightningIn = 0.1; __game.simulate(1, { throttle: 0.3 })');
+  // lightning is timed in the real frame loop: wait for a rendered frame rather than a fixed delay
+  { const f0 = await g(page, '__game.frames') as number; await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0 + 1, f0, { timeout: 120_000 }); }
   const storm = await st();
   expect(storm.weather).toBe('storm'); expect(storm.wet).toBeGreaterThan(0.9); expect(storm.lightning).toBeGreaterThanOrEqual(1); expect(storm.btn).toBe('⛈️');
   await page.screenshot({ path: `${SHOTS}/weather-storm.png` });

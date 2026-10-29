@@ -257,8 +257,8 @@ export const QUALITY: Record<QualityTier, {
   anisotropy: number; envMapSize: number; shadowMapSize: number;
 }> = {
   low: { pixelRatio: 1, shadows: false, post: 'none', rainCount: 1200, anisotropy: 2, envMapSize: 128, shadowMapSize: 1024 },
-  medium: { pixelRatio: 1.5, shadows: true, post: 'basic', rainCount: 2600, anisotropy: 4, envMapSize: 256, shadowMapSize: 1024 },
-  high: { pixelRatio: 2, shadows: true, post: 'full', rainCount: 5000, anisotropy: 8, envMapSize: 256, shadowMapSize: 2048 },
+  medium: { pixelRatio: 1.25, shadows: true, post: 'basic', rainCount: 2600, anisotropy: 4, envMapSize: 256, shadowMapSize: 1024 },
+  high: { pixelRatio: 1.5, shadows: true, post: 'full', rainCount: 5000, anisotropy: 8, envMapSize: 256, shadowMapSize: 2048 },
 };
 
 export const BUS_DIMENSIONS = {

@@ -207,7 +207,7 @@ export class Traffic {
   /** the bus is running its high beam: oncoming lit vehicles flash back */
   highBeam = false;
   private lampHead!: THREE.InstancedMesh; private lampTail!: THREE.InstancedMesh; private flashT = 0;
-  private lampM = new THREE.Matrix4(); private zero = new THREE.Matrix4().makeScale(0, 0, 0); private playerS = 0;
+  private lampM = new THREE.Matrix4(); private zero = new THREE.Matrix4().makeScale(0, 0, 0); private playerS = 0; private lv = new THREE.Vector3(); private ls = new THREE.Vector3();
   get unlitCount() { return this.vehicles.filter((v) => v.unlit).length; }
   setNight(on: boolean) {
     this.night = on;
@@ -327,6 +327,19 @@ export class Traffic {
     }
   }
 
+  /** Move a far-away / wrapped vehicle back into the window around the bus (see update). */
+  private respawn(vh: Vehicle, playerS: number, playerSpeed: number) {
+    const L = this.road.length;
+    const ahead = () => Math.min(L - 30, playerS + 160 + Math.random() * 220);
+    if (vh.dir === 1) {
+      const behind = playerS - 220 - Math.random() * 120;
+      vh.s = behind >= 40 && Math.random() < 0.5 ? behind : ahead();
+      if (vh.s > playerS - 200 && vh.s < playerS + 120) vh.s = behind >= 40 ? behind : ahead();
+      vh.speed = vh.s < playerS ? Math.min(vh.maxSpeed, Math.max(6, Math.abs(playerSpeed) + 4)) : vh.maxSpeed;
+    } else { vh.s = Math.min(L - 30, playerS + 250 + Math.random() * 350); vh.speed = vh.maxSpeed; }
+    vh.s = Math.max(30, vh.s); vh.overtake = 0; vh.cutin = 0; vh.hitT = 0;
+  }
+
   private place(vh: Vehicle) {
     const f = this.road.sample(vh.s);
     const lat = vh.lateral + vh.swerve - vh.dir * this.road.bulge(vh.s);
@@ -345,8 +358,8 @@ export class Traffic {
         // oncoming lit vehicles flash their lamps when the bus runs its high beam
         const flash = this.highBeam && vh.dir === -1 && vh.s > this.playerS && vh.s - this.playerS < 90 ? (Math.sin(this.flashT * 18) > 0 ? 2.6 : 1) : 1;
         for (const [i, x] of [[0, -half], [1, half]] as [number, number][]) {
-          this.lampM.compose(this.v.clone().add(new THREE.Vector3(x, hy, front).applyQuaternion(this.q)), this.q, new THREE.Vector3(flash, flash, 1)); this.lampHead.setMatrixAt(k + i, this.lampM);
-          this.lampM.compose(this.v.clone().add(new THREE.Vector3(x, hy, back).applyQuaternion(this.q)), this.q, new THREE.Vector3(1, 1, 1)); this.lampTail.setMatrixAt(k + i, this.lampM);
+          this.lampM.compose(this.lv.set(x, hy, front).applyQuaternion(this.q).add(this.v), this.q, this.ls.set(flash, flash, 1)); this.lampHead.setMatrixAt(k + i, this.lampM);
+          this.lampM.compose(this.lv.set(x, hy, back).applyQuaternion(this.q).add(this.v), this.q, this.ls.set(1, 1, 1)); this.lampTail.setMatrixAt(k + i, this.lampM);
         }
       }
     }
@@ -372,10 +385,14 @@ export class Traffic {
         let d = (o.s - vh.s) * vh.dir; if (d < 0) d += L;
         gap = d - o.len / 2 - vh.len / 2; leadSpeed = o.speed; break;
       }
-      // the player bus as a lead vehicle (same direction only)
-      if (playerActive && vh.dir === 1) {
+      // the player bus as a lead vehicle (same direction only). The bus is an obstacle whenever it is
+      // on the main road — stopped at the start, parked at the end, during a cinematic — so nobody
+      // ever drives through it; the lateral test uses the vehicle's real position (lane + swerve)
+      // and its width, so a wide truck half a lane over still counts as blocked.
+      let busLead = false;
+      if (playerActive && vh.dir === 1 && vh.overtake === 0) {
         const d = playerS - vh.s - 5.6 - vh.len / 2;
-        if (d > -1 && d < gap && Math.abs(playerLateral - vh.lateral) < 2.4) { gap = d; leadSpeed = Math.max(0, playerSpeed); }
+        if (d > -3 && d < gap && Math.abs(playerLateral - (vh.lateral + vh.swerve)) < 1.25 + SPEC[vh.type].width / 2 + 0.45) { gap = d; leadSpeed = Math.max(0, playerSpeed); busLead = true; }
       }
       // overtaking: a clearly faster vehicle stuck behind a slow one (or the slow bus) moves into the
       // oncoming lane when nothing oncoming is within 140 m, then returns once past
@@ -396,7 +413,8 @@ export class Traffic {
         for (let j = 1; j < vs.length; j++) { const o = vs[(i - j * vh.dir + vs.length * 4) % vs.length]; if (o.dir !== vh.dir) continue; let dd = (vh.s - o.s) * vh.dir; if (dd < 0) dd += L; if (dd < 15 + o.len && dd > -2) passed = false; break; }
         if (playerActive && vh.dir === 1 && Math.abs(vh.s - playerS) < 16) passed = false;
         let oncoming = false; for (const o of vs) { if (o.dir === vh.dir) continue; const dd = (o.s - vh.s) * vh.dir; if (dd > -5 && dd < 60) oncoming = true; }
-        if (passed || oncoming) vh.overtake = 0;
+        const alongsideBus = playerActive && vh.dir === 1 && playerS - vh.s > -18 && playerS - vh.s < 22;
+        if (passed || (oncoming && !alongsideBus)) vh.overtake = 0;
       }
       const laneTarget = vh.overtake === 1 ? vh.dir * (LANE + 0.3) : vh.lateral; // oncoming lane = +LANE for dir 1
       // CNG cut-in: an auto parked on the shoulder ahead of the bus pulls out into the lane
@@ -425,6 +443,8 @@ export class Traffic {
       // slowly along the edge; otherwise they brake and wait in line (each one behind the one
       // ahead, via the normal car-following above) until the bus leaves the lane.
       let swerveT = 0; let hardBrake = false;
+      // same direction, closing on the (slow or stopped) bus within 55 m: brake hard, never ram it
+      if (busLead && gap < 55 && vh.speed > leadSpeed + 1.5) hardBrake = true;
       if (playerActive && vh.dir === -1 && vh.overtake === 0 && vh.hitT <= 0) {
         const halfW = SPEC[vh.type].width / 2;
         const d = vh.s - playerS - 5.6 - vh.len / 2;                         // their nose → bus front
@@ -448,7 +468,7 @@ export class Traffic {
       if (gap < Infinity) {
         const margin = 4 + vh.speed * 0.9;
         const room = gap - margin;
-        const allowed = room <= 0 ? Math.min(leadSpeed, Math.max(0, gap - 2) * 0.5) : Math.sqrt(leadSpeed * leadSpeed + 2 * (hardBrake ? 7 : 4.5) * room);
+        const allowed = room <= 0 ? Math.min(leadSpeed, Math.max(0, gap - 2) * 0.5) : Math.sqrt(leadSpeed * leadSpeed + 2 * (hardBrake ? 8 : 4.5) * room);
         target = Math.min(target, Math.max(0, allowed));
         if (gap < 1.5) target = 0;
       }
@@ -460,15 +480,15 @@ export class Traffic {
       }
       if (swerveT !== 0 && vh.overtake === 0 && vh.cutin !== 1) vh.swerve += (swerveT - vh.swerve) * Math.min(1, dt * (vh.hitT > 0 ? 0.8 : 1.2));
       else if (vh.cutin !== 1) vh.swerve += ((laneTarget - vh.lateral) - vh.swerve) * Math.min(1, dt * 1.6) * (vh.overtake === 1 || Math.abs(vh.swerve) > 0.05 ? 1 : 0); // back to the lane centre
-      const accel = target > vh.speed ? (vh.speed < 0 ? 6 : 2.2) : (hardBrake || vh.hitT > 0 ? 9 : 7.5);
+      const accel = target > vh.speed ? (vh.speed < 0 ? 6 : 2.2) : (hardBrake ? 11 : vh.hitT > 0 ? 9 : 7.5);
       vh.speed += THREE.MathUtils.clamp(target - vh.speed, -accel * dt, accel * dt);
       vh.s += vh.speed * vh.dir * dt;
-      if (vh.s > L - 20) { vh.s -= L - 40; } else if (vh.s < 20) { vh.s += L - 40; }
-      // keep traffic around the player: anything far away is recycled into a window ahead/behind
-      if (playerActive && Math.abs(vh.s - playerS) > 650) {
-        vh.s = vh.dir === 1 ? (Math.random() < 0.5 ? playerS - 120 - Math.random() * 60 : playerS + 150 + Math.random() * 200) : playerS + 250 + Math.random() * 350;
-        vh.s = Math.max(30, Math.min(L - 30, vh.s)); vh.speed = vh.maxSpeed;
-      }
+      let wrapped = false;
+      if (vh.s > L - 20) { vh.s -= L - 40; wrapped = true; } else if (vh.s < 20) { vh.s += L - 40; wrapped = true; }
+      // keep traffic around the player: anything far away is recycled into a window ahead/behind.
+      // Same-direction vehicles never (re)appear in the 200 m behind / 120 m ahead of the bus, and
+      // never at full speed right behind it — the start of the route used to get rammed this way.
+      if (playerActive && (Math.abs(vh.s - playerS) > 650 || (wrapped && vh.dir === 1 && vh.s > playerS - 200 && vh.s < playerS + 120))) this.respawn(vh, playerS, playerSpeed);
       const yaw = this.place(vh);
       const rider = this.riderOf.get(vh);
       if (rider) { const f = this.road.sample(vh.s); const lat = vh.lateral + vh.swerve - vh.dir * this.road.bulge(vh.s); const back = vh.type === 'rickshaw' ? -0.55 : vh.type === 'van' ? -1.0 : 0; rider.position.set(f.x + f.rx * lat + f.tx * back * vh.dir, vh.type === 'bike' ? 0.52 : 0.62, f.z + f.rz * lat + f.tz * back * vh.dir); rider.root.rotation.y = yaw + Math.PI; }
