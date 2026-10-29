@@ -3,6 +3,7 @@ import type { Road } from './road.ts';
 import type { Circle, Contact } from './collision.ts';
 import { Person, PeopleManager, VARIANTS } from './people.ts';
 import { WORLD } from '../config.ts';
+import { mergeStaticMeshes } from '../vehicle/mergeStatic.ts';
 
 /**
  * Cattle crossing: at village spots a herder walks three cows across the road from the left
@@ -34,6 +35,7 @@ function buildCow(colour: number): { root: THREE.Group; legs: THREE.Mesh[] } {
   }
   const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.6, 5), dark); tail.position.set(0, 0.95, 0.85); tail.rotation.x = 0.3; root.add(tail);
   root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; } });
+  mergeStaticMeshes(root, new Set(legs), true);
   return { root, legs };
 }
 

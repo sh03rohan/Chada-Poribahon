@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Road } from './road.ts';
 import { WORLD } from '../config.ts';
+import { mergeStaticMeshes } from '../vehicle/mergeStatic.ts';
 
 /**
  * Town traffic signals: a pole on the left kerb with an arm over the lane and a three-lamp head
@@ -41,7 +42,7 @@ export class TrafficSignals {
       const line = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.roadWidth / 2 - 0.2, 0.4).rotateX(-Math.PI / 2), white); line.position.set(-WORLD.roadWidth / 4, 0.012, 2.6); g.add(line);
       for (let i = 0; i < 8; i++) { const z = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 2.6).rotateX(-Math.PI / 2), white); z.position.set(-WORLD.roadWidth / 2 + 0.6 + i * 0.9, 0.012, 0.6); g.add(z); }
       g.traverse((o) => { if ((o as THREE.Mesh).isMesh && (o as THREE.Mesh).geometry.type !== 'PlaneGeometry') o.castShadow = true; });
-      this.group.add(g);
+      this.group.add(g); mergeStaticMeshes(g, new Set(), true);
       this.signals.push({ s, offset: (k * 11 + 5) % CYCLE, state: 'green', ran: false, stoppedOk: false, warned: false, mats, forced: null });
     });
     this.update(0);

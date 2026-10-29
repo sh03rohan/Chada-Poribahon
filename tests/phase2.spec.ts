@@ -148,7 +148,7 @@ test('map: minimap + full map + fork signboards + wrong branch warning & recover
 });
 
 test('landing + intro: frames at 3/10/16/21/26 s, skip works at every second, intro remembered', async ({ page }) => {
-  test.setTimeout(1_200_000); // software GL at ~2 fps: the 30-skip loop alone takes most of the budget
+  test.setTimeout(1_500_000); // software GL at ~1 fps: the 30-skip loop alone takes most of the budget
   const errors = await boot(page, 'quality=low&hour=10'); // low tier keeps the 30-skip loop inside the budget on software GL
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${SHOTS}/landing.png` });

@@ -152,8 +152,9 @@ test('camera follows the bus when a run is started from the menu (not autostart)
   await page.waitForTimeout(600);
   await page.click('#pretrip-go');
   await page.waitForTimeout(500);
-  await g(page, '__game.input.override = { throttle: 1 }; __game.autopilot = true');
-  await page.waitForTimeout(8000);
+  // fixed-step drive (the real-time loop runs at ~1 fps under software GL), then let a frame place the camera
+  await g(page, '__game.simulate(4, { throttle: 1, autopilot: true }); __game.input.override = { throttle: 1 }; __game.autopilot = true');
+  await page.waitForTimeout(3000);
   const r = await g(page, '(() => { const c = __game.cam.camera.position, b = __game.bus.root.position; return { kmh: __game.cur.v * 3.6, dist: c.distanceTo(b), freeCam: !!__game.freeCam }; })()') as { kmh: number; dist: number; freeCam: boolean };
   console.log('menu-start camera', r);
   expect(r.kmh).toBeGreaterThan(5);
