@@ -67,3 +67,28 @@ test('garage minibus: bought with balance, survives reload, shorter body with 24
   expect(perf.zeroToSixty).toBeLessThan(9.5); expect(perf.top).toBeGreaterThan(95); expect(perf.top).toBeLessThan(108);
   expect(errors).toEqual([]);
 });
+
+test('night hazards: unlit vehicles exist at night, L toggles the high beam, a herder walks cows across and hitting one costs ৳2,000', async ({ page }) => {
+  const errors = await boot(page, 'quality=low&hour=21&weather=clear');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  const st = () => g(page, '(() => { const s = __game.stats(); return { highBeam: s.highBeam, unlit: s.unlit, cattle: s.cattle.map((c) => c.state), cowHits: s.cowHits, fines: s.ledger.fines, crashes: s.crashes, beamHidden: document.getElementById("btn-beam").classList.contains("hidden"), dist: __game.bus.headlights[1].distance }; })()') as Promise<{ highBeam: boolean; unlit: number; cattle: string[]; cowHits: number; fines: number; crashes: number; beamHidden: boolean; dist: number }>;
+  let s = await st();
+  expect(s.unlit).toBeGreaterThan(0); expect(s.beamHidden).toBe(false); expect(s.highBeam).toBe(false); expect(s.dist).toBe(70);
+  await page.keyboard.press('KeyL'); await page.waitForTimeout(100);
+  s = await st(); expect(s.highBeam).toBe(true); expect(s.dist).toBe(130);
+  await expect(page.locator('#btn-beam')).toHaveClass(/on/);
+  await page.screenshot({ path: `${SHOTS}/night-highbeam.png` });
+  await page.click('#btn-beam'); await page.waitForTimeout(100); expect((await st()).highBeam).toBe(false);
+  // cattle: the crossing starts as the bus comes within 220 m
+  await g(page, '__game.traffic.enabled = false; const sp = __game.cattle.spots[0]; __game.teleport(sp.s - 200); __game.simulate(0.5, { throttle: 0, handbrake: true })');
+  expect((await st()).cattle[0]).toBe('crossing');
+  await expect(page.locator('#hud-msg')).toContainText('গরু', { timeout: 8000 });
+  await g(page, 'const sp = __game.cattle.spots[0]; __game.teleport(sp.s - 45); __game.simulate(5, { throttle: 0, handbrake: true })');
+  await page.waitForTimeout(2500); await page.screenshot({ path: `${SHOTS}/night-cattle.png` });
+  // ram the lead cow
+  await g(page, 'const sp = __game.cattle.spots[0]; sp.cows.forEach((c, i) => { c.lat = -1.75 - i * 0.9; c.speed = 0.05; }); __game.teleport(sp.s - 25); __game.simulate(5, { throttle: 1, autopilot: true })');
+  await page.waitForFunction(() => (window as unknown as { __game: { stats(): { cowHits: number } } }).__game.stats().cowHits >= 1, null, { timeout: 10_000 });
+  s = await st(); expect(s.crashes).toBeGreaterThanOrEqual(1); expect(s.fines).toBeGreaterThanOrEqual(2000);
+  await expect(page.locator('#hud-msg')).toContainText('গরুকে ধাক্কা');
+  expect(errors).toEqual([]);
+});

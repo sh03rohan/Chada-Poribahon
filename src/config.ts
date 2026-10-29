@@ -154,6 +154,8 @@ export const WORLD = {
   railS: 1650,           // level crossing between the first chada spot and Rajbari
   accidentS: 3250,       // overturned truck blocking the left lane after the checkpoint
   highwayStartS: 5400,   // divided highway with a planted median from here to the finish
+  /** village spots where a herder walks cows across the road */
+  cattleS: [1450, 4150],
   medianWidth: 2.4,
 };
 
@@ -200,6 +202,8 @@ export const GAMEPLAY = {
   /** special passengers: chance one boards after each stop, and how many per run at most */
   specialChance: 0.65, specialMaxPerRun: 2,
   roofFine: 1000,
+  /** compensation to the owner for hitting a cow */
+  cowFine: 2000,
   roofSpeedCapKmh: 90,
   /** Phase 3 damage: % per m/s of impact above 1.2 m/s; repair ৳ per % at Dhaka */
   damagePerImpactMs: 2.4,

@@ -31,6 +31,8 @@ export interface BusRig {
   riders: Person[];
   /** damage visuals 0..1: bent bumper, dead left lamp (garage repairs it); optional on GLB rigs */
   setDamage?(level: number): void;
+  /** high beam: longer, brighter headlight cones (night hazards) */
+  setHighBeam?(on: boolean): void;
   /** engine smoke sprites (animated by the damage model) */
   smoke?: THREE.Sprite[];
   /** repaint the side livery + paint colour (garage); optional on GLB rigs */
@@ -482,13 +484,15 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   for (let i = 0; i < 5; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, transparent: true, opacity: 0, depthWrite: false })); sp.position.set(-0.8, 0.6, zR + 0.4); sp.scale.setScalar(0.6); body.add(sp); smoke.push(sp); }
   const bumperY = bumper.position.y;
   let headlightsDead = false;
+  let highBeam = false, lightsOn = false;
 
   const rig: BusRig = {
     root, body, wheelSpin, wheelSteer, steeringWheel, door, headlights, isProcedural: true,
     setLights({ headlights: on, brake, reverse }) {
-      headMat.emissiveIntensity = on ? 3.5 : 0.15;
+      lightsOn = on;
+      headMat.emissiveIntensity = on ? (highBeam ? 5.5 : 3.5) : 0.15;
       if (!headlightsDead) headMatL.emissiveIntensity = headMat.emissiveIntensity;
-      headlights.forEach((s, i) => { s.intensity = on && !(i === 0 && headlightsDead) ? 900 : 0; });
+      headlights.forEach((s, i) => { s.intensity = on && !(i === 0 && headlightsDead) ? (highBeam ? 1700 : 900) : 0; s.distance = highBeam ? 130 : 70; s.angle = highBeam ? 0.42 : 0.5; });
       tailMat.emissiveIntensity = (on ? 1.2 : 0.25) + brake * 5;
       revMat.emissiveIntensity = reverse ? 2.5 : 0;
     },
@@ -534,6 +538,7 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
     setDriverHandTarget(side, worldPoint) { if (!worldPoint) { driverHandOverride[side] = null; return; } driverHandOverride[side] = driver.root.worldToLocal(worldPoint.clone()); },
     updateSpeedo(kmh, rpm, gear) { speedo.update(kmh, rpm, gear); },
     smoke,
+    setHighBeam(on) { highBeam = on; rig.setLights({ headlights: lightsOn, brake: 0, reverse: false }); },
     setDamage(level) {
       // bent bumper from ~50 %, dead left headlight from ~30 %
       const bend = Math.max(0, (level - 0.45) / 0.55);

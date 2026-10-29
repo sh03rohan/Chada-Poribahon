@@ -17,7 +17,9 @@ import { Person, PeopleManager, VARIANTS, HAWKER_VARIANT, makeVariant } from './
 type VType = 'car' | 'bike' | 'bus' | 'truck' | 'auto' | 'rickshaw' | 'van';
 interface Vehicle { type: VType; idx: number; s: number; dir: 1 | -1; speed: number; maxSpeed: number; lateral: number; swerve: number; len: number; overtake: number; cutin: number;
   /** seconds left in the "just got hit" state: brake, pull to the kerb, then resume */
-  hitT: number; }
+  hitT: number;
+  /** night hazard: no working lamps (dark body, no glow) */
+  unlit: boolean; }
 
 const LANE = WORLD.laneWidth / 2;
 
@@ -198,6 +200,21 @@ export class Traffic {
   laneBarrierS = Infinity;
   /** last collision info for the game loop */
   collisionS = Infinity;
+  /** night: lamps glow on lit vehicles, unlit ones go dark; set by the game */
+  night = false;
+  /** the bus is running its high beam: oncoming lit vehicles flash back */
+  highBeam = false;
+  private lampHead!: THREE.InstancedMesh; private lampTail!: THREE.InstancedMesh; private flashT = 0;
+  private lampM = new THREE.Matrix4(); private zero = new THREE.Matrix4().makeScale(0, 0, 0); private playerS = 0;
+  get unlitCount() { return this.vehicles.filter((v) => v.unlit).length; }
+  setNight(on: boolean) {
+    this.night = on;
+    for (const vh of this.vehicles) {
+      const slot = this.slots[vh.type][vh.idx]; const mesh = this.meshes[vh.type][slot.mesh];
+      mesh.setColorAt(slot.idx, new THREE.Color(on && vh.unlit ? 0x2c2a28 : 0xffffff)); if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+    this.lampHead.visible = this.lampTail.visible = on;
+  }
   /** test hook: freeze traffic and ignore it for walls */
   enabled = true;
 
@@ -224,9 +241,16 @@ export class Traffic {
         let s0 = 250 + Math.random() * (road.length - 300);
         if (dir === -1 && s0 < 400) s0 += 400;
         const slow = type === 'rickshaw' || type === 'van';
-        this.vehicles.push({ type, idx: i, s: s0, dir, speed: maxSpeed, maxSpeed, lateral: -dir * (slow ? LANE + 1.3 : LANE), swerve: 0, len: sp.len, overtake: 0, cutin: 0, hitT: 0 });
+        const unlit = (type === 'truck' || type === 'van' || type === 'rickshaw' || type === 'auto') && Math.random() < 0.3;
+        this.vehicles.push({ type, idx: i, s: s0, dir, speed: maxSpeed, maxSpeed, lateral: -dir * (slow ? LANE + 1.3 : LANE), swerve: 0, len: sp.len, overtake: 0, cutin: 0, hitT: 0, unlit });
       }
     }
+    // Lamps: one glowing quad per headlight / tail light, placed every frame (night only)
+    const n = this.vehicles.length * 2;
+    this.lampHead = new THREE.InstancedMesh(new THREE.BoxGeometry(0.22, 0.12, 0.06), new THREE.MeshBasicMaterial({ color: 0xfff3c8, toneMapped: false }), n);
+    this.lampTail = new THREE.InstancedMesh(new THREE.BoxGeometry(0.2, 0.1, 0.06), new THREE.MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false }), n);
+    this.lampHead.frustumCulled = this.lampTail.frustumCulled = false; this.lampHead.visible = this.lampTail.visible = false;
+    this.group.add(this.lampHead, this.lampTail);
     // Bike riders (humanoids in a riding pose), one per bike
     for (const vh of this.vehicles) if (vh.type === 'bike' || vh.type === 'rickshaw' || vh.type === 'van') {
       const p = new Person(VARIANTS[(vh.idx * 3 + 1) % VARIANTS.length]); p.setAction('ride'); p.mesh.castShadow = false;
@@ -310,10 +334,25 @@ export class Traffic {
     this.m.compose(this.v, this.q, this.sc);
     const slot = this.slots[vh.type][vh.idx];
     this.meshes[vh.type][slot.mesh].setMatrixAt(slot.idx, this.m);
+    if (this.night) {
+      const k = this.vehicles.indexOf(vh) * 2;
+      if (vh.unlit) { this.lampHead.setMatrixAt(k, this.zero); this.lampHead.setMatrixAt(k + 1, this.zero); this.lampTail.setMatrixAt(k, this.zero); this.lampTail.setMatrixAt(k + 1, this.zero); }
+      else {
+        const half = vh.type === 'bike' || vh.type === 'rickshaw' ? 0 : SPEC[vh.type].width / 2 - 0.25;
+        const hy = vh.type === 'truck' || vh.type === 'bus' ? 1.0 : 0.7, front = -vh.len / 2 + 0.05, back = vh.len / 2 - 0.05;
+        // oncoming lit vehicles flash their lamps when the bus runs its high beam
+        const flash = this.highBeam && vh.dir === -1 && vh.s > this.playerS && vh.s - this.playerS < 90 ? (Math.sin(this.flashT * 18) > 0 ? 2.6 : 1) : 1;
+        for (const [i, x] of [[0, -half], [1, half]] as [number, number][]) {
+          this.lampM.compose(this.v.clone().add(new THREE.Vector3(x, hy, front).applyQuaternion(this.q)), this.q, new THREE.Vector3(flash, flash, 1)); this.lampHead.setMatrixAt(k + i, this.lampM);
+          this.lampM.compose(this.v.clone().add(new THREE.Vector3(x, hy, back).applyQuaternion(this.q)), this.q, new THREE.Vector3(1, 1, 1)); this.lampTail.setMatrixAt(k + i, this.lampM);
+        }
+      }
+    }
     return yaw;
   }
 
   update(dt: number, playerS: number, playerLateral: number, playerSpeed: number, camPos: THREE.Vector3, playerActive: boolean) {
+    this.playerS = playerS; this.flashT += dt;
     const L = this.road.length;
     const vs = this.vehicles;
     if (!this.enabled) { this.collisionS = Infinity; return; }
@@ -432,6 +471,7 @@ export class Traffic {
       if (rider) { const f = this.road.sample(vh.s); const lat = vh.lateral + vh.swerve - vh.dir * this.road.bulge(vh.s); const back = vh.type === 'rickshaw' ? -0.55 : vh.type === 'van' ? -1.0 : 0; rider.position.set(f.x + f.rx * lat + f.tx * back * vh.dir, vh.type === 'bike' ? 0.52 : 0.62, f.z + f.rz * lat + f.tz * back * vh.dir); rider.root.rotation.y = yaw + Math.PI; }
     }
     for (const type of Object.keys(this.meshes) as VType[]) for (const mesh of this.meshes[type]) mesh.instanceMatrix.needsUpdate = true;
+    if (this.night) { this.lampHead.instanceMatrix.needsUpdate = true; this.lampTail.instanceMatrix.needsUpdate = true; }
 
     // Pedestrians: walk along the footpath, recycle around the player
     for (const pd of this.peds) {
