@@ -1,4 +1,4 @@
-# চাঁদা পরিবহন (Chada Poribohon) — Phase 7
+# চাঁদা পরিবহন (Chada Poribohon) — Phase 8
 
 A browser-based Bangladeshi bus-driving game. Vite + TypeScript + three.js, no framework.
 Routes: কুষ্টিয়া → রাজবাড়ী → ফরিদপুর → ভাঙ্গা → পদ্মা সেতু → ঢাকা (~6 km), ঢাকা → নরসিংদী → মেঘনা সেতু → শায়েস্তাগঞ্জ → চা বাগান → শ্রীমঙ্গল → সিলেট (~6.5 km) and ঢাকা → কাঁচপুর → মেঘনা-গোমতী সেতু → কুমিল্লা → সীতাকুণ্ড পাহাড় → সমুদ্র → চট্টগ্রাম (~6.5 km); left-hand traffic.
@@ -439,6 +439,38 @@ Tests: `tests/phase6.spec.ts` (daily challenge, minibus, night hazards, traffic 
 
 Probes: `scripts/probe-story.mjs`, `probe-radio.mjs`, `probe-riders.mjs`, `probe-street.mjs`.
 Tests: `tests/phase7.spec.ts` (story mode, radio, passenger interaction, street life).
+
+## Phase 8 — graphics
+
+Everything is still procedural (no art assets); the aim was "clean, bright, stylised" with a real
+depth and material response, inside the phone budget. By quality tier:
+
+| | low | medium | high |
+|---|---|---|---|
+| post-processing (`render/post.ts`) | none | bloom (after tone mapping) → grade + vignette → SMAA | + GTAO, heat haze at noon |
+| shadows | none | one 1024 sun map | three cascades, 2048 (`render/shadows.ts`, `?csm=0` to compare) |
+| rear-view mirror | — | live | live |
+
+* **Materials**: asphalt normal map from a procedural height field (grain, patches, cracks) next to
+  the roughness map; grass blades + clump normals; ~5,600 instanced roadside tufts; ~220 reflective
+  puddles that fade in with wetness. Bus: rivet strips, mud flaps with mud, a dirt skirt, tarp and
+  rope over the luggage, more reflective glass.
+* **Lighting**: cascaded shadows on high; sun rays sprite at dawn/dusk; warm light pools under the
+  street lamps and emissive bulbs at the tea stalls (no real point lights — one scene point light
+  makes every material pay for it); additive headlight cones at night and in fog, longer on high beam.
+* **Scenery**: tree cards painted as lit leaf clusters with sky gaps and a wind-sway vertex shader;
+  a far-horizon ring of hills and village silhouettes; birds wheeling ahead by day and kites in the
+  late afternoon; pitched tin roofs on every third shop.
+* **Particles** (`world/particles.ts`, one draw call): exhaust by throttle, dust off the shoulder,
+  wheel spray in rain, tea-stall smoke. Cockpit rain on the glass with wiper wedges
+  (`vehicle/glassRain.ts`).
+* **Performance notes**: the HUD lost its backdrop blur, the sky environment map bakes once per
+  frame at most, static meshes of signals/cows/stalls are merged, instanced meshes are left out of
+  the merge. Draw calls are counted across every post pass (`stats().drawCalls`).
+
+Probes: `scripts/probe-post.mjs`, `probe-ground.mjs`, `probe-light.mjs`, `probe-bus.mjs`,
+`probe-scenery.mjs`, `probe-particles.mjs`, `probe-calls.mjs <port>`.
+Tests: `tests/phase8.spec.ts` (post levels and frame luma, lighting, bus detail, particles, UI).
 
 ## Extension points
 

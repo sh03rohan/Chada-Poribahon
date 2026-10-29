@@ -26,6 +26,35 @@ export class RouteMap {
     for (let s = 0; s <= branch.length; s += 10) { const f = branch.sample(s); this.branchPts.push([f.x, f.z]); }
   }
 
+  /** Results card: the route with the driven path coloured by speed and the trip's moments marked. */
+  drawTrace(canvas: HTMLCanvasElement, samples: { s: number; kmh: number }[], events: { s: number; kind: 'stop' | 'crash' | 'fine' | 'fuel' }[]) {
+    const ctx = canvas.getContext('2d')!, W = canvas.width, H = canvas.height;
+    const b = this.road.bounds; const pad = 18;
+    const sc = Math.min((W - pad * 2) / (b.maxX - b.minX || 1), (H - pad * 2) / (b.maxZ - b.minZ || 1));
+    const ox = (W - (b.maxX - b.minX) * sc) / 2, oz = (H - (b.maxZ - b.minZ) * sc) / 2;
+    const P = (x: number, z: number): [number, number] => [ox + (x - b.minX) * sc, oz + (z - b.minZ) * sc];
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#efe6cc'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#bfb49a'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
+    this.pts.forEach(([x, z], i) => { const [cx, cy] = P(x, z); i ? ctx.lineTo(cx, cy) : ctx.moveTo(cx, cy); }); ctx.stroke();
+    const col = (kmh: number) => kmh > 85 ? '#d8262c' : kmh > 55 ? '#f2a900' : '#1f8a4a';
+    ctx.lineWidth = 4;
+    for (let i = 1; i < samples.length; i++) {
+      const a = this.road.sample(samples[i - 1].s), c = this.road.sample(samples[i].s);
+      const [ax, ay] = P(a.x, a.z), [cx, cy] = P(c.x, c.z);
+      ctx.strokeStyle = col(samples[i].kmh); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(cx, cy); ctx.stroke();
+    }
+    ctx.font = '700 13px "Hind Siliguri", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const e of events) {
+      const f = this.road.sample(e.s); const [x, y] = P(f.x, f.z);
+      const [fill, glyph] = e.kind === 'crash' ? ['#d8262c', '✖'] : e.kind === 'fine' ? ['#7a3fa0', '৳'] : e.kind === 'fuel' ? ['#1f6fb5', '⛽'] : ['#1f8a4a', '●'];
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = fill; ctx.fillText(glyph, x, y + 0.5);
+    }
+    // legend
+    ctx.textAlign = 'left'; ctx.font = '600 11px "Hind Siliguri", sans-serif';
+    [['#1f8a4a', '< ৫৫'], ['#f2a900', '৫৫–৮৫'], ['#d8262c', '> ৮৫ কিমি/ঘ']].forEach(([c, t], i) => { ctx.fillStyle = c; ctx.fillRect(8 + i * 74, H - 14, 10, 6); ctx.fillStyle = '#2a1a0a'; ctx.fillText(t, 22 + i * 74, H - 11); });
+  }
   /** Full route map in a canvas (north up, fitted). */
   drawFull(canvas: HTMLCanvasElement, st: MapState | null, info?: { remaining: number; eta: number }) {
     const st2 = st;

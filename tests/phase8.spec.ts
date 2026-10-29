@@ -101,3 +101,18 @@ test('particles: exhaust under throttle, dust off the shoulder, windscreen rain 
   s = await st(); expect(s.glass).toBe(false); expect(s.particles).toBeGreaterThan(3);
   expect(errors).toEqual([]);
 });
+
+test('UI polish: results card draws the trip trace with stops marked, panels animate in, pills are blur-free glass', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await boot(page, 'quality=low&hour=11');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  const pill = await g(page, '(() => { const cs = getComputedStyle(document.querySelector(".pill")); return { bg: cs.backgroundImage, blur: cs.backdropFilter || "none" }; })()') as { bg: string; blur: string };
+  expect(pill.bg).toContain('gradient'); expect(pill.blur === 'none' || pill.blur === '').toBe(true);
+  await g(page, '__game.traffic.enabled = false; __game.teleport(1990); __game.simulate(1, { throttle: 0.5, autopilot: true }); for (let i = 0; i < 30 && __game.stats().kmh > 2; i++) __game.simulate(0.5, { throttle: 0, brake: 0.6, autopilot: true }); __game.simulate(12, { throttle: 0, handbrake: true, autopilot: true }); if (__game.choice.open) __game.choice.cancel(); __game.teleport(5900); __game.simulate(30, { throttle: 1, autopilot: true })');
+  await page.waitForFunction(() => (window as unknown as { __game: { finished: boolean } }).__game.finished === true, null, { timeout: 20_000 });
+  await page.waitForTimeout(300);
+  const t = await g(page, '(() => { const s = __game.stats(); const c = document.getElementById("res-trace"); const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let green = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 1] > 120 && d[i] < 90 && d[i + 2] < 110) green++; return { samples: s.trace, events: s.traceEvents, green, anim: getComputedStyle(document.querySelector("#results .panel")).animationName }; })()') as { samples: number; events: number; green: number; anim: string };
+  expect(t.samples).toBeGreaterThan(10); expect(t.events).toBeGreaterThanOrEqual(1); expect(t.green).toBeGreaterThan(200); expect(t.anim).toBe('panel-in');
+  await page.screenshot({ path: `${SHOTS}/results-trace.png` });
+  expect(errors).toEqual([]);
+});
