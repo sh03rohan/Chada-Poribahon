@@ -19,6 +19,7 @@ import { SkySystem } from './world/sky.ts';
 import { Weather, WEATHER_INFO, type WeatherKind } from './world/weather.ts';
 import { PhotoMode } from './game/photo.ts';
 import { CattleCrossing } from './world/cattle.ts';
+import { STORY, loadStory, saveStory, resetStory, judgeDay, verdict, describeDay, INSTALMENT, INSPECTOR_BONUS, INSPECTOR_PENALTY, type StoryDay } from './game/story.ts';
 import { TrafficSignals } from './world/signals.ts';
 import { BUSES, busDef } from './game/career.ts';
 import { dailyChallenge, dateId, describeChallenge, recordChallenge, loadBook, challengeScore, shareText, challengeDateLabel, type Challenge } from './game/challenge.ts';
@@ -105,6 +106,7 @@ class Game {
   busDef = BUSES[0];
   cattle!: CattleCrossing; highBeam = false; cowHits = 0; hazards = true; signals!: TrafficSignals; redLights = 0;
   /** daily challenge in progress (fixed route/hour/weather/contract) */
+  story: StoryDay | null = null; lastStory: { day: number; met: boolean; points: number; note: string } | null = null;
   challenge: Challenge | null = null; private fixedHour: number | null = null; lastChallenge: { score: number; best: number; isBest: boolean; runs: number } | null = null;
   wiperPhase = 0; speedoTimer = 0; minimapTimer = 0; clockTimer = 0;
   lastFrame = performance.now();
@@ -274,7 +276,9 @@ class Game {
   }
 
   private bindMenus() {
-    $('menu-start').onclick = async () => { await this.lockLandscape(); await this.audio.init(); this.audio.setVolume(this.settings.value.volume); if (BOOT_CHALLENGE && !this.challenge) this.startChallenge(BOOT_CHALLENGE); else if (this.settings.value.introSeen) this.showPretrip(); else this.playIntro(); };
+    $('menu-start').onclick = async () => { await this.lockLandscape(); await this.audio.init(); this.audio.setVolume(this.settings.value.volume); if (BOOT_CHALLENGE && !this.challenge) this.startChallenge(BOOT_CHALLENGE); else if (BOOT_STORY && !this.story) this.startStory(BOOT_STORY); else if (this.settings.value.introSeen) this.showPretrip(); else this.playIntro(); };
+    if (BOOT_STORY) $('menu-start').textContent = `📖 দিন ${bn(BOOT_STORY.day)}: ${BOOT_STORY.title}`;
+    $('menu-story').onclick = () => this.openStory();
     if (BOOT_CHALLENGE) $('menu-start').textContent = '🗓️ চ্যালেঞ্জ শুরু';
     $('menu-challenge').onclick = () => this.openChallenge();
     $('menu-intro').onclick = async () => { await this.lockLandscape(); await this.audio.init(); this.playIntro(); };
@@ -335,18 +339,20 @@ class Game {
     $('landing').classList.add('hidden'); $('pretrip').classList.remove('hidden'); this.hud.show(false);
     this.resetRun();
     this.map.drawFull($('pretrip-map') as HTMLCanvasElement, this.mapState());
-    const chal = this.challenge;
-    ($('pretrip').querySelector('.route-select') as HTMLElement).classList.toggle('hidden', !!chal);
-    $('pretrip-contracts').classList.toggle('hidden', !!chal);
+    const chal = this.challenge, story = this.story;
+    ($('pretrip').querySelector('.route-select') as HTMLElement).classList.toggle('hidden', !!chal || !!story);
+    $('pretrip-contracts').classList.toggle('hidden', !!chal || !!story);
     $('pretrip-challenge').classList.toggle('hidden', !chal);
+    $('pretrip-story').classList.toggle('hidden', !story);
+    if (story) { this.contractPick = () => CONTRACTS.find((c) => c.id === story.contract) ?? null; $('pretrip-story').innerHTML = `<b>📖 দিন ${bn(story.day)} / ৭ — ${story.title}</b><span class="story-owner">মালিক: ${story.owner}</span><span>${describeDay(story)}</span><small>${story.conditionText}${story.contract ? ` · 📜 কন্ট্রাক্ট: ${CONTRACTS.find((c) => c.id === story.contract)?.name ?? ''}` : ''}</small>`; }
     if (chal) { this.contractPick = () => chal.contract; const e = loadBook()[chal.id]; $('pretrip-challenge').innerHTML = `<b>🗓️ আজকের চ্যালেঞ্জ ${challengeDateLabel(chal.id)}</b><span>${describeChallenge(chal)}</span><small>${e ? `আপনার সেরা স্কোর ${bn(e.best)} (${bn(e.runs)} বার খেলেছেন)` : 'আজ এখনো খেলেননি — প্রথম চেষ্টা!'} · স্কোর = নিট আয় + তারা × ৫০০ + কন্ট্রাক্ট বোনাস</small>`; }
-    else this.contractPick = renderContractPicker($('pretrip-contracts'), dailyContracts(this.career.level), this.contract?.id ?? null);
+    else if (!story) this.contractPick = renderContractPicker($('pretrip-contracts'), dailyContracts(this.career.level), this.contract?.id ?? null);
     const h = this.clockHour(); const night = h < 6 || h >= 18;
     const rush = h >= GAMEPLAY.morningRushStart && h < GAMEPLAY.morningRushEnd;
     const effect = night ? 'রাত — হেডলাইট জ্বলবে, কুয়াশা, স্ট্যান্ডে যাত্রী কম' : rush ? 'সকালের অফিস টাইম — স্ট্যান্ডে যাত্রী দেড় গুণ' : 'দিন — স্বাভাবিক যাত্রী';
-    ($('pretrip').querySelector('.clock-note') as HTMLElement).innerHTML = chal ? `🕒 <b>চ্যালেঞ্জের সময় ঠিক করা:</b> ${bnClock(h)} — ${effect}` : `🕒 <b>আসল সময়ের দিন-রাত:</b> খেলার আলো আপনার ফোনের ঘড়ি অনুযায়ী চলে — এখন <span id="pretrip-clock">${bnClock(h)} (${effect})</span>। রাতে খেললে রাত, ভোরে খেললে ভোর।`;
+    ($('pretrip').querySelector('.clock-note') as HTMLElement).innerHTML = chal || story ? `🕒 <b>${story ? 'স্টোরির দিনের সময়' : 'চ্যালেঞ্জের সময় ঠিক করা'}:</b> ${bnClock(h)} — ${effect}` : `🕒 <b>আসল সময়ের দিন-রাত:</b> খেলার আলো আপনার ফোনের ঘড়ি অনুযায়ী চলে — এখন <span id="pretrip-clock">${bnClock(h)} (${effect})</span>। রাতে খেললে রাত, ভোরে খেললে ভোর।`;
     // today's weather: URL override, else drawn once per pre-trip (fog is likelier at night/dawn)
-    const w = chal ? chal.weather : this.urlWeather() ?? this.rollWeather(night || h < 8);
+    const w = chal ? chal.weather : story?.weather ? story.weather : this.urlWeather() ?? this.rollWeather(night || h < 8);
     this.applyWeather(w, true);
     const wi = WEATHER_INFO[w];
     $('pretrip-weather').textContent = `${wi.icon} ${wi.name} — ${wi.effect}`;
@@ -435,13 +441,32 @@ class Game {
 
   goToLanding() {
     this.togglePause(false); this.toggleMap(false);
-    this.challenge = null; this.fixedHour = null;
+    this.challenge = null; this.story = null; this.fixedHour = null;
     this.screen = 'landing'; this.running = false; this.hud.show(false); $('touch').classList.add('hidden'); $('minimap').classList.add('hidden');
     $('results').classList.add('hidden'); $('landing').classList.remove('hidden');
     this.refreshCareerChip();
     this.resetRun(); this.sky.setTime(6.3); this.applyNight();
   }
 
+  // ---- Story mode ------------------------------------------------------------
+  startStory(d: StoryDay) {
+    if (ROUTE.id !== d.route) { try { localStorage.setItem('cp-story-pending', String(d.day)); } catch { /* ignore */ } const u = new URL(location.href); u.searchParams.delete('route'); u.searchParams.delete('story'); u.searchParams.delete('challenge'); location.href = u.toString(); return; }
+    this.challenge = null; this.story = d; this.fixedHour = d.hour; this.lastStory = null;
+    $('story').classList.add('hidden');
+    this.showPretrip();
+  }
+  openStory() {
+    const p = loadStory();
+    const cards = STORY.map((d) => { const r = p.results[d.day - 1]; const cls = r ? 'done' : d.day === p.day && !p.finished ? 'today' : 'locked'; return `<div class="sday ${cls}"><b>দিন ${bn(d.day)}: ${d.title}</b>${describeDay(d)}<small>${d.conditionText}</small>${r ? `<small>${r.note} · ${'★'.repeat(r.stars)} · ${bn(r.points)} পয়েন্ট</small>` : ''}</div>`; }).join('');
+    const today = STORY[Math.min(p.day, 7) - 1];
+    const head = p.finished && p.ending ? `<p class="story-verdict"><b>${p.ending.split('\n')[0]}</b>${p.ending.split('\n')[1] ?? ''}</p>` : `<p class="hint">মালিকের বাসে সাত দিনের চাকরি। প্রতিদিনের টার্গেট পূরণে ১ পয়েন্ট, ৪+ তারায় ½, ০ জরিমানায় ½। সাত দিন পর মালিকের রায়।</p><p class="story-owner">দিন ${bn(today.day)} — মালিক: ${today.owner}</p>`;
+    $('story-body').innerHTML = head + `<div class="story-days">${cards}</div>`;
+    $('story-play').textContent = p.finished ? 'আবার সাত দিন খেলুন' : `দিন ${bn(today.day)} খেলুন`;
+    $('story').classList.remove('hidden');
+    $('story-play').onclick = async () => { await this.lockLandscape(); await this.audio.init(); this.audio.setVolume(this.settings.value.volume); if (p.finished) { resetStory(); this.startStory(STORY[0]); } else this.startStory(today); };
+    $('story-reset').onclick = () => { resetStory(); this.openStory(); };
+    $('story-close').onclick = () => $('story').classList.add('hidden');
+  }
   // ---- Daily challenge --------------------------------------------------------
   /** Enter challenge mode: fixed hour + weather + contract on the challenge's route, then the pre-trip card. */
   startChallenge(c: Challenge) {
@@ -524,7 +549,7 @@ class Game {
     this.ferryTaken = false; this.ferryOffered = false; this.roofOffered = false; this.clearRoof();
     this.damage = new Damage(this.bus, this.hud, this.passengers); this.damage.reset();
     this.fuel.litres = GAMEPLAY.fuelTankLitres * (GAMEPLAY.fuelStartFraction[0] + Math.random() * (GAMEPLAY.fuelStartFraction[1] - GAMEPLAY.fuelStartFraction[0])); // the owner never fills it
-    const hr = this.clockHour(); this.events.waitingMultiplier = hr >= GAMEPLAY.morningRushStart && hr < GAMEPLAY.morningRushEnd ? 1.5 : (hr >= 21 || hr < 5) ? 0.5 : 1;
+    const hr = this.clockHour(); this.events.waitingMultiplier = (hr >= GAMEPLAY.morningRushStart && hr < GAMEPLAY.morningRushEnd ? 1.5 : (hr >= 21 || hr < 5) ? 0.5 : 1) * (this.story?.crowd ?? 1);
     this.blockade.reset();
     this.debug.resetMeasure();
     this.input.override = null; this.autopilot = false;
@@ -970,6 +995,11 @@ class Game {
     this.settleSpecial(-1, true);
     const sm = this.passengers.summary;
     this.ledger.repair = this.damage.repairCost;
+    if (this.story) {
+      const smx = this.passengers.summary;
+      if (this.story.condition === 'instalment') this.ledger.owner -= INSTALMENT;
+      if (this.story.condition === 'inspector') this.ledger.owner += this.ledger.fines === 0 && smx.hardBrakes <= 2 ? INSPECTOR_BONUS : -INSPECTOR_PENALTY;
+    }
     const cr = evaluateContract(this.contract, {
       timeSec: this.elapsed, mood: this.passengers.mood, missedStops: this.events.stops.filter((s) => s.missed).length, stopsDone: this.events.stopsDone, passengers: this.passengers.count + this.roof,
       fines: this.ledger.fines, hardBrakes: sm.hardBrakes, crashes: this.crashes, chadaPaid: this.ledger.chada, refuels: this.fuel.refuels, fuelEmptied: this.fuelEmptied, wrongBranches: this.events.wrongBranchCount,
@@ -993,6 +1023,15 @@ class Game {
       challengeText = `🗓️ চ্যালেঞ্জ স্কোর <b>${bn(score)}</b>${rec.isBest ? ' — আজকের নতুন সেরা! 🎉' : ` (আজকের সেরা ${bn(rec.entry.best)})`}`;
       challengeShare = shareText(this.challenge, score, this.ledger.net, this.passengers.stars());
     }
+    let storyText: string | undefined;
+    if (this.story) {
+      const d = this.story, p = loadStory();
+      const res = judgeDay(d, { net: this.ledger.net, stars: this.passengers.stars(), fines: this.ledger.fines, hardBrakes: sm.hardBrakes, crashes: this.crashes });
+      p.results[d.day - 1] = res; p.results.length = d.day;
+      if (d.day >= 7) { const v = verdict(p.results); p.finished = true; p.ending = `${v.title}\n${v.text}`; p.day = 7; storyText = `📖 দিন ৭ শেষ — ${res.note}<br>${v.title}<br><small>${v.text}</small>`; }
+      else { p.day = d.day + 1; p.finished = false; p.ending = null; storyText = `📖 দিন ${bn(d.day)}: ${res.note} · ${bn(res.points)} পয়েন্ট${d.condition === 'instalment' ? ` · কিস্তি ${bnTaka(INSTALMENT)} কাটা` : ''}${d.condition === 'inspector' ? ` · ইন্সপেক্টরের রিপোর্ট ${this.ledger.owner > 0 ? 'ভালো ✅' : 'খারাপ ❌'}` : ''} — কাল দিন ${bn(d.day + 1)}: ${STORY[d.day].title}`; }
+      saveStory(p); this.lastStory = { day: d.day, met: res.met, points: res.points, note: res.note };
+    }
     this.audio.setAmbience({ crowd: 0, bell: 0, train: 0, siren: 0, water: 0 });
     if (outcome.levelUp) setTimeout(() => this.audio.sting('levelup'), 600); else if (fresh.length || cr?.done) setTimeout(() => this.audio.sting('badge'), 600);
     showResults({
@@ -1000,8 +1039,8 @@ class Game {
       stars: this.passengers.stars(), shouts: sm.shouts, hardBrakes: sm.hardBrakes, swerves: sm.swerves, stoppedAtRajbari: this.events.stoppedAtRajbari,
       stopsDone: this.events.stopsDone, stopsTotal: WORLD.stops.filter((x) => x.waiting > 0).length, fares: this.ledger.fares, fines: this.ledger.fines, chada: this.ledger.chada, fuel: this.ledger.fuel, charity: this.ledger.charity,
       career: outcome, contractText: cr?.text, repair: this.ledger.repair, damage: this.damage.value, toll: this.ledger.toll, tips: this.ledger.tips,
-      newBadges: fresh.map((a) => ({ icon: a.icon, name: a.name })), rank: this.career.lastRank, challengeText, challengeShare,
-    }, () => { this.startRun(); });
+      newBadges: fresh.map((a) => ({ icon: a.icon, name: a.name })), rank: this.career.lastRank, challengeText, challengeShare, storyText, owner: this.ledger.owner, againLabel: this.story ? (loadStory().finished ? '📖 মালিকের রায় দেখুন' : `📖 পরের দিন (${bn(Math.min(7, (this.story.day) + 1))})`) : undefined,
+    }, () => { if (this.story) { const p = loadStory(); if (p.finished) { this.goToLanding(); this.openStory(); } else this.startStory(STORY[p.day - 1]); } else this.startRun(); });
   }
 
   /** ?people=1 — every variant in a row beside the start, cycling through actions (for screenshots). */
@@ -1065,7 +1104,7 @@ class Game {
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
       fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
       checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
-      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, special: this.special ? this.special.def.id : null, bus: this.busDef.id, seats: GAMEPLAY.seats, highBeam: this.highBeam, unlit: this.traffic.unlitCount, cattle: this.cattle.spots.map((x) => ({ s: x.s, state: x.state, lats: x.cows.map((c) => +c.lat.toFixed(1)) })), cowHits: this.cowHits, signals: this.signals.signals.map((x) => ({ s: x.s, state: x.state, ran: x.ran, stoppedOk: x.stoppedOk })), redLights: this.redLights, busLength: this.busDef.dims.length, challenge: this.challenge?.id ?? null, lastChallenge: this.lastChallenge, fixedHour: this.fixedHour, audio: { ...this.audio.levels }, world: { railS: WORLD.railS, andolonS: WORLD.andolonS, bridgeStartS: WORLD.bridgeStartS, bridgeEndS: WORLD.bridgeEndS, tollS: WORLD.tollS, accidentS: WORLD.accidentS }, specialsDone: this.specialsDone, tips: this.ledger.tips, horns: this.horns, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
+      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, special: this.special ? this.special.def.id : null, bus: this.busDef.id, seats: GAMEPLAY.seats, highBeam: this.highBeam, unlit: this.traffic.unlitCount, cattle: this.cattle.spots.map((x) => ({ s: x.s, state: x.state, lats: x.cows.map((c) => +c.lat.toFixed(1)) })), cowHits: this.cowHits, signals: this.signals.signals.map((x) => ({ s: x.s, state: x.state, ran: x.ran, stoppedOk: x.stoppedOk })), redLights: this.redLights, busLength: this.busDef.dims.length, challenge: this.challenge?.id ?? null, lastChallenge: this.lastChallenge, fixedHour: this.fixedHour, story: this.story?.day ?? null, lastStory: this.lastStory, owner: this.ledger.owner, crowd: this.events.waitingMultiplier, audio: { ...this.audio.levels }, world: { railS: WORLD.railS, andolonS: WORLD.andolonS, bridgeStartS: WORLD.bridgeStartS, bridgeEndS: WORLD.bridgeEndS, tollS: WORLD.tollS, accidentS: WORLD.accidentS }, specialsDone: this.specialsDone, tips: this.ledger.tips, horns: this.horns, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {
@@ -1125,7 +1164,15 @@ function resolveBootChallenge(): Challenge | null {
   return id ? dailyChallenge(id) : null;
 }
 const BOOT_CHALLENGE = resolveBootChallenge();
-applyRoute(BOOT_CHALLENGE ? BOOT_CHALLENGE.routeId : savedRouteId());
+/** A story day asked for by URL (?story=N) or left pending by the story panel before a route reload. */
+function resolveBootStory(): StoryDay | null {
+  const q = params.get('story');
+  let pending: string | null = null; try { pending = localStorage.getItem('cp-story-pending'); localStorage.removeItem('cp-story-pending'); } catch { /* ignore */ }
+  const n = q ? parseInt(q, 10) : pending ? parseInt(pending, 10) : NaN;
+  return STORY.find((d) => d.day === n) ?? null;
+}
+const BOOT_STORY = BOOT_CHALLENGE ? null : resolveBootStory();
+applyRoute(BOOT_CHALLENGE ? BOOT_CHALLENGE.routeId : BOOT_STORY ? BOOT_STORY.route : savedRouteId());
 const game = new Game();
 (window as unknown as { __game: Game }).__game = game;
 game.init().catch((e) => { console.error(e); $('start-status').textContent = 'লোড করতে সমস্যা: ' + (e as Error).message; });

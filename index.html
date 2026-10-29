@@ -74,6 +74,7 @@
           <button id="menu-garage">🔧 গ্যারেজ</button>
           <button id="menu-records">🏆 রেকর্ড</button>
           <button id="menu-challenge">🗓️ আজকের চ্যালেঞ্জ</button>
+          <button id="menu-story">📖 স্টোরি: ৭ দিনের চাকরি</button>
           <button id="menu-install" class="hidden">📲 ফোনে ইনস্টল করুন</button>
           <button id="menu-settings">সেটিংস</button>
           <button id="menu-howto">কীভাবে খেলবেন</button>
@@ -106,6 +107,7 @@
         <p class="hint" id="pretrip-hint">—</p>
         <div id="pretrip-contracts" class="contract-box"></div>
         <div id="pretrip-challenge" class="chal-box hidden"></div>
+        <div id="pretrip-story" class="chal-box story-box hidden"></div>
         <p class="hint clock-note">🕒 <b>আসল সময়ের দিন-রাত:</b> খেলার আলো আপনার ফোনের ঘড়ি অনুযায়ী চলে — এখন <span id="pretrip-clock">—</span>। রাতে খেললে রাত, ভোরে খেললে ভোর।</p>
         <p class="hint weather-note">🌦️ <b>আজকের আবহাওয়া:</b> <span id="pretrip-weather">—</span></p>
         <button id="pretrip-go" class="btn-primary">যাত্রা শুরু</button>
@@ -143,6 +145,15 @@
     <div id="settings" class="hidden"></div>
     <div id="garage" class="hidden"></div>
     <div id="records" class="hidden"></div>
+
+    <!-- Story mode -->
+    <div id="story" class="hidden">
+      <div class="panel records-panel">
+        <h2>📖 ৭ দিনের চাকরি</h2>
+        <div id="story-body" class="rec-body"></div>
+        <div class="row"><button id="story-play" class="btn-primary">আজকের দিন খেলুন</button><button id="story-reset">নতুন করে শুরু</button><button id="story-close">ফিরে যান</button></div>
+      </div>
+    </div>
 
     <!-- Daily challenge -->
     <div id="challenge" class="hidden">

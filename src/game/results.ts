@@ -14,6 +14,8 @@ export interface RunResult {
   repair?: number; damage?: number; toll?: number; tips?: number;
   /** Phase 6: daily challenge line + share text */
   challengeText?: string; challengeShare?: string;
+  /** Phase 7: story day line + owner's adjustment */
+  storyText?: string; owner?: number; againLabel?: string;
   /** Phase 4 */
   newBadges?: { icon: string; name: string }[]; rank?: number;
 }
@@ -38,6 +40,7 @@ export function showResults(r: RunResult, onAgain: () => void) {
     ['মেরামত', `${bnTaka(r.repair ?? 0)}${r.damage ? ` (ক্ষতি ${bn(Math.round(r.damage))}%)` : ''}`],
     ['টোল / ফেরি', bnTaka(r.toll ?? 0)],
     ['বকশিশ (স্পেশাল যাত্রী)', '+' + bnTaka(r.tips ?? 0)],
+    ...(r.owner ? [['মালিকের হিসাব', `${r.owner > 0 ? '+' : '−'}${bnTaka(Math.abs(r.owner))}`]] : []),
   ].map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('');
   const car = $('res-career');
   if (r.career) {
@@ -54,7 +57,8 @@ export function showResults(r: RunResult, onAgain: () => void) {
     bd.classList.remove('hidden');
   } else bd.classList.add('hidden');
   const ch = $('res-challenge');
-  if (r.challengeText) {
+  if (r.storyText) { ch.innerHTML = `<span>${r.storyText}</span>`; ch.classList.remove('hidden'); }
+  else if (r.challengeText) {
     ch.innerHTML = `<span>${r.challengeText}</span><button id="btn-chal-share">📤 স্কোর শেয়ার</button>`;
     ch.classList.remove('hidden');
     $('btn-chal-share').onclick = async () => {
@@ -67,6 +71,7 @@ export function showResults(r: RunResult, onAgain: () => void) {
   const news = NEWS[Math.floor(Math.random() * NEWS.length)](r);
   $('res-news').textContent = '📰 ' + news;
   root.classList.remove('hidden');
+  $('btn-again').textContent = r.againLabel ?? 'আবার খেলুন';
   $('btn-again').onclick = () => { root.classList.add('hidden'); onAgain(); };
   $('btn-share').onclick = () => shareImage(r, news);
 }
