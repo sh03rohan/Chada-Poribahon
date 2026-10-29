@@ -1,4 +1,4 @@
-# চাঁদা পরিবহন (Chada Poribohon) — Phase 6
+# চাঁদা পরিবহন (Chada Poribohon) — Phase 7
 
 A browser-based Bangladeshi bus-driving game. Vite + TypeScript + three.js, no framework.
 Routes: কুষ্টিয়া → রাজবাড়ী → ফরিদপুর → ভাঙ্গা → পদ্মা সেতু → ঢাকা (~6 km), ঢাকা → নরসিংদী → মেঘনা সেতু → শায়েস্তাগঞ্জ → চা বাগান → শ্রীমঙ্গল → সিলেট (~6.5 km) and ঢাকা → কাঁচপুর → মেঘনা-গোমতী সেতু → কুমিল্লা → সীতাকুণ্ড পাহাড় → সমুদ্র → চট্টগ্রাম (~6.5 km); left-hand traffic.
@@ -244,7 +244,7 @@ rig has no interior passenger instances or canvas speedometer.
   (rickshaw/van present) and overtaking.
 
 `window.__game` exposes `simulate(seconds, input)`, `teleport(s)`, `stats()`, `switchCamera(mode)`,
-`toggleWeather()`, `applyWeather(kind)`, `forceSpecial(id)`, `openPhoto()`, `toggleHighBeam()`, `signals.force(i, state)`, `cattle.force(i)`, `setFreeCamera(pos, look)` for ad-hoc checks in the console.
+`toggleWeather()`, `applyWeather(kind)`, `forceSpecial(id)`, `openPhoto()`, `toggleHighBeam()`, `toggleRadio()`, `riders.force(kind)`, `startStory(day)`, `signals.force(i, state)`, `cattle.force(i)`, `setFreeCamera(pos, look)` for ad-hoc checks in the console.
 
 ## Phase 2 — money, incidents and fuel
 
@@ -413,6 +413,32 @@ Tests: `tests/phase5.spec.ts` (Chattogram route, weather, special passengers, au
 
 Probes: `scripts/probe-challenge.mjs`, `probe-minibus.mjs`, `probe-night.mjs`, `probe-signals.mjs`.
 Tests: `tests/phase6.spec.ts` (daily challenge, minibus, night hazards, traffic signals).
+
+## Phase 7 — story mode, radio, passenger moments, street life
+
+* **স্টোরি: ৭ দিনের চাকরি** (`game/story.ts`): seven linked days for a bus owner. Each day fixes the
+  route, clock, weather and contract and adds a condition — Eid crowd (×1.8 at the stands), hartal
+  (half the passengers), a ৳5,000 loan instalment, a storm night, an inspector on board (clean trip →
+  ৳1,500 bonus, else ৳2,000 off), a foggy finale — with a net-income target. The main-menu panel shows
+  the owner's line and the day cards; the pre-trip card locks the day; the results card judges it
+  (target 1 pt, 4+ stars ½, no fines ½) and chains to the next day. After day 7 the owner's verdict
+  is one of three endings. Progress in `localStorage` (`cp-story`); `?story=N` boots a day.
+* **Radio** (`game/radio.ts`): 📻 / `N` cycles three fictional stations — a pentatonic folk tune, a
+  minor-key pop loop and a news station with a time signal — all synthesised by a small WebAudio
+  step sequencer. A ticker in the right-hand column carries traffic (route-aware), weather (the real
+  kind), adverts and news. The station is remembered in settings; the radio ducks under the horn.
+* **Passenger interaction 2.0** (`game/riders.ts`): a haggle at boarding (accept −20 %, refuse — some
+  walk away, or let the helper argue), a big note with no change mid-leg (helper fetches change at
+  the next stop → +15 s dwell, waive, or helper), and a mid-way drop request (stop within 20 s for a
+  ৳20 tip, or refuse). At most one haggle per stop and one event per leg; `riders.force(kind)`.
+* **Street life** (`world/streetlife.ts`): scenes that exist only in their hour band — school children
+  at every stand 07:00–09:30, haat stalls with sellers and shoppers 11:00–14:00, a cricket pitch
+  with players 16:00–18:30, lit tea stalls with people on the bench 19:00–23:30. People join the
+  animation manager only while their scene is on.
+* Stop dwell can be extended by events (`events.extraDwell`); ledger gained an `owner` row.
+
+Probes: `scripts/probe-story.mjs`, `probe-radio.mjs`, `probe-riders.mjs`, `probe-street.mjs`.
+Tests: `tests/phase7.spec.ts` (story mode, radio, passenger interaction, street life).
 
 ## Extension points
 

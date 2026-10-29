@@ -20,6 +20,8 @@ import { Weather, WEATHER_INFO, type WeatherKind } from './world/weather.ts';
 import { PhotoMode } from './game/photo.ts';
 import { CattleCrossing } from './world/cattle.ts';
 import { Radio } from './game/radio.ts';
+import { RiderEvents } from './game/riders.ts';
+import { StreetLife } from './world/streetlife.ts';
 import { STORY, loadStory, saveStory, resetStory, judgeDay, verdict, describeDay, INSTALMENT, INSPECTOR_BONUS, INSPECTOR_PENALTY, type StoryDay } from './game/story.ts';
 import { TrafficSignals } from './world/signals.ts';
 import { BUSES, busDef } from './game/career.ts';
@@ -106,6 +108,7 @@ class Game {
   photo = new PhotoMode(); private photoFrom: 'driving' | 'pause' = 'driving';
   busDef = BUSES[0];
   radio = new Radio($('radio-ticker'));
+  riders!: RiderEvents; street!: StreetLife;
   cattle!: CattleCrossing; highBeam = false; cowHits = 0; hazards = true; signals!: TrafficSignals; redLights = 0;
   /** daily challenge in progress (fixed route/hour/weather/contract) */
   story: StoryDay | null = null; lastStory: { day: number; met: boolean; points: number; note: string } | null = null;
@@ -208,6 +211,7 @@ class Game {
     this.scene.add(this.traffic.group);
     this.cattle = new CattleCrossing(this.road, this.people, WORLD.cattleS); this.scene.add(this.cattle.group);
     this.signals = new TrafficSignals(this.road, WORLD.signalsS); this.scene.add(this.signals.group);
+    this.street = new StreetLife(this.road, this.people, WORLD.stops.filter((x) => x.waiting > 0).map((x) => x.s), ROUTE.hawkerSpots); this.scene.add(this.street.group);
     // ?hazards=0: signals stay green and no cattle cross (deterministic ledger for the older tests)
     this.hazards = params.get('hazards') !== '0'; if (!this.hazards) this.signals.pin = 'green';
     this.incidentProps = new IncidentProps(this.road, this.people);
@@ -549,6 +553,7 @@ class Game {
     if (this.incidents) this.incidents.reset();
     this.incidents = new Incidents(this.incidentProps, this.passengers, this.hud, this.ledger, this.choice, this.events, this.scene, this.people); this.incidents.props3 = this.eventProps; this.incidents.onRoofCleared = () => this.clearRoof();
     this.fuel = new Fuel(this.hud, this.ledger, this.choice, this.passengers);
+    this.riders = new RiderEvents(this.choice, this.hud, this.ledger, this.passengers, this.events); if (!this.hazards) this.riders.chance = 0;
     this.crashes = 0; this.fuelEmptied = false; this.ledgerSeen = { fines: 0, toll: 0, tips: 0 }; this.cattle?.reset(); this.cowHits = 0; this.signals?.reset(); this.redLights = 0; if (this.highBeam) this.toggleHighBeam(false); this.special = null; this.specialsDone = []; this.horns = 0; this.hornHeld = false; this.setGoalPill(null);
     this.ferryTaken = false; this.ferryOffered = false; this.roofOffered = false; this.clearRoof();
     this.damage = new Damage(this.bus, this.hud, this.passengers); this.damage.reset();
@@ -619,7 +624,7 @@ class Game {
   }
   applyNight() {
     const night = this.sky.state.night;
-    this.props.setNight(night); this.roundabouts?.setNight(night); this.traffic.setNight(night);
+    this.props.setNight(night); this.roundabouts?.setNight(night); this.traffic.setNight(night); this.street?.apply(this.sky.state.hour);
     $('btn-beam').classList.toggle('hidden', !night);
     this.bus.setLights({ headlights: night || this.weather.wet > 0.5 || this.weather.fog, brake: this.cur.brake, reverse: this.cur.v < -0.2 });
   }
@@ -810,6 +815,7 @@ class Game {
     this.updateAmbience();
     if (this.audio.ready) { this.ensureRadio(); if (raw.horn && this.running) this.radio.duck(1.2); this.radio.update(dt, { weather: this.weather.kind, hour: this.sky.state.hour, routeS: this.routeS }); }
     if (this.special) this.special.maxKmh = Math.max(this.special.maxKmh, kmh);
+    if (this.screen === 'driving' && this.running && !this.paused && !this.finished) this.riders.update(dt, kmh, this.events.phase, this.choice.open);
 
     // rear-view mirror (cockpit only, every other frame)
     if (this.mirrorTarget && this.mirrorCam && this.cam.mode === 'cockpit' && !this.freeCam && (this.debug.frameCount & 1) === 0) {
@@ -877,6 +883,7 @@ class Game {
     this.boarding = this.boarding.filter((p) => p.root.parent);
     if (i === 0 && !this.roofOffered) { this.roofOffered = true; void this.offerRoof(); }
     this.maybeBoardSpecial(i);
+    if (this.screen === 'driving') void this.riders.onStopEnd(i, this.events.stops[i].boarded);
   }
 
   private updateSignals(dt: number) {
@@ -1125,7 +1132,7 @@ class Game {
       colliders: COLLIDERS.count, screen: this.screen, paused: this.paused, cineTime: this.cinematic?.time ?? 0, cineActive: this.cinematic?.active ?? false, people: this.people.people.length, drawCalls: this.renderer.info.render.calls,
       fuel: this.fuel.fraction, fuelState: this.fuel.state, refuels: this.fuel.refuels, ledger: { ...this.ledger, net: this.ledger.net }, chada: [...this.incidents.chada], chadaRefused: this.incidents.chadaRefused,
       checkpoint: this.incidents.checkpoint, cameraDone: this.incidents.cameraDone, almsDone: this.incidents.almsDone, stopsDone: this.events.stopsDone, stops: this.events.stops.map((x) => ({ ...x })), choiceOpen: this.choice.open,
-      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, special: this.special ? this.special.def.id : null, bus: this.busDef.id, seats: GAMEPLAY.seats, highBeam: this.highBeam, unlit: this.traffic.unlitCount, cattle: this.cattle.spots.map((x) => ({ s: x.s, state: x.state, lats: x.cows.map((c) => +c.lat.toFixed(1)) })), cowHits: this.cowHits, radio: { on: this.radio.on, station: this.radio.station, ticks: this.radio.ticks, notes: this.radio.notes, ticker: $('radio-ticker').textContent }, signals: this.signals.signals.map((x) => ({ s: x.s, state: x.state, ran: x.ran, stoppedOk: x.stoppedOk })), redLights: this.redLights, busLength: this.busDef.dims.length, challenge: this.challenge?.id ?? null, lastChallenge: this.lastChallenge, fixedHour: this.fixedHour, story: this.story?.day ?? null, lastStory: this.lastStory, owner: this.ledger.owner, crowd: this.events.waitingMultiplier, audio: { ...this.audio.levels }, world: { railS: WORLD.railS, andolonS: WORLD.andolonS, bridgeStartS: WORLD.bridgeStartS, bridgeEndS: WORLD.bridgeEndS, tollS: WORLD.tollS, accidentS: WORLD.accidentS }, specialsDone: this.specialsDone, tips: this.ledger.tips, horns: this.horns, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
+      career: { ...this.career.profile, level: this.career.level, title: this.career.title }, lastOutcome: this.lastOutcome, contract: this.contract?.id ?? null, lastContract: this.lastContract, crashes: this.crashes, lastBadges: this.lastBadges, rank: this.career.lastRank, damage: this.damage.value, mods: { ...MODS }, toll: this.incidents.toll, rail: this.incidents.rail, accident: this.incidents.accident, trainActive: this.eventProps.trainActive, roof: this.roof, ferryTaken: this.ferryTaken, weather: this.weather.kind, wet: this.weather.wet, special: this.special ? this.special.def.id : null, bus: this.busDef.id, seats: GAMEPLAY.seats, highBeam: this.highBeam, unlit: this.traffic.unlitCount, cattle: this.cattle.spots.map((x) => ({ s: x.s, state: x.state, lats: x.cows.map((c) => +c.lat.toFixed(1)) })), cowHits: this.cowHits, riders: { log: this.riders.log, pendingDrop: this.riders.pendingDrop }, street: { bands: this.street.active, counts: this.street.counts() }, radio: { on: this.radio.on, station: this.radio.station, ticks: this.radio.ticks, notes: this.radio.notes, ticker: $('radio-ticker').textContent }, signals: this.signals.signals.map((x) => ({ s: x.s, state: x.state, ran: x.ran, stoppedOk: x.stoppedOk })), redLights: this.redLights, busLength: this.busDef.dims.length, challenge: this.challenge?.id ?? null, lastChallenge: this.lastChallenge, fixedHour: this.fixedHour, story: this.story?.day ?? null, lastStory: this.lastStory, owner: this.ledger.owner, crowd: this.events.waitingMultiplier, audio: { ...this.audio.levels }, world: { railS: WORLD.railS, andolonS: WORLD.andolonS, bridgeStartS: WORLD.bridgeStartS, bridgeEndS: WORLD.bridgeEndS, tollS: WORLD.tollS, accidentS: WORLD.accidentS }, specialsDone: this.specialsDone, tips: this.ledger.tips, horns: this.horns, fogDensity: (this.scene.fog as THREE.FogExp2).density, lightning: this.lightningCount,
     };
   }
   renderAndRead(x: number, y: number, w: number, h: number) {

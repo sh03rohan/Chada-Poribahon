@@ -90,3 +90,53 @@ test('radio: N cycles three stations and off, music schedules notes, ticker anno
   expect((await st()).station).toBe(1);
   expect(errors).toEqual([]);
 });
+
+const stopAt = (page: Page, s: number) => g(page, `(() => { __game.teleport(${s}); __game.simulate(1, { throttle: 0.5, autopilot: true }); for (let i = 0; i < 30 && __game.stats().kmh > 2; i++) __game.simulate(0.5, { throttle: 0, brake: 0.6, autopilot: true }); __game.simulate(1.5, { throttle: 0, handbrake: true, autopilot: true }); })()`);
+const choiceOpen = (page: Page) => page.waitForFunction(() => (window as unknown as { __game: { stats(): { choiceOpen: boolean } } }).__game.stats().choiceOpen, null, { timeout: 15_000 });
+
+test('passenger interaction: haggle at boarding, no-change adds dwell, mid-way drop pays a tip when the bus stops', async ({ page }) => {
+  const errors = await boot(page, 'quality=low&hour=11');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  const st = () => g(page, '(() => { const s = __game.stats(); return { log: s.riders.log, pendingDrop: s.riders.pendingDrop, fares: s.ledger.fares, tips: s.ledger.tips, pax: s.passengers, extraDwell: __game.events.extraDwell, title: document.getElementById("choice-title").textContent }; })()') as Promise<{ log: { kind: string; choice: number; outcome: string }[]; pendingDrop: boolean; fares: number; tips: number; pax: number; extraDwell: number; title: string }>;
+  await g(page, '__game.traffic.enabled = false; __game.riders.force("haggle")');
+  await stopAt(page, 1990);
+  await g(page, '__game.simulate(10, { throttle: 0, handbrake: true, autopilot: true })');
+  await choiceOpen(page);
+  let s = await st(); expect(s.title).toContain('ভাড়া একটু কম'); const faresBefore = s.fares;
+  await g(page, 'document.getElementById("choice-a").click()'); await page.waitForTimeout(300);
+  s = await st(); expect(s.log[0]).toMatchObject({ kind: 'haggle', choice: 0 }); expect(s.fares).toBe(faresBefore - 60);
+  await page.screenshot({ path: `${SHOTS}/riders-haggle.png` });
+  await g(page, 'if (__game.choice.open) __game.choice.cancel()');
+  // no change → helper gets change at the next stop (+15 s dwell)
+  await g(page, '__game.riders.legEvent = "nochange"; __game.riders.legTimer = 0.5; __game.teleport(2300); __game.simulate(3, { throttle: 1, autopilot: true })');
+  await choiceOpen(page); expect((await st()).title).toContain('খুচরা');
+  await g(page, 'document.getElementById("choice-a").click()'); await page.waitForTimeout(300);
+  s = await st(); expect(s.extraDwell).toBe(15); expect(s.log[1].kind).toBe('nochange');
+  // mid-way drop → stop within 20 s → one passenger off, ৳20 tip
+  await g(page, '__game.riders.legEvent = "drop"; __game.riders.legTimer = 0.5; __game.simulate(3, { throttle: 1, autopilot: true })');
+  await choiceOpen(page); expect((await st()).title).toContain('এখানেই নামব');
+  const paxBefore = (await st()).pax;
+  await g(page, 'document.getElementById("choice-a").click()'); await page.waitForTimeout(300);
+  expect((await st()).pendingDrop).toBe(true);
+  await g(page, 'for (let i = 0; i < 30 && __game.stats().kmh > 1; i++) __game.simulate(0.5, { throttle: 0, brake: 1, autopilot: true }); __game.simulate(1, { throttle: 0, handbrake: true })');
+  await page.waitForFunction(() => !(window as unknown as { __game: { stats(): { riders: { pendingDrop: boolean } } } }).__game.stats().riders.pendingDrop, null, { timeout: 15_000 });
+  s = await st(); expect(s.pax).toBe(paxBefore - 1); expect(s.tips).toBe(20); expect(s.log[2].outcome).toContain('বকশিশ');
+  expect(errors).toEqual([]);
+});
+
+test('street life follows the clock: school kids at 8, haat stalls at 12, cricket at 17, lit tea stalls at 21', async ({ page }) => {
+  const errors = await boot(page, 'quality=low&hour=8');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  const st = () => g(page, '(() => { const s = __game.stats(); return { bands: s.street.bands, counts: s.street.counts, people: __game.people.people.length }; })()') as Promise<{ bands: string[]; counts: Record<string, number>; people: number }>;
+  await g(page, '__game.traffic.enabled = false');
+  let s = await st(); expect(s.bands).toEqual(['school']); expect(s.counts.school).toBeGreaterThanOrEqual(10); const base = s.people - s.counts.school;
+  const shots: [number, number, string, number][] = [[12, 1150, 'haat', 12], [17, 2720, 'cricket', 7], [21, 1150, 'tea', 12]];
+  for (const [h, pos, band, min] of shots) {
+    await g(page, `__game.sky.setTime(${h}); __game.applyNight(); __game.teleport(${pos}); __game.simulate(0.3, { throttle: 0, handbrake: true })`);
+    s = await st(); expect(s.bands).toEqual([band]); expect(s.counts[band]).toBeGreaterThanOrEqual(min); expect(s.people).toBe(base + s.counts[band]);
+    await page.waitForTimeout(2500); await page.screenshot({ path: `${SHOTS}/street-${band}.png` });
+  }
+  await g(page, '__game.sky.setTime(3); __game.applyNight()');
+  s = await st(); expect(s.bands).toEqual([]); expect(s.people).toBe(base);
+  expect(errors).toEqual([]);
+});
