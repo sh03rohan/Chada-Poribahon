@@ -9,13 +9,14 @@ export interface Settings {
   camera: CameraMode;
   quality: QualityTier | 'auto';
   volume: number;              // 0 .. 1
+  radio: number;               // -1 off, else station index
   northUp: boolean;            // minimap orientation
   introSeen: boolean;
   tutorialSeen: boolean;
 }
 
 const KEY = 'cp-settings';
-const DEFAULTS: Settings = { steering: 'buttons', side: 'left', sensitivity: 1, camera: 'chase', quality: 'auto', volume: 0.8, northUp: false, introSeen: false, tutorialSeen: false };
+const DEFAULTS: Settings = { steering: 'buttons', side: 'left', sensitivity: 1, camera: 'chase', quality: 'auto', volume: 0.8, radio: -1, northUp: false, introSeen: false, tutorialSeen: false };
 
 type Listener = (s: Settings, changed: keyof Settings | null) => void;
 

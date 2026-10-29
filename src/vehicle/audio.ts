@@ -106,6 +106,7 @@ export class BusAudio {
     this.master = ctx.createGain(); this.master.gain.value = AUDIO.masterGain;
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -12; comp.ratio.value = 4;
     this.master.connect(comp).connect(ctx.destination);
+    this.radioBus = ctx.createGain(); this.radioBus.gain.value = AUDIO.radioGain; this.radioBus.connect(this.master);
     const noise = noiseBuffer(ctx);
 
     this.engine = new SynthEngine(ctx, noise);
@@ -190,6 +191,9 @@ export class BusAudio {
   }
 
   get ready(): boolean { return !!this.ctx; }
+  /** a bus into the master mix for the radio (created on init) */
+  get context() { return this.ctx; }
+  radioBus!: GainNode;
   get ctxState() { return this.ctx?.state ?? 'none'; }
 
   update(dt: number, rpm: number, throttle: number, kmh: number, horn: boolean, onRoad: boolean, rain: number) {

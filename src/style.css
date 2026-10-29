@@ -392,3 +392,9 @@ body.has-goal #bubbles { top: calc(350px + var(--sat)); }
 .sday small { display: block; opacity: 0.8; }
 .story-owner { font-style: italic; background: #fff8e0; border-left: 4px solid var(--accent); padding: 6px 10px; border-radius: 6px; margin: 6px 0; text-align: left; }
 .story-verdict { font-size: 18px; margin: 8px 0; } .story-verdict b { display: block; font-size: 22px; color: var(--red); margin-bottom: 6px; }
+
+/* Radio */
+#radio-ticker { background: rgba(60, 30, 90, 0.9); color: #fff; border-radius: 10px; padding: 6px 12px; font-size: 14px; font-weight: 700; line-height: 1.3; animation: bubble-in 0.3s ease-out; }
+#radio-ticker.hidden { display: none; }
+#btn-radio.on { background: #c084fc; color: #000; box-shadow: 0 0 10px #c084fc; }
+@media (max-height: 560px) { #radio-ticker { font-size: 11px; padding: 3px 8px; } }

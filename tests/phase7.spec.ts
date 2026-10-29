@@ -62,3 +62,31 @@ test('story mode: day 1 locks route/hour/weather, target judged and saved, next 
   await expect(page.locator('#story-body')).toContainText('অর্ধেক তোমার');
   expect(errors).toEqual([]);
 });
+
+test('radio: N cycles three stations and off, music schedules notes, ticker announces, choice persists in settings', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => { if (!localStorage.getItem('cp-settings')) localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })); });
+  await page.goto('/?quality=low&hour=11&weather=rain&hazards=0');
+  await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 120_000 });
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  const st = () => g(page, '(() => { const r = __game.stats().radio; return { on: r.on, station: r.station, ticks: r.ticks, notes: r.notes, ticker: r.ticker, btnOn: document.getElementById("btn-radio").classList.contains("on"), setting: JSON.parse(localStorage.getItem("cp-settings")).radio }; })()') as Promise<{ on: boolean; station: number; ticks: number; notes: number; ticker: string; btnOn: boolean; setting: number }>;
+  expect((await st()).on).toBe(false);
+  await page.keyboard.press('KeyN');
+  await page.waitForFunction(() => (window as unknown as { __game: { stats(): { radio: { notes: number } } } }).__game.stats().radio.notes > 3, null, { timeout: 15_000 });
+  let s = await st(); expect(s).toMatchObject({ on: true, station: 0, btnOn: true, setting: 0 }); expect(s.ticker).toContain('রেডিও পদ্মা');
+  await g(page, '__game.radio.tickIn = 0');
+  await page.waitForFunction(() => (window as unknown as { __game: { stats(): { radio: { ticks: number } } } }).__game.stats().radio.ticks >= 1, null, { timeout: 15_000 });
+  s = await st(); expect(s.ticker.length).toBeGreaterThan(8); expect(s.ticker).not.toContain('আপনি শুনছেন');
+  await page.screenshot({ path: `${SHOTS}/radio.png` });
+  await page.click('#btn-radio'); await page.waitForTimeout(200); expect((await st()).station).toBe(1);
+  await page.click('#btn-radio'); await page.waitForTimeout(200); expect((await st()).station).toBe(2);
+  await page.click('#btn-radio'); await page.waitForTimeout(200); s = await st(); expect(s.on).toBe(false); expect(s.setting).toBe(-1); expect(s.btnOn).toBe(false);
+  // persisted station comes back after a reload
+  await g(page, 'const c = JSON.parse(localStorage.getItem("cp-settings")); c.radio = 1; localStorage.setItem("cp-settings", JSON.stringify(c))');
+  await page.reload(); await page.waitForFunction(() => (window as unknown as { __game?: { ready: boolean } }).__game?.ready === true, null, { timeout: 120_000 });
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  await page.waitForFunction(() => (window as unknown as { __game: { stats(): { radio: { on: boolean } } } }).__game.stats().radio.on, null, { timeout: 15_000 });
+  expect((await st()).station).toBe(1);
+  expect(errors).toEqual([]);
+});

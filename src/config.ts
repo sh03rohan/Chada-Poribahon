@@ -247,7 +247,7 @@ export const AUDIO = {
   roadGain: 0.35,
   windGain: 0.45,
   rainGain: 0.25,
-  crowdGain: 0.22, bellGain: 0.35, trainGain: 0.5, sirenGain: 0.16, waterGain: 0.2, stingGain: 0.35,
+  radioGain: 0.3, crowdGain: 0.22, bellGain: 0.35, trainGain: 0.5, sirenGain: 0.16, waterGain: 0.2, stingGain: 0.35,
 };
 
 export type QualityTier = 'low' | 'medium' | 'high';

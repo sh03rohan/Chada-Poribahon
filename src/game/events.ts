@@ -23,6 +23,8 @@ export class RouteEvents {
   currentStop = -1;
   /** multiplier on waiting passengers (morning rush etc.), set by the game from the clock */
   waitingMultiplier = 1;
+  /** extra seconds added to the current stop's dwell (helper off getting change, etc.) */
+  extraDwell = 0;
   private dwell = 0;
   private hitBlockade = false;
   private blockadeStopped = false;
@@ -107,7 +109,7 @@ export class RouteEvents {
       const i = this.currentStop, cfg = WORLD.stops[i], st = this.stops[i];
       this.dwell += dt;
       const k = Math.min(1, this.dwell / 1.2);
-      this.bus.setDoor(this.dwell < G.stopDwellTime - 1 ? k : Math.max(0, G.stopDwellTime - this.dwell));
+      this.bus.setDoor(this.dwell < G.stopDwellTime + this.extraDwell - 1 ? k : Math.max(0, G.stopDwellTime + this.extraDwell - this.dwell));
       if (this.dwell > 2 && !st.done) {
         st.done = true;
         st.alighted = Math.min(this.passengers.count, cfg.getOff);
@@ -119,8 +121,8 @@ export class RouteEvents {
         this.passengers.mood = Math.min(100, this.passengers.mood + 5);
         this.bus.setPassengers(this.passengers.count);
       }
-      if (this.dwell >= G.stopDwellTime) {
-        this.bus.setDoor(0); this.phase = 'driving'; this.onStopEnd?.(i);
+      if (this.dwell >= G.stopDwellTime + this.extraDwell) {
+        this.extraDwell = 0; this.bus.setDoor(0); this.phase = 'driving'; this.onStopEnd?.(i);
         this.hud.message(st.boarded > 0 ? `${bn(st.boarded)} জন উঠলেন, ভাড়া ${bnTaka(st.boarded * cfg.fare)} — চলুন!` : `${bn(st.alighted)} জন নামলেন — চলুন!`, true);
         this.currentStop = -1;
       }

@@ -1,0 +1,22 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+page.on('pageerror', (e) => console.log('PAGEERROR', e.message, e.stack));
+await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
+await page.goto('http://localhost:5173/?quality=low&hour=11&weather=rain&hazards=0');
+await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 120000 });
+await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+const st = () => page.evaluate(() => { const s = __game.stats(); return { ...s.radio, btn: document.getElementById('btn-radio').className, setting: JSON.parse(localStorage.getItem('cp-settings')).radio, msg: document.getElementById('hud-msg').textContent }; });
+console.log('off', await st());
+await page.keyboard.press('KeyN'); await page.waitForTimeout(2500); console.log('station 1', await st());
+await page.evaluate(() => { __game.radio.tickIn = 0; }); await page.waitForTimeout(2500); console.log('tick', await st());
+await page.screenshot({ path: 'test-results/radio.png' });
+await page.click('#btn-radio'); await page.waitForTimeout(2500); console.log('station 2', await st());
+await page.click('#btn-radio'); await page.waitForTimeout(2500); console.log('station 3', await st());
+await page.click('#btn-radio'); await page.waitForTimeout(1500); console.log('off again', await st());
+// persisted: reload with station 2 saved
+await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('cp-settings')); s.radio = 1; localStorage.setItem('cp-settings', JSON.stringify(s)); });
+await page.reload(); await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 120000 });
+await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(2500);
+console.log('after reload', await st());
+await browser.close();
