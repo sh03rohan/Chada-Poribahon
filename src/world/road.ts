@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { WORLD } from '../config.ts';
 import { COLLIDERS } from './collision.ts';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { makeRoadTextures, makeDirtTexture, makeGrassTexture, makeKerbTexture, makePavementTexture } from './textures.ts';
+import { makeRoadTextures, makeDirtTexture, makeGrassTexture, makeKerbTexture, makePavementTexture , makeGrassNormal, makeTuftTexture, makePuddleTexture} from './textures.ts';
 
 /** Route definition: [length m, total turn deg (+ right, − left)] */
 export const MAIN_ROUTE: [number, number][] = [
@@ -185,7 +185,7 @@ export class Road {
 
     this.roadTex = makeRoadTextures(anisotropy);
     this.roadMaterial = new THREE.MeshStandardMaterial({
-      map: this.roadTex.map, roughnessMap: this.roadTex.roughnessMap, roughness: 0.92, metalness: 0.0, color: 0xffffff,
+      map: this.roadTex.map, roughnessMap: this.roadTex.roughnessMap, normalMap: this.roadTex.normalMap, normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.92, metalness: 0.0, color: 0xffffff,
     });
     const road = new THREE.Mesh(makeStrip(-hw, hw, 0, 0, WORLD.roadTextureTileLength, 1), this.roadMaterial);
     road.receiveShadow = true; road.name = 'road';
@@ -206,11 +206,13 @@ export class Road {
     const gw = b.maxX - b.minX + pad * 2, gh = b.maxZ - b.minZ + pad * 2;
     const grass = makeGrassTexture(anisotropy);
     grass.repeat.set(gw / 14, gh / 14);
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(gw, gh, 48, 48), new THREE.MeshStandardMaterial({ map: grass, roughness: 1, color: 0xb9c2a6 }));
+    const grassN = makeGrassNormal(anisotropy); grassN.repeat.copy(grass.repeat);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(gw, gh, 48, 48), new THREE.MeshStandardMaterial({ map: grass, normalMap: grassN, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 1, color: 0xb9c2a6 }));
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((b.minX + b.maxX) / 2, GROUND_Y, (b.minZ + b.maxZ) / 2);
     ground.receiveShadow = true; ground.name = 'ground';
     this.group.add(ground);
+    this.buildTuftsAndPuddles(hw, sh, GROUND_Y);
   }
 
   /** Height of the footpath surface beside the road at s (kerbed town sections are raised). */
@@ -220,6 +222,40 @@ export class Road {
   }
 
   /** Town sections: raised footpath with paving + striped kerb face; Dhaka: divided highway median. */
+  /** Roadside grass tufts (one instanced mesh of crossed alpha cards) and rain puddles in the wheel tracks. */
+  private puddleMat: THREE.MeshStandardMaterial | null = null;
+  private buildTuftsAndPuddles(hw: number, sh: number, groundY: number) {
+    const tuftTex = makeTuftTexture();
+    const card = new THREE.PlaneGeometry(0.9, 0.55).translate(0, 0.27, 0);
+    const cross = mergeGeometries([card, card.clone().rotateY(Math.PI / 2)])!;
+    const tuftMat = new THREE.MeshStandardMaterial({ map: tuftTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1, color: 0xdfe8c8 });
+    const n = Math.floor(this.length / 2.2) * 2;
+    const tufts = new THREE.InstancedMesh(cross, tuftMat, n);
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+    let k = 0;
+    for (let s = 2; s < this.length - 2 && k < n; s += 2.2) for (const side of [-1, 1]) {
+      if (k >= n) break;
+      const f = this.sample(s + Math.random() * 1.5);
+      const lat = side * (hw + sh + 0.3 + Math.random() * 2.4 + this.bulge(s));
+      v.set(f.x + f.rx * lat, groundY + 0.01, f.z + f.rz * lat); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI); const sz = 0.7 + Math.random() * 0.8; sc.set(sz, sz * (0.8 + Math.random() * 0.5), sz);
+      m.compose(v, q, sc); tufts.setMatrixAt(k++, m);
+    }
+    tufts.count = k; tufts.frustumCulled = false; tufts.name = 'tufts';
+    this.group.add(tufts);
+    // puddles: a few hundred flat discs along the wheel tracks, invisible until it rains
+    const pm = new THREE.MeshStandardMaterial({ map: makePuddleTexture(), transparent: true, opacity: 0, roughness: 0.08, metalness: 0.15, color: 0x3a4250, depthWrite: false });
+    this.puddleMat = pm;
+    const pn = Math.floor(this.length / 28);
+    const puddles = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), pm, pn);
+    for (let i = 0; i < pn; i++) {
+      const s = 20 + Math.random() * (this.length - 40); const f = this.sample(s);
+      const lat = (Math.random() < 0.5 ? -1 : 1) * (0.9 + Math.random() * 1.8);
+      v.set(f.x + f.rx * lat, 0.012, f.z + f.rz * lat); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(-f.tx, -f.tz) + (Math.random() - 0.5) * 0.6); const w = 1.4 + Math.random() * 2.2; sc.set(w, 1, w * (0.4 + Math.random() * 0.4));
+      m.compose(v, q, sc); puddles.setMatrixAt(i, m);
+    }
+    puddles.frustumCulled = false; puddles.renderOrder = 1; puddles.name = 'puddles';
+    this.group.add(puddles);
+  }
   private buildKerbsAndMedian(anisotropy: number, hw: number, sh: number, groundY: number) {
     const kerbTex = makeKerbTexture(anisotropy);
     const kerbMat = new THREE.MeshStandardMaterial({ map: kerbTex, roughness: 0.85 });
@@ -287,7 +323,8 @@ export class Road {
 
   /** Wet look: lower roughness, slightly darker. */
   setWet(wet: number) {
-    this.roadMaterial.roughness = 0.92 - 0.42 * wet;
+    if (this.puddleMat) this.puddleMat.opacity = Math.min(0.85, wet * 1.1);
+    this.roadMaterial.roughness = 0.92 - 0.34 * wet;
     this.roadMaterial.metalness = 0.05 * wet;
     this.roadMaterial.color.setScalar(1 - 0.4 * wet);
     this.roadMaterial.envMapIntensity = 1 + 0.4 * wet;

@@ -17,7 +17,35 @@ function speckle(ctx: CanvasRenderingContext2D, w: number, h: number, count: num
   }
 }
 
-export interface RoadTextures { map: THREE.CanvasTexture; roughnessMap: THREE.CanvasTexture; }
+export interface RoadTextures { map: THREE.CanvasTexture; roughnessMap: THREE.CanvasTexture; normalMap: THREE.CanvasTexture; }
+
+/** Tangent-space normal map from a greyscale height canvas (Sobel), strength in texels. */
+export function normalFromHeight(src: HTMLCanvasElement, strength = 2, anisotropy = 4): THREE.CanvasTexture {
+  const w = src.width, h = src.height;
+  const sctx = src.getContext('2d')!; const d = sctx.getImageData(0, 0, w, h).data;
+  const hAt = (x: number, y: number) => d[(((y + h) % h) * w + ((x + w) % w)) * 4] / 255;
+  const [c, ctx] = canvas(w, h); const out = ctx.createImageData(w, h); const o = out.data;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const dx = (hAt(x + 1, y) - hAt(x - 1, y)) * strength, dy = (hAt(x, y + 1) - hAt(x, y - 1)) * strength;
+    const len = Math.hypot(dx, dy, 1); const i = (y * w + x) * 4;
+    o[i] = (-dx / len * 0.5 + 0.5) * 255; o[i + 1] = (-dy / len * 0.5 + 0.5) * 255; o[i + 2] = (1 / len * 0.5 + 0.5) * 255; o[i + 3] = 255;
+  }
+  ctx.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = anisotropy;
+  return t;
+}
+/** Height field for asphalt: aggregate grain, a few sunk patches and cracks (dark = low). */
+function asphaltHeight(W: number, H: number): HTMLCanvasElement {
+  const [c, ctx] = canvas(W, H);
+  ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i < 70000; i++) { const v = 100 + Math.random() * 90; ctx.fillStyle = `rgb(${v},${v},${v})`; ctx.fillRect(Math.random() * W, Math.random() * H, 1 + Math.random() * 2, 1 + Math.random() * 2); }
+  for (let i = 0; i < 8; i++) { ctx.fillStyle = 'rgba(70,70,70,0.6)'; ctx.fillRect(Math.random() * W, Math.random() * H, 40 + Math.random() * 120, 60 + Math.random() * 200); }
+  ctx.strokeStyle = 'rgba(30,30,30,0.9)'; ctx.lineWidth = 2;
+  for (let i = 0; i < 16; i++) { ctx.beginPath(); let x = Math.random() * W, y = Math.random() * H; ctx.moveTo(x, y); for (let j = 0; j < 8; j++) { x += (Math.random() - 0.5) * 30; y += Math.random() * 30; ctx.lineTo(x, y); } ctx.stroke(); }
+  // soften a touch so the normals are not pure noise
+  ctx.globalAlpha = 0.5; ctx.drawImage(c, 1, 0); ctx.drawImage(c, 0, 1); ctx.globalAlpha = 1;
+  return c;
+}
 
 /**
  * Road texture. u spans the full road width (7 m), v spans one tile of `roadTextureTileLength` metres.
@@ -84,7 +112,8 @@ export function makeRoadTextures(anisotropy: number): RoadTextures {
   const roughnessMap = new THREE.CanvasTexture(rc);
   roughnessMap.wrapS = THREE.ClampToEdgeWrapping; roughnessMap.wrapT = THREE.RepeatWrapping;
   roughnessMap.anisotropy = anisotropy;
-  return { map, roughnessMap };
+  const normalMap = normalFromHeight(asphaltHeight(W / 2, H / 2), 1.6, anisotropy); normalMap.wrapS = THREE.ClampToEdgeWrapping;
+  return { map, roughnessMap, normalMap };
 }
 
 export function makeGrassTexture(anisotropy: number): THREE.CanvasTexture {
@@ -101,9 +130,30 @@ export function makeGrassTexture(anisotropy: number): THREE.CanvasTexture {
     ctx.fillStyle = `rgba(${110 + Math.random() * 30},${90 + Math.random() * 20},${50},0.35)`;
     ctx.beginPath(); ctx.ellipse(Math.random() * S, Math.random() * S, 20 + Math.random() * 40, 10 + Math.random() * 20, Math.random() * 3, 0, Math.PI * 2); ctx.fill();
   }
+  // blades: short bright strokes so the ground reads as grass up close
+  for (let i = 0; i < 6000; i++) { const x = Math.random() * S, y = Math.random() * S, l = 3 + Math.random() * 6; ctx.strokeStyle = `rgba(${90 + Math.random() * 60},${130 + Math.random() * 70},${40 + Math.random() * 30},0.55)`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (Math.random() - 0.5) * 3, y - l); ctx.stroke(); }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = anisotropy; t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+/** Bumpy grass normals (clumps) to go with makeGrassTexture. */
+export function makeGrassNormal(anisotropy: number): THREE.CanvasTexture {
+  const S = 256; const [c, ctx] = canvas(S, S);
+  ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 900; i++) { const r = 3 + Math.random() * 9, x = Math.random() * S, y = Math.random() * S; const gr = ctx.createRadialGradient(x, y, 0, x, y, r); const v = 110 + Math.random() * 80; gr.addColorStop(0, `rgba(${v},${v},${v},0.9)`); gr.addColorStop(1, 'rgba(128,128,128,0)'); ctx.fillStyle = gr; ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+  return normalFromHeight(c, 2.2, anisotropy);
+}
+/** Grass tuft card (alpha) for the roadside instancing. */
+export function makeTuftTexture(): THREE.CanvasTexture {
+  const [c, ctx] = canvas(64, 64);
+  for (let i = 0; i < 26; i++) { const x = 8 + Math.random() * 48, top = 4 + Math.random() * 22; ctx.strokeStyle = `rgba(${70 + Math.random() * 60},${120 + Math.random() * 70},${35 + Math.random() * 30},0.95)`; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(32 + (x - 32) * 0.3, 64); ctx.quadraticCurveTo(x, 40, x + (Math.random() - 0.5) * 10, top); ctx.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+/** Soft puddle disc (alpha) */
+export function makePuddleTexture(): THREE.CanvasTexture {
+  const [c, ctx] = canvas(128, 128); const g = ctx.createRadialGradient(64, 64, 10, 64, 64, 62); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.75, 'rgba(255,255,255,0.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(64, 64, 62, 44, 0.4, 0, Math.PI * 2); ctx.fill();
+  return new THREE.CanvasTexture(c);
 }
 
 export function makeDirtTexture(anisotropy: number): THREE.CanvasTexture {

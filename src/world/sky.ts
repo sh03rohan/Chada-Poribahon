@@ -103,6 +103,7 @@ export class SkySystem {
 
   /** Point the shadow camera at the bus every frame. */
   follow(target: THREE.Vector3) {
+    this.bakeEnv();
     this.sun.target.position.copy(target);
     this.sun.position.copy(target).addScaledVector(this.sunDir, 120);
     this.sunDisc.position.copy(target).addScaledVector(this.sunDir, 1500);
@@ -176,13 +177,19 @@ export class SkySystem {
     this.renderer.toneMappingExposure = this.exposure;
     this.baseHemi = this.hemi.intensity; this.baseExposure = this.exposure; this.flashT = 0;
 
-    // Bake environment map: the sky dome lives in a tiny side scene while PMREM runs,
-    // then goes back into the main scene where it is drawn as the backdrop.
+    this.scene.environmentIntensity = (night ? 0.25 : 0.45 - rain * 0.2) * (1 - fogLvl * 0.3) * (1 - storm * 0.3);
+    // the PMREM bake is the expensive part: do it once per frame at most, not once per setter
+    this.envDirty = true;
+  }
+  private envDirty = true; bakes = 0;
+  /** Bake the environment map from the sky dome (deferred to the next follow() so several setters cost one bake). */
+  bakeEnv() {
+    if (!this.envDirty) return;
+    this.envDirty = false; this.bakes++;
     this.skyScene.add(this.sky);
     this.envTarget?.dispose();
     this.envTarget = this.pmrem.fromScene(this.skyScene, 0.02);
     this.scene.environment = this.envTarget.texture;
-    this.scene.environmentIntensity = (night ? 0.25 : 0.45 - rain * 0.2) * (1 - fogLvl * 0.3) * (1 - storm * 0.3);
     this.scene.add(this.sky);
   }
 }
