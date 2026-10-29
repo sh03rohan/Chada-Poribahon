@@ -115,6 +115,12 @@ export class Props {
     kinds.forEach((k) => {
       const tex = makeTreeCardTexture(k);
       const mat = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 1, transparent: false });
+      // wind: the top of each card sways with a per-instance phase (shadows keep the still pose)
+      mat.onBeforeCompile = (sh) => {
+        sh.uniforms.uTime = this.uTime;
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\n float swayK = smoothstep(0.15, 1.5, position.y) * 0.05; float ph = dot(instanceMatrix[3].xz, vec2(0.37, 0.91));\n transformed.x += sin(uTime * 1.3 + ph) * swayK; transformed.z += cos(uTime * 0.9 + ph * 1.7) * swayK * 0.7;');
+      };
       const mesh = new THREE.InstancedMesh(cross, mat, counts[k]);
       mesh.castShadow = true; mesh.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: tex, alphaTest: 0.5 });
       for (let i = 0; i < counts[k]; i++) {
@@ -238,7 +244,12 @@ export class Props {
         const rot = yaw + (side > 0 ? Math.PI / 2 : -Math.PI / 2); // front (+z local) toward the road
         const M = new THREE.Matrix4().compose(pos.clone().setY(0), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot), new THREE.Vector3(1, 1, 1));
         this.pushBucket(wallTex[i % 3], texturedBox(w, h, d, 1 / 3, 1 / 3).translate(0, h / 2, 0).applyMatrix4(M));
-        this.pushExtra(new THREE.BoxGeometry(w + 0.6, 0.08, d + 0.8).rotateX(0.08).translate(0, h + 0.05, -0.2).applyMatrix4(M), 0x8a8f94);
+        if (i % 3 === 0) { // pitched tin roof: two sloped slabs meeting on a ridge along the frontage
+          const rc = i % 2 ? 0x8a8f94 : 0x8a4a2a;
+          this.pushExtra(new THREE.BoxGeometry(w + 0.6, 0.06, d / 2 + 0.5).rotateX(0.55).translate(0, h + 0.45, -d / 4 - 0.1).applyMatrix4(M), rc);
+          this.pushExtra(new THREE.BoxGeometry(w + 0.6, 0.06, d / 2 + 0.5).rotateX(-0.55).translate(0, h + 0.45, d / 4 + 0.1).applyMatrix4(M), rc);
+          this.pushExtra(new THREE.BoxGeometry(w + 0.7, 0.1, 0.12).translate(0, h + 0.78, 0).applyMatrix4(M), 0x4a4f54);
+        } else this.pushExtra(new THREE.BoxGeometry(w + 0.6, 0.08, d + 0.8).rotateX(0.08).translate(0, h + 0.05, -0.2).applyMatrix4(M), 0x8a8f94);
         this.pushBucket(signTex[i % signTex.length], new THREE.PlaneGeometry(w * 0.9, w * 0.9 / 4).translate(0, h - 0.4, d / 2 + 0.03).applyMatrix4(M));
         void tinMat;
         COLLIDERS.addBox(pos.x, pos.z, rot, w, d);
@@ -388,6 +399,9 @@ export class Props {
   }
 
   poolMat: THREE.MeshBasicMaterial | null = null;
+  readonly uTime = { value: 0 };
+  /** per frame: wind time for the tree sway */
+  tick(dt: number) { this.uTime.value += dt; }
   setNight(on: boolean) {
     for (const m of this.nightEmissives) m.emissiveIntensity = on ? 2.5 : 0;
     if (this.poolMat) this.poolMat.opacity = on ? 0.42 : 0;

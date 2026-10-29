@@ -21,7 +21,7 @@ export class SkySystem {
   private skyScene = new THREE.Scene();
   private sunDir = new THREE.Vector3();
   exposure = 0.7;
-  private sunDisc: THREE.Sprite; private sunGlow: THREE.Sprite; private moon: THREE.Sprite; private stars: THREE.Points; private clouds: THREE.Mesh; private overcast: THREE.Mesh; private rays: THREE.Sprite;
+  private sunDisc: THREE.Sprite; private sunGlow: THREE.Sprite; private moon: THREE.Sprite; private stars: THREE.Points; private clouds: THREE.Mesh; private overcast: THREE.Mesh; private rays: THREE.Sprite; private horizon: THREE.Mesh;
 
   constructor(private renderer: THREE.WebGLRenderer, private scene: THREE.Scene, shadows: boolean, shadowMapSize: number) {
     this.sky.scale.setScalar(10000);
@@ -67,7 +67,16 @@ export class SkySystem {
     // Overcast dome: a flat grey shell that hides the sky shader in fog (pale) and storms (dark)
     this.overcast = new THREE.Mesh(new THREE.SphereGeometry(1450, 24, 12), new THREE.MeshBasicMaterial({ color: 0xc3c8cd, transparent: true, opacity: 0, side: THREE.BackSide, depthWrite: false, fog: false }));
     this.overcast.renderOrder = -2; this.overcast.frustumCulled = false; this.overcast.visible = false;
-    scene.add(this.sunDisc, this.sunGlow, this.rays, this.moon, this.stars, this.clouds, this.overcast);
+    // far horizon: a ring of low hills / village silhouettes painted on an open cylinder, fog-tinted
+    { const hc = document.createElement('canvas'); hc.width = 2048; hc.height = 128; const hx = hc.getContext('2d')!;
+      hx.fillStyle = '#000'; hx.beginPath(); hx.moveTo(0, 128);
+      for (let x = 0; x <= 2048; x += 8) { const y = 92 - 18 * Math.sin(x * 0.004) - 10 * Math.sin(x * 0.013 + 1.3) - 6 * Math.sin(x * 0.031 + 0.4); hx.lineTo(x, y); }
+      hx.lineTo(2048, 128); hx.closePath(); hx.fill();
+      for (let i = 0; i < 60; i++) { const x = Math.random() * 2048, w = 6 + Math.random() * 14, h = 8 + Math.random() * 14; hx.fillRect(x, 84 - h, w, h + 44); if (Math.random() < 0.3) { hx.beginPath(); hx.moveTo(x, 84 - h); hx.lineTo(x + w / 2, 84 - h - 10); hx.lineTo(x + w, 84 - h); hx.fill(); } }
+      const ht = new THREE.CanvasTexture(hc); ht.wrapS = THREE.RepeatWrapping; ht.repeat.set(3, 1);
+      this.horizon = new THREE.Mesh(new THREE.CylinderGeometry(1380, 1380, 110, 96, 1, true), new THREE.MeshBasicMaterial({ map: ht, transparent: true, side: THREE.BackSide, depthWrite: false, fog: false, color: 0x7f8894, opacity: 0.55 }));
+      this.horizon.renderOrder = -1; this.horizon.frustumCulled = false; this.horizon.position.y = 20; }
+    scene.add(this.sunDisc, this.sunGlow, this.rays, this.moon, this.stars, this.clouds, this.overcast, this.horizon);
     scene.fog = new THREE.FogExp2(0xc8d8e8, WORLD.fogDensity);
     scene.background = null;
     const h = new URLSearchParams(location.search).get('hour');
@@ -115,7 +124,7 @@ export class SkySystem {
     this.sunDisc.position.copy(target).addScaledVector(this.sunDir, 1500);
     this.sunGlow.position.copy(this.sunDisc.position); this.rays.position.copy(this.sunDisc.position); (this.rays.material as THREE.SpriteMaterial).rotation += 0.0006;
     this.moon.position.copy(target).addScaledVector(this.moonDir, 1500);
-    this.stars.position.copy(target); this.clouds.position.copy(target); this.overcast.position.copy(target);
+    this.stars.position.copy(target); this.clouds.position.copy(target); this.overcast.position.copy(target); this.horizon.position.set(target.x, 20, target.z);
     this.sky.position.copy(target); // the sky box is 10 km wide: keep it centred on the bus so long routes never leave it
     this.clouds.rotation.y += 0.00004;
   }
@@ -185,6 +194,8 @@ export class SkySystem {
     const ocA = Math.max(fog_ * 0.96, storm * 0.85);
     oc.opacity = ocA; this.overcast.visible = ocA > 0.01;
     oc.color.copy(fog_ >= storm ? fog.color : new THREE.Color(night ? 0x151a24 : 0x4a5058));
+    const hm = this.horizon.material as THREE.MeshBasicMaterial;
+    hm.color.copy(fog.color).multiplyScalar(night ? 0.55 : 0.78); hm.opacity = (night ? 0.5 : 0.6) * (1 - fog_) ; this.horizon.visible = hm.opacity > 0.03;
 
     this.exposure = (night ? 0.5 : 0.47 - rain * 0.18) - storm * 0.1 - fogLvl * (night ? 0.05 : 0);
     this.renderer.toneMappingExposure = this.exposure;

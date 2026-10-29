@@ -309,14 +309,27 @@ export function makeTreeCardTexture(kind: number): THREE.CanvasTexture {
     ctx.fillStyle = '#5a3d22'; ctx.fillRect(W / 2 - 9, H * 0.55, 18, H * 0.45);
     ctx.fillStyle = '#4a3019'; ctx.fillRect(W / 2 - 9, H * 0.55, 6, H * 0.45);
     const hue = kind === 2 ? 95 : 110;
-    for (let i = 0; i < 70; i++) {
-      const r = 22 + Math.random() * 36;
-      const ang = Math.random() * Math.PI * 2, rad = Math.random() * 78;
+    // canopy: a dark mass, then many small leaf clusters, lighter toward the top-left (sun side)
+    for (let i = 0; i < 40; i++) {
+      const r = 26 + Math.random() * 34;
+      const ang = Math.random() * Math.PI * 2, rad = Math.random() * 74;
       const x = W / 2 + Math.cos(ang) * rad, y = H * 0.33 + Math.sin(ang) * rad * 0.8;
-      const l = 22 + Math.random() * 22;
-      ctx.fillStyle = `hsla(${hue + Math.random() * 14 - 7}, 48%, ${l}%, 0.95)`;
+      ctx.fillStyle = `hsla(${hue + Math.random() * 10 - 5}, 45%, ${16 + Math.random() * 10}%, 0.95)`;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     }
+    for (let i = 0; i < 260; i++) {
+      const ang = Math.random() * Math.PI * 2, rad = Math.pow(Math.random(), 0.7) * 96;
+      const x = W / 2 + Math.cos(ang) * rad, y = H * 0.33 + Math.sin(ang) * rad * 0.8;
+      const sun = 0.5 + 0.5 * ((-Math.cos(ang) * 0.6 - Math.sin(ang) * 0.8)); // top-left lit
+      const l = 24 + sun * 26 + Math.random() * 8;
+      ctx.fillStyle = `hsla(${hue + Math.random() * 16 - 8}, ${48 + sun * 12}%, ${l}%, ${0.75 + Math.random() * 0.25})`;
+      const r = 5 + Math.random() * 11;
+      ctx.beginPath(); ctx.ellipse(x, y, r * 1.3, r, Math.random() * 3, 0, Math.PI * 2); ctx.fill();
+    }
+    // a few sky gaps
+    ctx.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 10; i++) { const ang = Math.random() * Math.PI * 2, rad = 20 + Math.random() * 70; ctx.beginPath(); ctx.arc(W / 2 + Math.cos(ang) * rad, H * 0.33 + Math.sin(ang) * rad * 0.8, 4 + Math.random() * 6, 0, Math.PI * 2); ctx.fill(); }
+    ctx.globalCompositeOperation = 'source-over';
     // lit top highlights
     for (let i = 0; i < 25; i++) { const ang = Math.random() * Math.PI * 2, rad = Math.random() * 70; ctx.fillStyle = `hsla(${hue}, 55%, ${48 + Math.random() * 10}%, 0.55)`; ctx.beginPath(); ctx.arc(W / 2 + Math.cos(ang) * rad, H * 0.28 + Math.sin(ang) * rad * 0.6, 10 + Math.random() * 14, 0, 7); ctx.fill(); }
   }

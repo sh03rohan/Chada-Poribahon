@@ -58,3 +58,16 @@ test('lighting: cascades on high, sun rays at dawn, headlight cones + lamp pools
   s = await st(); expect(s.cones).toBe(2); expect(s.pools).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test('bus detail: rivets, mud flaps, dirt skirt and tarp exist and the side photo renders', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await boot(page, 'quality=medium&hour=15');
+  await page.click('#menu-start'); await page.waitForTimeout(400); await page.click('#pretrip-go'); await page.waitForTimeout(300);
+  await g(page, '__game.traffic.enabled = false; __game.teleport(3400); __game.simulate(0.3, { throttle: 0, handbrake: true }); __game.openPhoto(); __game.photo.yaw = 1.1; __game.photo.pitch = 0.12; __game.photo.dist = 11');
+  const f0 = await g(page, '__game.frames') as number;
+  await page.waitForFunction((f0) => (window as unknown as { __game: { frames: number } }).__game.frames > f0 + 1, f0, { timeout: 120_000 });
+  const d = await g(page, '(() => { const b = __game.bus.body; let flaps = 0, meshes = 0; b.traverse((o) => { if (o.isMesh) meshes++; }); return { rivets: b.getObjectByName("rivets")?.count ?? 0, meshes, cones: b.children.filter((c) => c.geometry && c.geometry.type === "ConeGeometry").length }; })()') as { rivets: number; meshes: number; cones: number };
+  expect(d.rivets).toBeGreaterThan(150); expect(d.cones).toBe(2); expect(d.meshes).toBeLessThan(200);
+  await page.screenshot({ path: `${SHOTS}/bus-detail-side.png` });
+  expect(errors).toEqual([]);
+});

@@ -20,6 +20,7 @@ import { CattleCrossing } from './world/cattle.ts';
 import { Radio } from './game/radio.ts';
 import { RiderEvents } from './game/riders.ts';
 import { StreetLife } from './world/streetlife.ts';
+import { SkyLife } from './world/skylife.ts';
 import { STORY, loadStory, saveStory, resetStory, judgeDay, verdict, describeDay, INSTALMENT, INSPECTOR_BONUS, INSPECTOR_PENALTY, type StoryDay } from './game/story.ts';
 import { TrafficSignals } from './world/signals.ts';
 import { BUSES, busDef } from './game/career.ts';
@@ -106,7 +107,7 @@ class Game {
   photo = new PhotoMode(); private photoFrom: 'driving' | 'pause' = 'driving';
   busDef = BUSES[0];
   radio = new Radio($('radio-ticker'));
-  riders!: RiderEvents; street!: StreetLife;
+  riders!: RiderEvents; street!: StreetLife; skylife = new SkyLife();
   cattle!: CattleCrossing; highBeam = false; cowHits = 0; hazards = true; signals!: TrafficSignals; redLights = 0;
   /** daily challenge in progress (fixed route/hour/weather/contract) */
   story: StoryDay | null = null; lastStory: { day: number; met: boolean; points: number; note: string } | null = null;
@@ -211,6 +212,7 @@ class Game {
     this.cattle = new CattleCrossing(this.road, this.people, WORLD.cattleS); this.scene.add(this.cattle.group);
     this.signals = new TrafficSignals(this.road, WORLD.signalsS); this.scene.add(this.signals.group);
     this.street = new StreetLife(this.road, this.people, WORLD.stops.filter((x) => x.waiting > 0).map((x) => x.s), ROUTE.hawkerSpots); this.scene.add(this.street.group);
+    this.scene.add(this.skylife.group);
     // ?hazards=0: signals stay green and no cattle cross (deterministic ledger for the older tests)
     this.hazards = params.get('hazards') !== '0'; if (!this.hazards) this.signals.pin = 'green';
     this.incidentProps = new IncidentProps(this.road, this.people);
@@ -788,6 +790,7 @@ class Game {
     if (this.freeCam) { this.cam.camera.position.copy(this.freeCam.pos); this.cam.camera.lookAt(this.freeCam.look); if (this.freeCam.fov) { this.cam.camera.fov = this.freeCam.fov; this.cam.camera.updateProjectionMatrix(); } }
     else this.cam.update(this.bus.root, this.bus.body, kmh, rough, dt, this.cur.aLat);
     this.sky.follow(this.bus.root.position);
+    this.props.tick(dt); this.skylife.update(dt, this.bus.root.position, this.tmpV.set(-Math.sin(this.cur.yaw), 0, -Math.cos(this.cur.yaw)), this.sky.state.hour);
     if (this.cascades) this.cascades.update(this.sky.lightDir, this.sky.sun.color, this.sky.sunIntensity);
     this.bus.setBeamCones?.(this.sky.state.night ? 0.16 + this.sky.state.fog * 0.3 + this.weather.wet * 0.08 : this.sky.state.fog * 0.3);
     const vel = this.tmpV.set(-Math.sin(this.cur.yaw), 0, -Math.cos(this.cur.yaw)).multiplyScalar(this.cur.v);
