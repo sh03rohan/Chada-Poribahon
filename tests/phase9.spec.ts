@@ -55,3 +55,39 @@ test('road surface: speed breakers flank every town stop with signs, potholes do
   await boot(page, 'quality=low&hour=10&hazards=0');
   expect((await g(page, '__game.stats().surface.breakers') as number[]).length).toBe(0);
 });
+
+interface GhostStats { available: boolean; bestTime: number | null; delta: number | null; visible: boolean; newBest: boolean; result: string | null; samples: number }
+const ghost = (page: Page) => g(page, '(() => { const s = __game.stats(); return { ...s.ghost, finished: __game.finished, hud: document.getElementById("hud-ghost").className, hudVal: document.getElementById("hud-ghost-val").textContent, res: document.getElementById("res-ghost").textContent }; })()') as Promise<GhostStats & { finished: boolean; hud: string; hudVal: string; res: string }>;
+const frames = async (page: Page, n: number) => { const f0 = await g(page, '__game.frames') as number; await page.waitForFunction(([f0, n]) => (window as unknown as { __game: { frames: number } }).__game.frames > f0 + n, [f0, n], { timeout: 180_000 }); };
+
+test('ghost bus: the first finished trip is saved, the next trip races it (translucent bus + HUD delta), a slower trip loses and a faster one becomes the new best; story/challenge trips do not count; setting hides it', async ({ page }) => {
+  test.setTimeout(900_000);
+  const errors = await boot(page, 'quality=low&hour=10&hazards=0&view=chase');
+  await start(page);
+  let s = await ghost(page); expect(s.available).toBe(false); expect(s.hud).toContain('hidden');
+  // trip 1: flat out from the end of the bridge
+  await g(page, '__game.traffic.enabled = false; __game.simulate(3, { throttle: 1, autopilot: true }); __game.teleport(__game.stats().world.bridgeEndS + 20); __game.simulate(60, { throttle: 1, autopilot: true })');
+  await frames(page, 2);
+  s = await ghost(page); expect(s.finished).toBe(true); expect(s.available).toBe(true); expect(s.newBest).toBe(true); expect(s.samples).toBeGreaterThan(50); expect(s.res).toContain('প্রথম সম্পূর্ণ ট্রিপ');
+  const best = s.bestTime!;
+  // trip 2: half throttle — behind the ghost, which is visible ahead; results say it arrived earlier
+  await boot(page, 'quality=low&hour=10&hazards=0&view=chase'); await start(page);
+  s = await ghost(page); expect(s.available).toBe(true); expect(s.bestTime).toBeCloseTo(best, 1); expect(s.hud).toContain('hidden'); // nothing to compare before moving
+  await g(page, '__game.traffic.enabled = false; __game.simulate(3, { throttle: 1, autopilot: true }); __game.teleport(__game.stats().world.bridgeEndS + 20); __game.simulate(8, { throttle: 0.45, autopilot: true })');
+  await frames(page, 1);
+  s = await ghost(page); expect(s.visible).toBe(true); expect(s.delta).toBeGreaterThan(0.5); expect(s.hud).toContain('behind'); expect(s.hudVal.startsWith('+')).toBe(true);
+  await page.screenshot({ path: `${SHOTS}/ghost-behind.png` });
+  await g(page, '__game.simulate(120, { throttle: 0.45, autopilot: true })'); await frames(page, 2);
+  s = await ghost(page); expect(s.finished).toBe(true); expect(s.newBest).toBe(false); expect(s.res).toContain('আগে পৌঁছেছিল'); expect(s.bestTime).toBeCloseTo(best, 1);
+  // trip 3: the same flat-out line but from further along → faster → new best
+  await boot(page, 'quality=low&hour=10&hazards=0&view=chase'); await start(page);
+  await g(page, '__game.traffic.enabled = false; __game.simulate(2, { throttle: 1, autopilot: true }); __game.teleport(__game.stats().world.bridgeEndS + 200); __game.simulate(60, { throttle: 1, autopilot: true })');
+  await frames(page, 2);
+  s = await ghost(page); expect(s.finished).toBe(true); expect(s.newBest).toBe(true); expect(s.bestTime!).toBeLessThan(best); expect(s.res).toContain('নতুন সেরা সময়');
+  // the setting hides the ghost mid-trip
+  await boot(page, 'quality=low&hour=10&hazards=0&view=chase'); await start(page);
+  await g(page, '__game.settings.set("ghost", false); __game.traffic.enabled = false; __game.simulate(2, { throttle: 1, autopilot: true }); __game.teleport(__game.stats().world.bridgeEndS + 220); __game.simulate(4, { throttle: 1, autopilot: true })');
+  await frames(page, 1);
+  s = await ghost(page); expect(s.available).toBe(true); expect(s.visible).toBe(false); expect(s.delta).toBeNull();
+  expect(errors).toEqual([]);
+});
