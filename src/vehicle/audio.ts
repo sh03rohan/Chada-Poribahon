@@ -93,9 +93,9 @@ export class BusAudio {
   readonly levels = { crowd: 0, bell: 0, train: 0, siren: 0, water: 0 };
   private sirenT = 0;
   private hornOn = false;
-  private hornKind: 'stock' | 'air' = 'stock';
-  /** garage horn upgrade: deeper, louder three-tone air horn */
-  setHorn(kind: 'stock' | 'air') { this.hornKind = kind; const f = kind === 'air' ? [262, 330, 131] : [311, 370, 155]; this.hornOsc.forEach((o, i) => { if (this.ctx) o.frequency.setTargetAtTime(f[i], this.ctx.currentTime, 0.01); }); }
+  hornKind: 'stock' | 'air' | 'musical' = 'stock';
+  /** garage horn upgrade: deeper, louder three-tone air horn; the musical one plays a little tune */
+  setHorn(kind: 'stock' | 'air' | 'musical') { this.hornKind = kind; const f = kind === 'air' ? [262, 330, 131] : [311, 370, 155]; this.hornOsc.forEach((o, i) => { if (this.ctx) o.frequency.setTargetAtTime(f[i], this.ctx.currentTime, 0.01); }); }
   private muted = false;
 
   /** Must be called from a user gesture. */
@@ -203,7 +203,8 @@ export class BusAudio {
     if (horn !== this.hornOn) {
       this.hornOn = horn;
       this.hornGain.gain.cancelScheduledValues(t);
-      this.hornGain.gain.setTargetAtTime(horn ? AUDIO.hornGain * (this.hornKind === 'air' ? 1.5 : 1) : 0, t, horn ? 0.03 : 0.08);
+      if (this.hornKind === 'musical') { this.hornGain.gain.setTargetAtTime(0, t, 0.02); if (horn) this.playTune(t); }
+      else this.hornGain.gain.setTargetAtTime(horn ? AUDIO.hornGain * (this.hornKind === 'air' ? 1.5 : 1) : 0, t, horn ? 0.03 : 0.08);
     }
     const sp = Math.min(1, kmh / 120);
     this.roadGain.gain.setTargetAtTime(AUDIO.roadGain * sp * (onRoad ? 1 : 2.2) * (0.3 + rain * 0.7 + 0.5), t, 0.1);
@@ -265,6 +266,19 @@ export class BusAudio {
     const g = this.ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5, t + 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
     const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500;
     o.connect(f).connect(g).connect(this.master); o.start(t); o.stop(t + 2.7);
+  }
+  /** musical horn: a six-note tune on two detuned square waves (the classic Bangladeshi "sureli horn") */
+  private playTune(t: number) {
+    if (!this.ctx) return;
+    const notes = [523, 659, 784, 659, 880, 1047], len = 0.13;
+    notes.forEach((f, i) => {
+      for (const det of [0, 4]) {
+        const o = this.ctx!.createOscillator(); o.type = 'square'; o.frequency.value = f + det;
+        const g = this.ctx!.createGain(); const t0 = t + i * len; g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(AUDIO.hornGain * 0.55, t0 + 0.015); g.gain.setValueAtTime(AUDIO.hornGain * 0.55, t0 + len - 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+        const fl = this.ctx!.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = 2600;
+        o.connect(fl).connect(g).connect(this.master); o.start(t0); o.stop(t0 + len + 0.01);
+      }
+    });
   }
   /** Little melodic stings: cash (two quick high notes), fail (two falling notes), badge (rising triad), levelup (fanfare), ding (one soft chime). */
   private playNotes(kind: 'cash' | 'fail' | 'badge' | 'levelup' | 'ding', t: number) {

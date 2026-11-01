@@ -1,5 +1,5 @@
 import { bn, bnTaka } from '../util/bangla.ts';
-import { Career, UPGRADES, LIVERIES, BUSES, busDef, type BusId, upgradeCost, UPGRADE_MODS } from './career.ts';
+import { Career, UPGRADES, LIVERIES, BUSES, busDef, type BusId, upgradeCost, UPGRADE_MODS, STRING_LIGHTS_COST } from './career.ts';
 import { MODS } from '../vehicle/physics.ts';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -40,6 +40,10 @@ export function buildGaragePanel(career: Career, onApply: () => void, onClose: (
       <div class="gbal">ব্যালেন্স <b>${bnTaka(p.balance)}</b> · লেভেল ${bn(career.level)} ${career.title}</div>
       <div class="gcards">${cards}</div>
       <div class="gpaint"><b>রং / লিভারি</b><div class="swatches">${paints}</div></div>
+      <div class="gpaint gname"><b>বাসের নাম</b><small class="hint">পাশে, পেছনে আর সামনের বোর্ডে এই নামটা আঁকা হবে (সর্বোচ্চ ১৮ অক্ষর)</small>
+        <div class="row-s"><input id="garage-name" type="text" maxlength="18" value="${p.busName.replace(/"/g, '&quot;')}" placeholder="চাঁদা পরিবহন"><button id="garage-name-ok">আঁকো</button></div></div>
+      <div class="gpaint"><b>সাজসজ্জা</b><div class="gcards"><div class="gcard"><div class="gico">💡</div><div class="gbody"><b>ছাদের মরিচবাতি</b><small>রাতে ছাদের কিনারায় লাল-সবুজ-নীল-হলুদ বাতির মালা দৌড়ায়</small><em>${p.lights ? 'লাগানো আছে' : 'নেই'}</em></div>
+        <button class="gbuy" id="garage-lights" ${p.lights || !career.canAfford(STRING_LIGHTS_COST) ? 'disabled' : ''}>${p.lights ? '✓' : bnTaka(STRING_LIGHTS_COST)}</button></div></div></div>
       <div class="gbuses"><b>বাস</b><small class="hint">বাস বদলালে গেম আবার লোড হবে</small><div class="gcards">${buses}</div></div>
       <div class="row"><button id="garage-close" class="btn-primary">ঠিক আছে</button></div>
     </div>`;
@@ -59,6 +63,11 @@ export function buildGaragePanel(career: Career, onApply: () => void, onClose: (
       if (!p.busesOwned.includes(def.id)) { if (!career.spend(def.cost)) return; p.busesOwned.push(def.id); }
       p.bus = def.id; career.save(); onBusChange();
     });
+    const nameIn = el.querySelector<HTMLInputElement>('#garage-name')!;
+    const applyName = () => { const v = nameIn.value.trim().slice(0, 18) || 'চাঁদা পরিবহন'; if (v === p.busName) return; p.busName = v; career.save(); onApply(); render(); };
+    el.querySelector<HTMLButtonElement>('#garage-name-ok')!.onclick = applyName;
+    nameIn.onkeydown = (e) => { if (e.key === 'Enter') applyName(); };
+    el.querySelector<HTMLButtonElement>('#garage-lights')!.onclick = () => { if (p.lights || !career.spend(STRING_LIGHTS_COST)) return; p.lights = true; career.save(); onApply(); render(); };
     el.querySelector<HTMLButtonElement>('#garage-close')!.onclick = () => { el.classList.add('hidden'); onClose(); };
   };
   render();

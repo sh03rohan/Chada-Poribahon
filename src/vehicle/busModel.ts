@@ -39,6 +39,10 @@ export interface BusRig {
   smoke?: THREE.Sprite[];
   /** repaint the side livery + paint colour (garage); optional on GLB rigs */
   setLivery?(main: string, dark: string): void;
+  /** roof string lights (garage cosmetic): shown when owned and it is night; tickLights runs the chase pattern */
+  setStringLights?(owned: boolean, night: boolean): void;
+  tickLights?(t: number): void;
+  stringLights?: THREE.InstancedMesh;
   /** live rear-view mirror (render target texture); optional on GLB rigs */
   setMirrorTexture?(tex: THREE.Texture): void;
   setPassengerPose(a: Action): void;
@@ -335,6 +339,17 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
   for (const x of [-0.95, -0.32, 0.32, 0.95]) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 8.6), rackMat); r.position.set(x, D.height + 0.22, 0.2); body.add(r); }
   for (let z = -4; z <= 4; z += 1.6) { const c = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.05, 0.05), rackMat); c.position.set(0, D.height + 0.22, z); body.add(c); }
   for (let z = -4; z <= 4; z += 1.6) for (const x of [-0.95, 0.95]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.04), rackMat); p.position.set(x, D.height + 0.11, z); body.add(p); }
+  // String lights: coloured bulbs along both roof edges and across the front — a chasing pattern at night
+  const bulbPos: [number, number, number][] = [];
+  for (let z = -HALF + 0.45; z <= HALF - 0.45; z += 0.42) for (const x of [-W / 2 + 0.04, W / 2 - 0.04]) bulbPos.push([x, D.height + 0.03, z]);
+  for (let x = -W / 2 + 0.3; x <= W / 2 - 0.3; x += 0.36) bulbPos.push([x, D.height + 0.03, -HALF + 0.12]);
+  const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.045, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), bulbPos.length);
+  bulbs.name = 'stringLights'; bulbs.visible = false; bulbs.frustumCulled = false;
+  { const m = new THREE.Matrix4(); bulbPos.forEach((p, i) => { m.makeTranslation(p[0], p[1], p[2]); bulbs.setMatrixAt(i, m); }); bulbs.instanceMatrix.needsUpdate = true; }
+  const bulbColors = [new THREE.Color(0xff3b30), new THREE.Color(0x34e07a), new THREE.Color(0x3b8bff), new THREE.Color(0xffd23b)];
+  { const c = new THREE.Color(); for (let i = 0; i < bulbPos.length; i++) { c.copy(bulbColors[i % 4]); bulbs.setColorAt(i, c); } if (bulbs.instanceColor) bulbs.instanceColor.needsUpdate = true; }
+  body.add(bulbs);
+  let lightsOwned = false;
   const luggage = cast(new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 2.2), new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.9 }))); luggage.position.set(0.1, D.height + 0.5, 1.2); body.add(luggage);
   const sack = new THREE.Mesh(new THREE.SphereGeometry(0.45, 10, 8), new THREE.MeshStandardMaterial({ color: 0xc9b58a, roughness: 1 })); sack.scale.set(1, 0.7, 1.3); sack.position.set(-0.5, D.height + 0.5, -1.4); body.add(sack);
 
@@ -603,6 +618,16 @@ export function createProceduralBus(opts: { anisotropy: number; shadows: boolean
       paint.color.set(main);
     },
     setDoor(open) { door.position.z = -(3.35 + 0.65) + open * 1.25; door.position.x = -W / 2 - 0.01 - open * 0.08; },
+    stringLights: bulbs,
+    setStringLights(owned, night) { lightsOwned = owned; bulbs.visible = owned && night; },
+    tickLights(t) {
+      if (!bulbs.visible) return;
+      // four-phase chase: every fourth bulb bright, the rest dim, stepping 5 times a second
+      const phase = Math.floor(t * 5) % 4; const c = new THREE.Color();
+      for (let i = 0; i < bulbPos.length; i++) { c.copy(bulbColors[i % 4]); if (i % 4 !== phase) c.multiplyScalar(0.22); bulbs.setColorAt(i, c); }
+      if (bulbs.instanceColor) bulbs.instanceColor.needsUpdate = true;
+      void lightsOwned;
+    },
   };
   rig.setLights({ headlights: false, brake: 0, reverse: false });
   return rig;

@@ -117,6 +117,11 @@ function brushNoise(ctx: CanvasRenderingContext2D, w: number, h: number, strengt
   ctx.restore();
 }
 
+/** the name painted on the side band, rear board and front strip (garage lets the player change it) */
+export let BUS_NAME = 'চাঁদা পরিবহন';
+export const DEFAULT_BUS_NAME = 'চাঁদা পরিবহন';
+export function setBusName(n: string) { BUS_NAME = (n.trim() || DEFAULT_BUS_NAME).slice(0, 18); }
+
 export interface SideLiveryLayout {
   /** panel extents in bus profile units (u along length, y height) */
   uMin: number; uMax: number; yMin: number; yMax: number;
@@ -159,7 +164,7 @@ export function makeSideLivery(l: SideLiveryLayout, anisotropy: number, main = P
   ctx.fillRect(W * 0.22, nameTop + nameH * 0.08, W * 0.56, nameH * 0.84);
   ctx.strokeStyle = dark; ctx.lineWidth = 6; ctx.strokeRect(W * 0.22, nameTop + nameH * 0.08, W * 0.56, nameH * 0.84);
   ctx.strokeStyle = PALETTE.green; ctx.lineWidth = 3; ctx.strokeRect(W * 0.225, nameTop + nameH * 0.08 + 8, W * 0.55, nameH * 0.84 - 16);
-  paintText(ctx, 'চাঁদা পরিবহন', W / 2, nameTop + nameH * 0.5, nameH * 0.62, main, dark, W * 0.52);
+  paintText(ctx, BUS_NAME, W / 2, nameTop + nameH * 0.5, nameH * 0.62, main, dark, W * 0.52);
 
   // Flower clusters at both ends of the name band
   for (const side of [-1, 1]) {
@@ -196,7 +201,7 @@ export function makeRearBoard(anisotropy: number, main = PALETTE.red, dark = PAL
   band(ctx, 0, H - 54, W, 54, PALETTE.green, PALETTE.yellow, 'zigzag');
   ctx.fillStyle = PALETTE.yellow; ctx.fillRect(60, 90, W - 120, H - 180);
   ctx.strokeStyle = dark; ctx.lineWidth = 8; ctx.strokeRect(60, 90, W - 120, H - 180);
-  paintText(ctx, 'চাঁদা পরিবহন', W / 2, H * 0.42, 150, main, dark, W - 180);
+  paintText(ctx, BUS_NAME, W / 2, H * 0.42, 150, main, dark, W - 180);
   paintText(ctx, 'সাবধানে চালান — আল্লাহ ভরসা', W / 2, H * 0.72, 54, PALETTE.darkGreen, PALETTE.cream, W - 200);
   flower(ctx, 110, H / 2, 60, PALETTE.pink, PALETTE.yellow, 7);
   flower(ctx, W - 110, H / 2, 60, PALETTE.orange, main, 7);
@@ -226,7 +231,7 @@ export function makeFrontStrip(anisotropy: number, main = PALETTE.red, dark = PA
   const ctx = c.getContext('2d')!;
   band(ctx, 0, 0, W, H, main, PALETTE.yellow, 'diamond');
   ctx.fillStyle = PALETTE.yellow; ctx.fillRect(W * 0.25, 10, W * 0.5, H - 20);
-  paintText(ctx, 'চাঁদা পরিবহন', W / 2, H / 2, 76, main, dark, W * 0.46);
+  paintText(ctx, BUS_NAME, W / 2, H / 2, 76, main, dark, W * 0.46);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = anisotropy;
   return t;
 }

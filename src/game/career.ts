@@ -28,7 +28,11 @@ export interface Profile {
   /** Phase 6: garage buses */
   busesOwned: BusId[];
   bus: BusId;
+  /** Phase 9: cosmetics — the painted name and the roof string lights */
+  busName: string;
+  lights: boolean;
 }
+export const STRING_LIGHTS_COST = 1200;
 export interface BestRun { net: number; stars: number; timeSec: number; passengers: number; date: string; }
 
 export interface RunSummary {
@@ -46,7 +50,7 @@ export const LEVEL_TITLES = ['হেল্পার', 'নতুন ড্রা
 const KEY = 'cp-career';
 const DEFAULTS: Profile = {
   version: 1, balance: 0, xp: 0, trips: 0, bestStars: 0, totalPassengers: 0, totalEarned: 0, contractsDone: 0,
-  upgrades: { brakes: 0, engine: 0, tyres: 0, horn: 0, livery: 0 }, liveriesOwned: [0], livery: 0, lastPlayed: '', achievements: [], bestRuns: [], busesOwned: ['bus'], bus: 'bus',
+  upgrades: { brakes: 0, engine: 0, tyres: 0, horn: 0, livery: 0 }, liveriesOwned: [0], livery: 0, lastPlayed: '', achievements: [], bestRuns: [], busesOwned: ['bus'], bus: 'bus', busName: 'চাঁদা পরিবহন', lights: false,
 };
 
 export class Career {
@@ -118,7 +122,7 @@ export const UPGRADES: UpgradeDef[] = [
   { id: 'brakes', name: 'ব্রেক', icon: '🛑', desc: 'নতুন ব্রেক শু আর এয়ার ড্রাম — কম দূরত্বে থামে', costs: [3000, 6000, 10000], effect: (l) => `ব্রেক শক্তি +${bn(l * 12)}%` },
   { id: 'engine', name: 'ইঞ্জিন', icon: '⚙️', desc: 'টার্বো আর ফুয়েল পাম্প টিউন — দ্রুত টানে', costs: [4000, 8000, 14000], effect: (l) => `টর্ক +${bn(l * 8)}%` },
   { id: 'tyres', name: 'টায়ার', icon: '🛞', desc: 'নতুন রেডিয়াল টায়ার — বাঁকে আর বৃষ্টিতে কম পিছলায়', costs: [2500, 5000, 8000], effect: (l) => `গ্রিপ +${bn(l * 6)}%` },
-  { id: 'horn', name: 'এয়ার হর্ন', icon: '📯', desc: 'তিন-সুরের এয়ার হর্ন — রাস্তা ফাঁকা হয়', costs: [1500], effect: (l) => (l ? 'লাগানো আছে' : 'স্টক হর্ন') },
+  { id: 'horn', name: 'হর্ন', icon: '📯', desc: 'এয়ার হর্ন — রাস্তা ফাঁকা হয়; তারপর সুরেলা হর্ন — গ্রামের ছেলেরা হাত নাড়ে', costs: [1500, 3200], effect: (l) => (l >= 2 ? 'সুরেলা হর্ন' : l === 1 ? 'তিন-সুরের এয়ার হর্ন' : 'স্টক হর্ন') },
 ];
 export const UPGRADE_MODS = { brakesPerLevel: 0.12, torquePerLevel: 0.08, gripPerLevel: 0.06 };
 

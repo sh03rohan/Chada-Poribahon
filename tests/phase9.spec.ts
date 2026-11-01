@@ -169,3 +169,29 @@ test('controls: tilt steering maps the phone roll to analog steer (with calibrat
   inp = await g(page, '__game.stats().input') as typeof inp; expect(inp.haptics).toContain('thud');
   expect(errors).toEqual([]);
 });
+
+test('garage cosmetics: a custom name is painted on the livery, roof string lights show at night only once bought, the second horn level is the musical horn', async ({ page }) => {
+  test.setTimeout(600_000);
+  const errors = await boot(page, 'quality=medium&hour=21&hazards=0&view=chase');
+  let c = await g(page, '__game.stats().cosmetics') as { busName: string; lights: boolean; lightsVisible: boolean; horn: string; bulbs: number };
+  expect(c.busName).toBe('চাঁদা পরিবহন'); expect(c.lights).toBe(false); expect(c.lightsVisible).toBe(false); expect(c.horn).toBe('stock'); expect(c.bulbs).toBeGreaterThan(40);
+  // garage: type a name, buy the lights, buy both horn levels (give the profile some money first)
+  await g(page, '__game.career.profile.balance = 20000; __game.career.save(); __game.openGarage()'); await page.waitForTimeout(200);
+  await page.fill('#garage-name', 'সোনার বাংলা'); await page.click('#garage-name-ok'); await page.waitForTimeout(300);
+  await page.click('#garage-lights'); await page.waitForTimeout(200);
+  await page.click('.gbuy[data-up="horn"]'); await page.waitForTimeout(200); await page.click('.gbuy[data-up="horn"]'); await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/garage-cosmetics.png` });
+  await page.click('#garage-close'); await page.waitForTimeout(200);
+  c = await g(page, '__game.stats().cosmetics') as typeof c;
+  expect(c.busName).toBe('সোনার বাংলা'); expect(c.lights).toBe(true); expect(c.lightsVisible).toBe(true); expect(c.horn).toBe('musical');
+  expect(await g(page, '__game.career.profile.balance')).toBe(20000 - 1200 - 1500 - 3200);
+  expect(await g(page, 'JSON.parse(localStorage.getItem("cp-career")).busName')).toBe('সোনার বাংলা');
+  await start(page);
+  await g(page, '__game.traffic.enabled = false; __game.teleport(900); __game.simulate(0.5, { throttle: 0, handbrake: true })');
+  await frames(page, 2);
+  await page.screenshot({ path: `${SHOTS}/string-lights-night.png` });
+  // daytime: the bulbs go dark
+  await g(page, '__game.sky.setTime(12); __game.applyNight()');
+  c = await g(page, '__game.stats().cosmetics') as typeof c; expect(c.lights).toBe(true); expect(c.lightsVisible).toBe(false);
+  expect(errors).toEqual([]);
+});
