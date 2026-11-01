@@ -19,6 +19,8 @@ export interface SurfaceInfo {
   wet: boolean;
   /** Hard stop ahead (e.g. blockade): distance in metres along forward axis, or Infinity. */
   wallDistance: number;
+  /** road surface height under the front / rear axle (m): speed breakers +, potholes − */
+  bumpFront?: number; bumpRear?: number;
 }
 
 export interface VehicleState {
@@ -222,7 +224,8 @@ export function stepVehicle(s: VehicleState, input: VehicleInput, surf: SurfaceI
   // ---- Body motion: second-order spring-damper on roll/pitch/heave --------
   const rollTarget = Math.max(-P.maxRoll, Math.min(P.maxRoll, aLat * P.rollPerLateralG));
   // +rotation.x lifts the nose (nose is at -Z), so braking (aLong < 0) must dip it → same sign as aLong.
-  const pitchTarget = Math.max(-P.maxPitch, Math.min(P.maxPitch, aLong * P.pitchPerLongG));
+  const bf = surf.bumpFront ?? 0, br = surf.bumpRear ?? 0;
+  const pitchTarget = Math.max(-P.maxPitch * 1.5, Math.min(P.maxPitch * 1.5, aLong * P.pitchPerLongG + (bf - br) / P.wheelbase * 1.6));
   const w = P.bodyOmega, z2 = 2 * P.bodyZeta * P.bodyOmega;
   s.rollVel += (w * w * (rollTarget - s.roll) - z2 * s.rollVel) * dt;
   s.roll += s.rollVel * dt;
@@ -232,7 +235,7 @@ export function stepVehicle(s: VehicleState, input: VehicleInput, surf: SurfaceI
   // Heave excited by road roughness scaled by speed
   s.wheelSpin += s.v / P.wheelRadius * dt;
   const roughAmp = (surf.onRoad ? P.roughnessAmplitude : P.roughnessOffRoad) * Math.min(1, kmh / 40);
-  const bump = roughNoise(Math.floor(s.wheelSpin * 3)) * roughAmp;
+  const bump = roughNoise(Math.floor(s.wheelSpin * 3)) * roughAmp + (bf + br) * 0.5 * 1.6;   // humps / holes, a little exaggerated
   const hw = P.heaveOmega, hz2 = 2 * P.heaveZeta * P.heaveOmega;
   s.heaveVel += (hw * hw * (bump - s.heave) - hz2 * s.heaveVel) * dt;
   s.heave += s.heaveVel * dt;

@@ -24,7 +24,10 @@ export class Damage {
 
   /** impact in m/s (closing speed removed by the collision) */
   hit(impact: number, kind: 'traffic' | 'object') {
-    const add = Math.min(40, Math.max(2, (impact - 1.2) * G.damagePerImpactMs)) * (kind === 'traffic' ? 1 : 0.8);
+    this.wear(Math.min(40, Math.max(2, (impact - 1.2) * G.damagePerImpactMs)) * (kind === 'traffic' ? 1 : 0.8));
+  }
+  /** add a fixed amount of damage (speed breakers / potholes taken too fast) */
+  wear(add: number) {
     this.value = Math.min(100, this.value + add);
     this.apply();
     for (const th of [30, 50, 75, 100]) {

@@ -1,0 +1,11 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
+await page.goto('http://localhost:5173/?quality=medium&hour=10&weather=clear', { timeout: 180000, waitUntil: 'commit' });
+await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 180000 });
+await page.click('#menu-start', { timeout: 120000, force: true }); await page.waitForTimeout(400); await page.click('#pretrip-go', { timeout: 120000, force: true }); await page.waitForTimeout(300);
+const info = await page.evaluate(() => { const ph = __game.surface.potholes[3]; __game.traffic.enabled = false; __game.teleport(ph.s - 12); __game.simulate(0.3, { throttle: 0, handbrake: true }); const dl = ph.lat - __game.lateral; /* bus-relative: forward is -z, right is +x */ __game.setFreeCamera([dl - 1.5, 3.2, -4], [dl, 0, -12]); return { ph, lateral: __game.lateral, h: __game.surface.height(ph.s, ph.lat) }; });
+console.log(JSON.stringify(info));
+await page.waitForTimeout(3000); await page.screenshot({ path: 'test-results/surface-pothole-free.png' });
+await browser.close();

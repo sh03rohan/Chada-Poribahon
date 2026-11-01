@@ -200,6 +200,8 @@ export class Traffic {
   laneBarrierS = Infinity;
   /** set by the game: stop lines of signals currently red/amber — same-direction vehicles stop there */
   stopLines: number[] = [];
+  /** speed breakers (s): every vehicle slows to ~12 km/h over them */
+  breakers: number[] = [];
   /** last collision info for the game loop */
   collisionS = Infinity;
   /** night: lamps glow on lit vehicles, unlit ones go dark; set by the game */
@@ -428,6 +430,7 @@ export class Traffic {
       if (this.barrierS !== Infinity && toBarrier > -5 && toBarrier < gap) { gap = toBarrier; leadSpeed = 0; }
       if (vh.dir === 1 && this.laneBarrierS !== Infinity && vh.overtake === 0) { const tb = this.laneBarrierS - vh.s - vh.len / 2 - 4; if (tb > -5 && tb < gap) { gap = tb; leadSpeed = 0; } }
       if (vh.dir === 1) for (const ls of this.stopLines) { const tb = ls - vh.s - vh.len / 2 - 1.5; if (tb > -3 && tb < gap) { gap = tb; leadSpeed = 0; } }
+      for (const bs of this.breakers) { const tb = (bs - vh.s) * vh.dir; if (tb > -vh.len && tb < 14) { target = Math.min(target, 3.4); break; } else if (tb >= 14 && tb < 45) { target = Math.min(target, Math.sqrt(3.4 * 3.4 + 2 * 3.5 * (tb - 14))); break; } }
       // target speed: the fastest speed from which we can still slow to the leader's speed
       // within (gap − margin) at a comfortable 4.5 m/s², plus a time headway
       target = Math.min(target, vh.maxSpeed);

@@ -226,9 +226,20 @@ export class BusAudio {
   setVolume(v: number) { this.volume = Math.max(0, Math.min(1, v)); if (this.master && !this.muted) this.master.gain.value = AUDIO.masterGain * this.volume; }
   private volume = 1;
   /** Short synthesised stings for the intro. */
-  sting(kind: 'start' | 'horn' | 'crash' | 'thunder' | 'cash' | 'fail' | 'badge' | 'levelup' | 'ding') {
+  sting(kind: 'start' | 'horn' | 'crash' | 'thunder' | 'cash' | 'fail' | 'badge' | 'levelup' | 'ding' | 'thud', strength = 1) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
+    if (kind === 'thud') {
+      // suspension thump: a short low-passed noise burst plus a sub-bass drop, scaled by how hard
+      const src = this.ctx.createBufferSource(); src.buffer = noiseBuffer(this.ctx, 0.4);
+      const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(320, t); f.frequency.exponentialRampToValueAtTime(90, t + 0.25);
+      const g = this.ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5 * strength, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      src.connect(f).connect(g).connect(this.master); src.start(t); src.stop(t + 0.35);
+      const o = this.ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(32, t + 0.2);
+      const og = this.ctx.createGain(); og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.4 * strength, t + 0.01); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      o.connect(og).connect(this.master); o.start(t); o.stop(t + 0.3);
+      return;
+    }
     if (kind === 'cash' || kind === 'fail' || kind === 'badge' || kind === 'levelup' || kind === 'ding') { this.playNotes(kind, t); return; }
     if (kind === 'thunder') {
       // low rumble: filtered noise swelling in, plus a sub-bass sine that decays over ~2.5 s
