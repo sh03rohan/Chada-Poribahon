@@ -1,6 +1,6 @@
 import { GAMEPLAY as G } from '../config.ts';
 
-export type ShoutKind = 'brake' | 'swerve' | 'speed' | 'offroad' | 'wait' | 'good' | 'horn' | 'blockade' | 'roof';
+export type ShoutKind = 'brake' | 'swerve' | 'speed' | 'offroad' | 'wait' | 'good' | 'horn' | 'blockade' | 'roof' | 'sleepy';
 
 /** Mild, generic passenger lines. No profanity, no slurs. */
 const LINES: Record<ShoutKind, string[]> = {
@@ -8,6 +8,7 @@ const LINES: Record<ShoutKind, string[]> = {
   swerve: ['রাস্তা দেইখা চালান!', 'এটা কি নৌকা নাকি বাস?', 'ধরেন ধরেন, পড়ে যাচ্ছি!'],
   speed: ['ঘুমাইছেন নাকি? আস্তে চালান!', 'এত জোরে কেন, প্লেন চালান?', 'ড্রাইভার সাহেব, একটু ধীরে!'],
   offroad: ['রাস্তা ছাইড়া মাঠে কেন?', 'এইটা রাস্তা না, ক্ষেত!', 'ও ভাই, রাস্তায় উঠেন!'],
+  sleepy: ['ও ড্রাইভার! ঘুমাচ্ছেন নাকি?', 'ভাই, চোখে পানি দেন — গাড়ি বাঁকা যাচ্ছে!', 'হেল্পার, ড্রাইভারকে চা খাওয়াও!'],
   wait: ['আর কত দেরি? আমার অফিস আছে!', 'ভাই, আজকে পৌঁছাব তো?', 'গাড়ি চলে না কেন?'],
   good: ['ভালো চালান! এখনই পৌঁছে যাব।', 'বাহ, মসৃণ চালাচ্ছেন!', 'এই ড্রাইভারকে বকশিশ দেওয়া দরকার।'],
   horn: ['হর্ন কম দেন, কান গেল!'],

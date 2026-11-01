@@ -1,0 +1,30 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
+await page.addInitScript(() => localStorage.setItem('cp-settings', JSON.stringify({ introSeen: true, tutorialSeen: true })));
+await page.goto('http://localhost:5173/?quality=low&hour=22&weather=clear&hazards=0&view=chase', { timeout: 180000, waitUntil: 'commit' });
+await page.waitForFunction(() => window.__game?.ready === true, null, { timeout: 180000 });
+await page.click('#menu-start', { timeout: 120000, force: true }); await page.waitForTimeout(400); await page.click('#pretrip-go', { timeout: 120000, force: true }); await page.waitForTimeout(300);
+const frame = async (n = 1) => { const f0 = await page.evaluate(() => __game.frames); await page.waitForFunction(([f0, n]) => __game.frames > f0 + n, [f0, n], { timeout: 180000 }); };
+const st = () => page.evaluate(() => { const s = __game.stats(); return { ...s.fatigue, elapsed: Math.round(__game.elapsed), kmh: Math.round(s.kmh), lateral: +__game.lateral.toFixed(2), mood: Math.round(__game.passengers.mood), veil: document.getElementById('fatigue-veil').style.opacity, veilClass: document.getElementById('fatigue-veil').className, hour: +__game.sky.state.hour.toFixed(2), net: __game.ledger.net }; });
+console.log('start', JSON.stringify(await st()));
+// fatigue is a frame-loop quantity (real time): simulate drives, frames tick it. Force the value for the effects.
+await page.evaluate(() => { __game.traffic.enabled = false; __game.teleport(600); __game.simulate(8, { throttle: 0.8, autopilot: true }); }); await frame(1);
+console.log('after 8 s drive', JSON.stringify(await st()));
+await page.evaluate(() => { __game.fatigue.value = 75; }); await frame(1);
+const lat0 = await page.evaluate(() => { __game.teleport(700); __game.simulate(10, { throttle: 0.8, autopilot: true }); return +__game.lateral.toFixed(2); });
+console.log('tired steering (lateral after 10 s autopilot, target -1.75)', lat0, JSON.stringify(await st()));
+await page.evaluate(() => { __game.fatigue.value = 100; __game.fatigue.sinceSleep = 20; });
+await frame(2);
+await page.evaluate(() => __game.simulate(2, { throttle: 0.8, autopilot: true })); await frame(1);
+console.log('asleep?', JSON.stringify(await st()));
+await page.screenshot({ path: 'test-results/fatigue-sleep.png' });
+// stop and take a chai break
+await page.evaluate(() => __game.simulate(6, { throttle: 0, brake: 1, handbrake: true })); await frame(2);
+console.log('stopped', JSON.stringify(await st()));
+await page.click('#btn-chai', { timeout: 30000, force: true }); await page.waitForTimeout(400);
+console.log('choice open', await page.evaluate(() => ({ open: __game.choice.open, title: document.getElementById('choice-title').textContent })));
+await page.click('#choice-a', { force: true }); await page.waitForTimeout(500); await frame(1);
+console.log('after chai', JSON.stringify(await st()));
+await browser.close();

@@ -11,7 +11,7 @@ export interface RunResult {
   /** career delta (Phase 3) */
   career?: RunOutcome;
   contractText?: string;
-  repair?: number; damage?: number; toll?: number; tips?: number;
+  repair?: number; damage?: number; toll?: number; tips?: number; tea?: number; breaks?: number;
   /** Phase 6: daily challenge line + share text */
   challengeText?: string; challengeShare?: string;
   /** Phase 7: story day line + owner's adjustment */
@@ -40,6 +40,7 @@ export function showResults(r: RunResult, onAgain: () => void) {
     ['মেরামত', `${bnTaka(r.repair ?? 0)}${r.damage ? ` (ক্ষতি ${bn(Math.round(r.damage))}%)` : ''}`],
     ['টোল / ফেরি', bnTaka(r.toll ?? 0)],
     ['বকশিশ (স্পেশাল যাত্রী)', '+' + bnTaka(r.tips ?? 0)],
+    ...(r.breaks ? [['চা-বিরতি', `${bn(r.breaks)} বার, ${bnTaka(r.tea ?? 0)}`]] : []),
     ...(r.owner ? [['মালিকের হিসাব', `${r.owner > 0 ? '+' : '−'}${bnTaka(Math.abs(r.owner))}`]] : []),
   ].map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join('');
   const car = $('res-career');

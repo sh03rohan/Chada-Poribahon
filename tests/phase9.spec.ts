@@ -91,3 +91,42 @@ test('ghost bus: the first finished trip is saved, the next trip races it (trans
   s = await ghost(page); expect(s.available).toBe(true); expect(s.visible).toBe(false); expect(s.delta).toBeNull();
   expect(errors).toEqual([]);
 });
+
+interface FatigueStats { value: number; breaks: number; microsleeps: number; asleep: boolean; tea: number; btnHidden: boolean }
+const fat = (page: Page) => g(page, '(() => { const s = __game.stats(); return { ...s.fatigue, elapsed: __game.elapsed, kmh: s.kmh, mood: __game.passengers.mood, veil: +document.getElementById("fatigue-veil").style.opacity, blink: document.getElementById("fatigue-veil").classList.contains("blink"), net: __game.ledger.net }; })()') as Promise<FatigueStats & { elapsed: number; kmh: number; mood: number; veil: number; blink: boolean; net: number }>;
+
+test('driver fatigue: climbs with driving time, darkens the view and lazies the steering past 60, micro-sleeps at 100; a chai break while stopped costs 3 minutes + ৳30 and restores the driver', async ({ page }) => {
+  test.setTimeout(600_000);
+  const errors = await boot(page, 'quality=low&hour=22&hazards=0&view=chase');
+  await start(page);
+  let s = await fat(page); expect(s.value).toBe(0); expect(s.btnHidden).toBe(true);
+  // tiredness is clocked in the frame loop (real time): a few frames of driving nudge it up, the bar stays hidden under 15
+  await g(page, '__game.traffic.enabled = false; __game.teleport(600); __game.simulate(5, { throttle: 0.8, autopilot: true }); __game.input.override = { throttle: 0.6 }; __game.autopilot = true');
+  await frames(page, 3);
+  s = await fat(page); expect(s.value).toBeGreaterThan(0); expect(s.veil).toBe(0);
+  expect(await page.locator('#hud-fatigue').isVisible()).toBe(false);
+  // tired: the veil shows and the bar turns orange
+  await g(page, '__game.fatigue.value = 75'); await frames(page, 1);
+  s = await fat(page); expect(s.veil).toBeGreaterThan(0.1); expect(s.veil).toBeLessThan(0.5);
+  expect(await page.locator('#hud-fatigue').isVisible()).toBe(true); await expect(page.locator('#hud-fatigue-fill')).toHaveClass(/high/);
+  // asleep at the wheel: a micro-sleep blinks the lids shut, steering drops to zero, the passengers shout
+  await g(page, '__game.fatigue.value = 100; __game.fatigue.sinceSleep = 20'); await frames(page, 2);
+  await g(page, '__game.simulate(1, { throttle: 0.8, autopilot: true })'); await frames(page, 1);
+  s = await fat(page); expect(s.microsleeps).toBeGreaterThanOrEqual(1); expect(s.mood).toBeLessThan(75);
+  await page.screenshot({ path: `${SHOTS}/fatigue-asleep.png` });
+  // stop → the chai button appears; take the break
+  await g(page, '__game.input.override = null; __game.autopilot = false; __game.simulate(6, { throttle: 0, brake: 1, handbrake: true })'); await frames(page, 2);
+  s = await fat(page); expect(s.kmh).toBeLessThan(1); expect(s.btnHidden).toBe(false);
+  const before = s;
+  await page.click('#btn-chai', { force: true }); await page.waitForTimeout(400);
+  expect(await g(page, '__game.choice.open')).toBe(true); await expect(page.locator('#choice-title')).toContainText('চা-বিরতি');
+  await page.click('#choice-a', { force: true }); await page.waitForTimeout(500); await frames(page, 1);
+  s = await fat(page);
+  expect(s.breaks).toBe(1); expect(s.tea).toBe(30); expect(s.net).toBe(before.net - 30); expect(s.value).toBeCloseTo(35, 0); expect(s.elapsed - before.elapsed).toBeGreaterThanOrEqual(180);
+  expect(s.mood).toBeGreaterThan(before.mood); expect(s.veil).toBe(0); expect(s.blink).toBe(false);
+  // declining the offer changes nothing
+  await g(page, '__game.fatigue.value = 50'); await frames(page, 1);
+  await page.click('#btn-chai', { force: true }); await page.waitForTimeout(300); await page.click('#choice-b', { force: true }); await page.waitForTimeout(300);
+  s = await fat(page); expect(s.breaks).toBe(1); expect(s.tea).toBe(30);
+  expect(errors).toEqual([]);
+});

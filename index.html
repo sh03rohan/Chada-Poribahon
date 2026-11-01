@@ -30,6 +30,7 @@
       <div id="hud-mood-wrap" class="pill">
         <div class="hud-label">যাত্রীর মেজাজ</div>
         <div id="hud-mood"><div id="hud-mood-fill"></div></div>
+        <div id="hud-fatigue" class="hidden" title="ক্লান্তি"><span>😴</span><div id="hud-fatigue-bar"><div id="hud-fatigue-fill"></div></div></div>
         <div class="hud-label" id="hud-dist">—</div>
       </div>
       <!-- right-hand message column: nothing is drawn over the road ahead -->
@@ -46,6 +47,7 @@
         <button class="icon-btn" id="btn-cam" title="ক্যামেরা">📷</button>
         <button class="icon-btn" id="btn-weather" title="আবহাওয়া বদলান">🌧️</button>
         <button class="icon-btn hidden" id="btn-beam" title="হাই বিম (L)">🔦</button>
+        <button class="icon-btn hidden" id="btn-chai" title="চা-বিরতি">☕</button>
         <button class="icon-btn" id="btn-radio" title="রেডিও (N)">📻</button>
         <button class="icon-btn" id="btn-map" title="ম্যাপ">🗺️</button>
         <button class="icon-btn" id="btn-pause" title="বিরতি">⏸</button>
@@ -224,6 +226,7 @@
     </div>
 
     <div id="crack" class="hidden"></div>
+    <div id="fatigue-veil"><div class="lid top"></div><div class="lid bottom"></div></div>
     <!-- Photo mode: orbit the bus, save a captioned PNG -->
     <div id="photo" class="hidden">
       <div id="photo-bar">
