@@ -312,7 +312,9 @@ test('phase 2: fuel — tank starts part-full, burns under load, pump refuels fo
   await g(page, '__game.teleport(5900)');
   st = await sim(page, 25, { throttle: 1, autopilot: true });
   expect(st.phase).toBe('finished');
-  await page.waitForTimeout(500);
+  // the results card is built on the next rendered frame (software GL: wait for it rather than a fixed delay)
+  await page.waitForFunction(() => (window as unknown as { __game: { finished: boolean } }).__game.finished === true, null, { timeout: 120_000 });
+  await page.waitForTimeout(300);
   const grid = await page.locator('#res-grid').textContent();
   expect(grid).toContain('ভাড়া আদায়'); expect(grid).toContain('জরিমানা'); expect(grid).toContain('তেল'); expect(grid).toContain('স্টপ');
   await page.screenshot({ path: `${SHOTS}/results-ledger.png` });

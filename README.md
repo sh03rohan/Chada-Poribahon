@@ -487,6 +487,37 @@ Probes: `scripts/probe-post.mjs`, `probe-ground.mjs`, `probe-light.mjs`, `probe-
 Tests: `tests/phase8.spec.ts` (post levels and frame luma, lighting, bus detail, particles, UI,
 traffic no-ram).
 
+## Phase 9 — feel of the road
+
+* **Speed breakers and potholes** (`world/roadSurface.ts`): striped humps 70 m before and 40 m
+  after every town stop with a yellow warning sign 45 m ahead; seeded potholes on the open road.
+  The surface height under each axle drives the heave/pitch springs, so the bus really lurches.
+  Over 40 km/h on a hump costs mood and damage (more with roof riders); a wheel in a pothole
+  above 30 km/h costs mood and wear; slow crossings are free. Traffic and the test autopilot
+  slow down for humps. `?hazards=0` removes them for the deterministic suites.
+* **Ghost bus** (`game/ghost.ts`): the fastest finished trip on a route is kept (half-second
+  samples in localStorage) and replayed as a translucent cyan bus with a "👻 সেরা ট্রিপ" label.
+  A pill under the minimap shows the delta at your position (green ahead, red behind); the
+  results card says whether you beat it. Story days and daily challenges do not count. Settings
+  → ভূত-বাস hides it.
+* **Driver fatigue** (`game/fatigue.ts`): climbs with driving time (faster at night and in a
+  storm). Past 60 the view edges darken and the steering lags and wanders; past 85 the
+  passengers notice; at 100 the driver micro-sleeps every ten seconds (lids blink shut,
+  steering drops). While standing, the ☕ button offers a chai break: three minutes off the
+  clock, ৳30, fatigue −65, mood +4. A "চা-বিরতি" row appears on the results card.
+* **Controls** (`input.ts`): tilt steering ("ফোন কাত করে" in settings) reads the phone's roll
+  with a bubble level and a re-centre button, orientation-aware, with the iOS permission prompt
+  taken from the tap; fuller gamepad mapping (stick dead zone, d-pad, Y camera, LB high beam,
+  RB radio, Start pause, Back map) with rumble; haptics on humps, potholes, crashes and
+  micro-sleeps.
+* **Garage cosmetics**: a custom bus name painted on the side band, rear board and front strip;
+  roof string lights (৳1,200, four-colour chase at night); horn level 2 is the musical
+  "sureli" horn.
+
+Stats: `stats().surface`, `.ghost`, `.fatigue`, `.input`, `.cosmetics`.
+Probes: `scripts/probe-surface.mjs`, `probe-ghost.mjs`, `probe-fatigue.mjs`, `shot-pothole.mjs`,
+`shot-ghost.mjs`. Tests: `tests/phase9.spec.ts` (five tests).
+
 ## Extension points
 
 `game/events.ts` is a small state machine keyed on route distance — add stops / events there.
