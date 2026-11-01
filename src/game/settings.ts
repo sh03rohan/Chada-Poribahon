@@ -3,7 +3,7 @@ import type { QualityTier } from '../config.ts';
 
 /** Player settings, persisted in localStorage. */
 export interface Settings {
-  steering: 'wheel' | 'buttons';
+  steering: 'wheel' | 'buttons' | 'tilt';
   side: 'left' | 'right';
   sensitivity: number;         // 0.5 .. 1.5
   camera: CameraMode;
@@ -52,7 +52,7 @@ export function buildSettingsPanel(store: SettingsStore, onClose: () => void): H
   el.innerHTML = `
     <div class="panel settings-panel">
       <h2>সেটিংস</h2>
-      <div class="row-s"><label>স্টিয়ারিং</label>${seg('steering', [['wheel', 'স্টিয়ারিং হুইল'], ['buttons', 'বাম/ডান বাটন']])}</div>
+      <div class="row-s"><label>স্টিয়ারিং</label>${seg('steering', [['wheel', 'স্টিয়ারিং হুইল'], ['buttons', 'বাম/ডান বাটন'], ['tilt', 'ফোন কাত করে']])}</div>
       <div class="row-s"><label>কন্ট্রোলের দিক</label>${seg('side', [['left', 'বামে'], ['right', 'ডানে']])}</div>
       <div class="row-s"><label>স্টিয়ারিং সংবেদনশীলতা <span id="sens-val"></span></label><input type="range" id="set-sens" min="0.5" max="1.5" step="0.05" value="${s.sensitivity}"></div>
       <div class="row-s"><label>ডিফল্ট ক্যামেরা</label>${seg('camera', (Object.keys(CAM_LABEL) as CameraMode[]).map((k) => [k, CAM_LABEL[k]]))}</div>

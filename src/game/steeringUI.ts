@@ -18,7 +18,8 @@ export class SteeringUI {
   private pedals: HTMLElement;
   private steerBox: HTMLElement;
 
-  constructor(private store: SettingsStore, private onButtons: (root: HTMLElement) => void) {
+  private tiltBubble: HTMLElement | null = null;
+  constructor(private store: SettingsStore, private onButtons: (root: HTMLElement) => void, private tilt: { steer: number | null; angle: number | null } | null = null) {
     this.root = document.getElementById('touch')!;
     this.steerBox = document.getElementById('touch-steer')!;
     this.pedals = document.getElementById('touch-pedals')!;
@@ -31,9 +32,15 @@ export class SteeringUI {
     this.root.classList.toggle('side-right', s.side === 'right');
     this.steerBox.innerHTML = '';
     this.steer = null; this.dragging = false; this.wheelEl = null;
+    this.tiltBubble = null;
     if (s.steering === 'buttons') {
       this.steerBox.innerHTML = `<button class="tbtn" data-act="left">◀</button><button class="tbtn" data-act="right">▶</button>`;
       this.steerBox.dataset.scheme = 'buttons';
+    } else if (s.steering === 'tilt') {
+      // tilt: a level with a bubble that follows the phone's roll, and a re-centre button
+      this.steerBox.innerHTML = `<div id="tilt-ui"><div class="level"><div class="bubble"></div></div><button class="tbtn small" data-act="calibrate" title="সোজা ধরে চাপুন">⟲</button></div>`;
+      this.steerBox.dataset.scheme = 'tilt';
+      this.tiltBubble = this.steerBox.querySelector('.bubble');
     } else {
       this.steerBox.innerHTML = `<div id="wheel-ui"><canvas width="220" height="220"></canvas></div>`;
       this.steerBox.dataset.scheme = 'wheel';
@@ -75,6 +82,7 @@ export class SteeringUI {
 
   /** Call every frame with the physics steering fraction (-1..1) so the graphic matches the wheels. */
   update(dt: number, physicsSteer: number) {
+    if (this.tiltBubble) { const v = this.tilt?.steer ?? null; this.steer = v; this.tiltBubble.style.left = `${50 + (v ?? physicsSteer) * 42}%`; this.tiltBubble.classList.toggle('idle', v === null); return; }
     if (!this.wheelEl) return;
     if (this.dragging) {
       // graphic follows the finger; physics follows the graphic

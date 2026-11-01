@@ -130,3 +130,42 @@ test('driver fatigue: climbs with driving time, darkens the view and lazies the 
   s = await fat(page); expect(s.breaks).toBe(1); expect(s.tea).toBe(30);
   expect(errors).toEqual([]);
 });
+
+test('controls: tilt steering maps the phone roll to analog steer (with calibration), a gamepad steers/throttles and its buttons fire once, bumps and crashes buzz the haptics', async ({ page }) => {
+  test.setTimeout(600_000);
+  const errors = await boot(page, 'quality=low&hour=10&view=chase');
+  await start(page);
+  // --- tilt -------------------------------------------------------------------------------
+  await g(page, '__game.settings.set("steering", "tilt")'); await page.waitForTimeout(300);
+  let inp = await g(page, '__game.stats().input') as { tilt: { enabled: boolean; angle: number | null; steer: number | null; permission: string }; scheme: string; analogSteer: number | null; haptics: string[] };
+  expect(inp.scheme).toBe('tilt'); expect(inp.tilt.enabled).toBe(true); expect(inp.tilt.permission).toBe('granted');
+  expect(await page.locator('#tilt-ui .bubble').count()).toBe(1);
+  // feed a synthetic motion sample: the screen's right edge 15° down (in whatever orientation the headless screen reports)
+  const feed = (deg: number) => g(page, `(() => { const t = (screen.orientation && screen.orientation.type) || 'portrait-primary'; const r = -Math.sin(${deg} * Math.PI / 180) * 9.8, u = Math.cos(${deg} * Math.PI / 180) * 9.8;
+    let x, y; if (t === 'landscape-primary') { y = -r; x = u; } else if (t === 'landscape-secondary') { y = r; x = -u; } else if (t === 'portrait-secondary') { x = -r; y = -u; } else { x = r; y = u; }
+    __game.input.tilt.onMotion({ accelerationIncludingGravity: { x, y, z: 0 } }); return __game.input.tilt.steer; })()`) as Promise<number | null>;
+  const s15 = await feed(15); expect(s15).toBeGreaterThan(0.5); expect(s15).toBeLessThan(0.7);
+  await frames(page, 1);
+  inp = await g(page, '__game.stats().input') as typeof inp; expect(inp.analogSteer).toBeCloseTo(s15!, 2); expect(inp.tilt.angle).toBeCloseTo(15, 0);
+  const sm15 = await feed(-15); expect(sm15).toBeLessThan(-0.5);
+  // calibrate while tilted: that becomes the new zero
+  await g(page, '__game.input.tilt.calibrate()'); expect(await feed(-15)).toBe(0); expect(await feed(0)).toBeGreaterThan(0.5);
+  await g(page, '__game.settings.set("steering", "buttons")'); await page.waitForTimeout(200);
+  inp = await g(page, '__game.stats().input') as typeof inp; expect(inp.tilt.enabled).toBe(false); expect(inp.tilt.steer).toBeNull();
+  // --- gamepad ----------------------------------------------------------------------------
+  const pad = await g(page, `(() => { const b = () => ({ pressed: false, touched: false, value: 0 }); const gp = { index: 0, id: 'Test Pad', connected: true, mapping: 'standard', timestamp: 0, axes: [0.6, 0, 0, 0], buttons: Array.from({ length: 17 }, b) };
+    window.__pad = gp; navigator.getGamepads = () => [gp]; __game.input.gamepadIndex = 0; const r = { ...__game.input.poll() }; gp.buttons[7].value = 0.8; const r2 = { ...__game.input.poll() }; return { steer: r.steer, throttle: r2.throttle }; })()`) as { steer: number; throttle: number };
+  expect(pad.steer).toBeCloseTo((0.6 - 0.12) / 0.88, 2); expect(pad.throttle).toBeCloseTo(0.8, 2);
+  const cam0 = await g(page, '__game.cam.mode') as string;
+  await g(page, '__pad.buttons[3].pressed = true; __game.input.poll(); __game.input.poll()');
+  const cam1 = await g(page, '__game.cam.mode') as string; expect(cam1).not.toBe(cam0);
+  await g(page, '__game.input.poll(); __game.input.poll()'); expect(await g(page, '__game.cam.mode')).toBe(cam1); // held = no repeat
+  await g(page, '__pad.buttons[3].pressed = false; __game.input.poll(); __pad.buttons[3].pressed = true; __game.input.poll()');
+  expect(await g(page, '__game.cam.mode')).not.toBe(cam1);
+  await g(page, '__game.input.gamepadIndex = null; __pad.buttons[3].pressed = false');
+  // --- haptics ----------------------------------------------------------------------------
+  const b0 = await g(page, '__game.surface.breakers[0].s') as number;
+  await g(page, `__game.traffic.enabled = false; __game.teleport(${b0} - 120); __game.cur.v = __game.prev.v = 16; __game.simulate(10, { throttle: 1 })`);
+  inp = await g(page, '__game.stats().input') as typeof inp; expect(inp.haptics).toContain('thud');
+  expect(errors).toEqual([]);
+});
